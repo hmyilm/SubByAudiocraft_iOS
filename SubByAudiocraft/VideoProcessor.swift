@@ -50,34 +50,47 @@ class VideoProcessor: ObservableObject {
                 }
                 
                 let request = SFSpeechURLRecognitionRequest(url: audioURL)
-                request.shouldReportPartialResults = false
-                request.taskHint = .dictation // Dikte modunu açarak Türkçe konuşma tanıma doğruluğunu artırıyoruz
+                request.shouldReportPartialResults = true
+                request.taskHint = .unspecified // Kesintisiz video konuşmalarını yakalamak için unspecified (varsayılan) moduna geçiyoruz (dictation modundaki erken durma hatasını çözer)
                 if #available(iOS 13.0, *) {
                     request.requiresOnDeviceRecognition = false // İnternet desteği ile yüksek doğruluk ve tüm cihazlarda çalışma
                 }
                 
+                var bestWords: [WordTimestamp] = []
+                var hasCompleted = false
+                
                 recognizer.recognitionTask(with: request) { result, error in
-                    if let error = error {
-                        print("Recognition failed: \(error.localizedDescription)")
-                        completion([], "Ses analiz edilirken bir hata oluştu: \(error.localizedDescription)")
-                        return
-                    }
+                    if hasCompleted { return }
                     
-                    guard let result = result else {
-                        completion([], "Ses analiz sonucu boş döndü.")
-                        return
-                    }
-                    
-                    if result.isFinal {
-                        var words: [WordTimestamp] = []
+                    if let result = result {
+                        var currentWords: [WordTimestamp] = []
                         for segment in result.bestTranscription.segments {
-                            words.append(WordTimestamp(
+                            currentWords.append(WordTimestamp(
                                 text: segment.substring,
                                 start: segment.timestamp,
                                 end: segment.timestamp + segment.duration
                             ))
                         }
-                        completion(words, nil)
+                        if !currentWords.isEmpty {
+                            bestWords = currentWords
+                        }
+                        
+                        if result.isFinal {
+                            hasCompleted = true
+                            completion(bestWords, nil)
+                            return
+                        }
+                    }
+                    
+                    if let error = error {
+                        hasCompleted = true
+                        // Hata oluşsa bile (bağlantı kesintisi, zaman aşımı vb.), şimdiye kadar yakalanan kelimeleri geri dönüyoruz ki emek boşa gitmesin
+                        if !bestWords.isEmpty {
+                            completion(bestWords, nil)
+                        } else {
+                            completion([], "Ses analiz edilirken bir hata oluştu: \(error.localizedDescription)")
+                        }
+                        return
                     }
                 }
             case .denied, .restricted:
