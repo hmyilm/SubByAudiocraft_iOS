@@ -14,9 +14,17 @@ workflows:
       - name: Install Dependencies
         script: |
           pod install
-      - name: Set up code signing
+      - name: Set up keychain
+        script: |
+          keychain initialize
+      - name: Fetch signing files
         script: |
           app-store-connect fetch-signing-files "com.hmyilm.SubtitleStudio" --type IOS_APP_STORE --create
+      - name: Add certificates to keychain
+        script: |
+          keychain add-certificates
+      - name: Set up code signing settings on Xcode project
+        script: |
           xcode-project use-profiles
       - name: Build App for TestFlight
         script: |
