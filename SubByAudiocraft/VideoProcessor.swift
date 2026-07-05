@@ -38,46 +38,52 @@ class VideoProcessor: ObservableObject {
         }
     }
     
-    // 2. Apple Native Speech (Siri) ile Sesi Metne Çevirme
-    func runSpeechRecognition(audioURL: URL, completion: @escaping ([WordTimestamp]) -> Void) {
+    // 2. Apple Native Speech (Siri) ile Sesi Metne Çevirme (Detaylı hata ve izin kontrollü)
+    func runSpeechRecognition(audioURL: URL, completion: @escaping ([WordTimestamp], String?) -> Void) {
         SFSpeechRecognizer.requestAuthorization { authStatus in
-            guard authStatus == .authorized else {
-                print("Speech recognition not authorized")
-                completion([])
-                return
-            }
-            
-            // Türkçe (Türkiye) dil desteği
-            guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "tr-TR")) else {
-                print("Turkish locale not supported")
-                completion([])
-                return
-            }
-            
-            let request = SFSpeechURLRecognitionRequest(url: audioURL)
-            request.shouldReportPartialResults = false
-            if #available(iOS 13.0, *) {
-                request.requiresOnDeviceRecognition = false // İnternet desteği ile yüksek doğruluk ve tüm cihazlarda çalışma
-            }
-            
-            recognizer.recognitionTask(with: request) { result, error in
-                guard let result = result else {
-                    print("Recognition failed: \(String(describing: error))")
-                    completion([])
+            switch authStatus {
+            case .authorized:
+                guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "tr-TR")) else {
+                    completion([], "Türkçe dil desteği bu cihazda mevcut değil.")
                     return
                 }
                 
-                if result.isFinal {
-                    var words: [WordTimestamp] = []
-                    for segment in result.bestTranscription.segments {
-                        words.append(WordTimestamp(
-                            text: segment.substring,
-                            start: segment.timestamp,
-                            end: segment.timestamp + segment.duration
-                        ))
-                    }
-                    completion(words)
+                let request = SFSpeechURLRecognitionRequest(url: audioURL)
+                request.shouldReportPartialResults = false
+                if #available(iOS 13.0, *) {
+                    request.requiresOnDeviceRecognition = false // İnternet desteği ile yüksek doğruluk ve tüm cihazlarda çalışma
                 }
+                
+                recognizer.recognitionTask(with: request) { result, error in
+                    if let error = error {
+                        print("Recognition failed: \(error.localizedDescription)")
+                        completion([], "Ses analiz edilirken bir hata oluştu: \(error.localizedDescription)")
+                        return
+                    }
+                    
+                    guard let result = result else {
+                        completion([], "Ses analiz sonucu boş döndü.")
+                        return
+                    }
+                    
+                    if result.isFinal {
+                        var words: [WordTimestamp] = []
+                        for segment in result.bestTranscription.segments {
+                            words.append(WordTimestamp(
+                                text: segment.substring,
+                                start: segment.timestamp,
+                                end: segment.timestamp + segment.duration
+                            ))
+                        }
+                        completion(words, nil)
+                    }
+                }
+            case .denied, .restricted:
+                completion([], "Ses tanıma izni reddedildi. Lütfen Ayarlar'dan izin verin.")
+            case .notDetermined:
+                completion([], "Ses tanıma izni henüz verilmedi.")
+            @unknown default:
+                completion([], "Bilinmeyen ses tanıma yetki hatası.")
             }
         }
     }
@@ -219,20 +225,37 @@ class VideoProcessor: ObservableObject {
         }
     }
     
-    // 5. Videoyu Galeriye Kaydet
-    func saveToGallery(videoURL: URL, completion: @escaping (Bool) -> Void) {
-        PHPhotoLibrary.requestAuthorization { status in
-            guard status == .authorized else {
-                completion(false)
-                return
-            }
-            
-            PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: videoURL)
-            }) { success, error in
-                completion(success)
+    // 5. Videoyu Galeriye Kaydet (iOS 14+ addOnly ile daha güvenli ve detaylı hata dönüşlü)
+    func saveToGallery(videoURL: URL, completion: @escaping (Bool, String?) -> Void) {
+        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+        if status == .authorized {
+            performSave(videoURL: videoURL, completion: completion)
+        } else {
+            PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
+                if newStatus == .authorized {
+                    self.performSave(videoURL: videoURL, completion: completion)
+                } else {
+                    completion(false, "Galeriye kaydetme izni reddedildi. Lütfen Ayarlar'dan izin verin.")
+                }
             }
         }
+    }
+    
+    private func performSave(videoURL: URL, completion: @escaping (Bool, String?) -> Void) {
+        PHPhotoLibrary.shared().performChanges({
+            PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: videoURL)
+        }) { success, error in
+            if success {
+                completion(true, nil)
+            } else {
+                completion(false, error?.localizedDescription ?? "Bilinmeyen galeri kaydetme hatası.")
+            }
+        }
+    }
+    
+    // Geçici dosyaları silerek telefon hafızasının şişmesini önler.
+    func deleteFile(at url: URL) {
+        try? FileManager.default.removeItem(at: url)
     }
     
     private func formatASSTime(_ seconds: Double) -> String {

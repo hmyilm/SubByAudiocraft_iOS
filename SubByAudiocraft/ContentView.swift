@@ -162,16 +162,29 @@ struct ContentView: View {
                 DispatchQueue.main.async {
                     self.statusMessage = "Hata: Ses çıkarılamadı."
                     self.isProcessing = false
+                    VideoProcessor.shared.deleteFile(at: url) // Orijinal geçici video kopyasını sil
                 }
                 return
             }
             
             DispatchQueue.main.async { self.statusMessage = "Yapay Zeka sözleri analiz ediyor..." }
-            VideoProcessor.shared.runSpeechRecognition(audioURL: audioURL) { words in
+            VideoProcessor.shared.runSpeechRecognition(audioURL: audioURL) { words, speechError in
+                if let speechError = speechError {
+                    DispatchQueue.main.async {
+                        self.statusMessage = "Hata: \(speechError)"
+                        self.isProcessing = false
+                        VideoProcessor.shared.deleteFile(at: audioURL)
+                        VideoProcessor.shared.deleteFile(at: url)
+                    }
+                    return
+                }
+                
                 guard !words.isEmpty else {
                     DispatchQueue.main.async {
                         self.statusMessage = "Hata: Videoda net bir konuşma bulunamadı."
                         self.isProcessing = false
+                        VideoProcessor.shared.deleteFile(at: audioURL)
+                        VideoProcessor.shared.deleteFile(at: url)
                     }
                     return
                 }
@@ -185,6 +198,8 @@ struct ContentView: View {
                         DispatchQueue.main.async {
                             self.statusMessage = "Hata: Altyazı dosyası oluşturulamadı."
                             self.isProcessing = false
+                            VideoProcessor.shared.deleteFile(at: audioURL)
+                            VideoProcessor.shared.deleteFile(at: url)
                         }
                         return
                     }
@@ -198,19 +213,27 @@ struct ContentView: View {
                             DispatchQueue.main.async {
                                 self.statusMessage = "Hata: \(errorMessage ?? "Bilinmeyen FFmpeg hatası")"
                                 self.isProcessing = false
+                                VideoProcessor.shared.deleteFile(at: audioURL)
+                                VideoProcessor.shared.deleteFile(at: assURL)
+                                VideoProcessor.shared.deleteFile(at: url)
                             }
                             return
                         }
                         
                         DispatchQueue.main.async { self.statusMessage = "Galeriye kaydediliyor..." }
-                        VideoProcessor.shared.saveToGallery(videoURL: outputURL) { success in
+                        VideoProcessor.shared.saveToGallery(videoURL: outputURL) { success, galleryError in
                             DispatchQueue.main.async {
                                 self.isProcessing = false
                                 if success {
                                     self.statusMessage = "Tebrikler! Altyazılı video galerinize başarıyla kaydedildi. 🎉"
                                 } else {
-                                    self.statusMessage = "Hata: Galeriye kaydedilemedi. Lütfen fotoğraf izinlerini kontrol edin."
+                                    self.statusMessage = "Hata: \(galleryError ?? "Galeriye kaydedilemedi.")"
                                 }
+                                // İşlem bitsin veya hata versin, tüm geçici dosyaları siliyoruz (Çöp toplama)
+                                VideoProcessor.shared.deleteFile(at: audioURL)
+                                VideoProcessor.shared.deleteFile(at: assURL)
+                                VideoProcessor.shared.deleteFile(at: url)
+                                VideoProcessor.shared.deleteFile(at: outputURL)
                             }
                         }
                     }
