@@ -129,6 +129,7 @@ struct ContentView: View {
                         .font(.subheadline)
                         .foregroundColor(.gray)
                         .multilineTextAlignment(.center)
+                        .textSelection(.enabled)
                     
                 }
                 .padding()
