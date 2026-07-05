@@ -1,0 +1,31 @@
+workflows:
+  ios-build:
+    name: Subtitle Studio iOS Build
+    environment:
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.hmyilm.SubtitleStudio
+    integrations:
+      app_store_connect: BURAYA_ANAHTAR_ADINI_YAZIN
+    scripts:
+      - name: Generate Xcode Project
+        script: |
+          brew install xcodegen
+          xcodegen generate
+      - name: Install Dependencies
+        script: |
+          pod install
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
+      - name: Build App for TestFlight
+        script: |
+          xcode-project build-ipa --workspace SubtitleStudio.xcworkspace --scheme SubtitleStudio
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
