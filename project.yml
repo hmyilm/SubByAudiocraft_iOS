@@ -14,6 +14,16 @@ targets:
       properties:
         UILaunchScreen: {}
         CFBundleIconName: AppIcon
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSPhotoLibraryUsageDescription: "Videolarınızı işleyebilmek için fotoğraf galerinize erişmemiz gerekiyor."
         NSPhotoLibraryAddUsageDescription: "Oluşturulan altyazılı videoyu galerinize kaydetmek için izin gerekiyor."
         NSSpeechRecognitionUsageDescription: "Videodaki sözleri otomatik yakalamak için ses tanıma izni gereklidir."
