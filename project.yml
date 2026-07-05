@@ -13,9 +13,5 @@ targets:
         UILaunchScreen: {}
         NSPhotoLibraryUsageDescription: "Videolarınızı işleyebilmek için fotoğraf galerinize erişmemiz gerekiyor."
         NSPhotoLibraryAddUsageDescription: "Oluşturulan altyazılı videoyu galerinize kaydetmek için izin gerekiyor."
-    dependencies:
-      - package: whisper
-packages:
-  whisper:
-    url: https://github.com/ggerganov/whisper.cpp.git
-    from: 1.5.0
+        NSSpeechRecognitionUsageDescription: "Videodaki sözleri otomatik yakalamak için ses tanıma izni gereklidir."
+        NSMicrophoneUsageDescription: "Ses tanıma algoritması için gereklidir."
