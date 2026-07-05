@@ -21,6 +21,7 @@ enum ProcessingStage: Int, CaseIterable {
 struct ProcessingView: View {
     let stage: ProcessingStage
     let message: String
+    var downloadProgress: Double? = nil
 
     @State private var pulse = false
 
@@ -68,6 +69,18 @@ struct ProcessingView: View {
                 }
             }
             .padding(.horizontal, 8)
+
+            // Model ilk kez indirilirken ilerleme çubuğu gösterilir
+            if let progress = downloadProgress, progress < 1.0 {
+                VStack(spacing: 6) {
+                    ProgressView(value: progress)
+                        .tint(Theme.yellow)
+                    Text("Yapay zeka modeli indiriliyor: %\(Int(progress * 100))")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                .padding(.horizontal, 16)
+            }
 
             Text(message)
                 .font(.footnote)

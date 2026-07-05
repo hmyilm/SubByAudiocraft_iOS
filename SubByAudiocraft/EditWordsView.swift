@@ -22,7 +22,7 @@ struct EditWordsView: View {
                         fontName: fontName,
                         fontSize: fontSize,
                         marginV: marginV,
-                        sampleText: words.first?.text ?? "Altyazı Ön İzleme",
+                        sampleText: words.isEmpty ? "Altyazı Ön İzleme" : words.prefix(3).map { $0.text }.joined(separator: " "),
                         height: 200
                     )
 

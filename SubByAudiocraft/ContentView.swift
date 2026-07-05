@@ -17,6 +17,7 @@ struct ContentView: View {
     // Workflow States
     @State private var currentStep: AppStep = .selectVideo
     @State private var processingStage: ProcessingStage = .extractingAudio
+    @State private var modelDownloadProgress: Double? = nil
     @State private var words: [VideoProcessor.WordTimestamp] = []
     @State private var videoURL: URL? = nil
     @State private var audioURL: URL? = nil
@@ -79,7 +80,7 @@ struct ContentView: View {
                                 marginV: $marginV
                             )
                         case .processing:
-                            ProcessingView(stage: processingStage, message: statusMessage)
+                            ProcessingView(stage: processingStage, message: statusMessage, downloadProgress: modelDownloadProgress)
                         case .done:
                             SuccessView(onNewVideo: resetToImport)
                         }
@@ -248,9 +249,14 @@ struct ContentView: View {
                 self.statusMessage = "Yapay Zeka sözleri analiz ediyor (İlk kullanımda ~500 MB model indirilir, Wi-Fi önerilir)..."
             }
 
-            VideoProcessor.shared.runSpeechRecognition(audioURL: audioURL) { words, speechError in
+            VideoProcessor.shared.runSpeechRecognition(audioURL: audioURL, downloadProgress: { fraction in
+                DispatchQueue.main.async {
+                    self.modelDownloadProgress = fraction >= 1.0 ? nil : fraction
+                }
+            }) { words, speechError in
                 if let speechError = speechError {
                     DispatchQueue.main.async {
+                        self.modelDownloadProgress = nil
                         self.statusMessage = "Hata: \(speechError)"
                         self.isProcessing = false
                         self.currentStep = .selectVideo
@@ -262,6 +268,7 @@ struct ContentView: View {
 
                 guard !words.isEmpty else {
                     DispatchQueue.main.async {
+                        self.modelDownloadProgress = nil
                         self.statusMessage = "Hata: Videoda net bir konuşma bulunamadı."
                         self.isProcessing = false
                         self.currentStep = .selectVideo
@@ -272,6 +279,7 @@ struct ContentView: View {
                 }
 
                 DispatchQueue.main.async {
+                    self.modelDownloadProgress = nil
                     self.words = words
                     self.isProcessing = false
                     self.currentStep = .editSubtitles

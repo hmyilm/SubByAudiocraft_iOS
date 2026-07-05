@@ -59,7 +59,8 @@ class VideoProcessor: ObservableObject {
     private var cachedWhisperKit: WhisperKit?
 
     // 2. Yapay Zeka WhisperKit (CoreML) ile Sesi Metne Çevirme (Python hassasiyetinde kelime kelime zamanlama)
-    func runSpeechRecognition(audioURL: URL, completion: @escaping ([WordTimestamp], String?) -> Void) {
+    // downloadProgress: model ilk kez indirilirken 0.0-1.0 arası ilerleme bildirir
+    func runSpeechRecognition(audioURL: URL, downloadProgress: @escaping (Double) -> Void, completion: @escaping ([WordTimestamp], String?) -> Void) {
         Task {
             do {
                 // 1. Model Klasörünü Hazırla (İlk çalıştırmada modeli Hugging Face'den indirir ve kaydeder)
@@ -70,7 +71,16 @@ class VideoProcessor: ObservableObject {
                 } else {
                     // "small" modeli: varsayılan tiny/base modellere göre Türkçe'de çok daha
                     // isabetli sonuç verir. İlk kullanımda ~500 MB indirilir ve cihazda saklanır.
-                    let config = WhisperKitConfig(model: "openai_whisper-small")
+                    // Önce indirme adımı (ilerleme geri bildirimli); model zaten indirilmişse hızlıca geçer.
+                    let modelFolder = try await WhisperKit.download(
+                        variant: "openai_whisper-small",
+                        progressCallback: { progress in
+                            downloadProgress(progress.fractionCompleted)
+                        }
+                    )
+                    downloadProgress(1.0)
+
+                    let config = WhisperKitConfig(modelFolder: modelFolder.path)
                     whisperKit = try await WhisperKit(config)
                     self.cachedWhisperKit = whisperKit
                 }
@@ -203,36 +213,68 @@ class VideoProcessor: ObservableObject {
         // Kelimeler düzenleme sırasında karışmış olabilir; zamana göre sıralıyoruz
         let sortedWords = words.sorted { $0.start < $1.start }
 
+        // Kelimeleri cümle benzeri satır gruplarına ayır:
+        // en fazla 4 kelime veya ~18 karakter; kelimeler arası 0.8 sn'den uzun
+        // boşluk varsa yeni satır başlat.
+        var groups: [[WordTimestamp]] = []
+        var currentGroup: [WordTimestamp] = []
+        var currentChars = 0
+
         for word in sortedWords {
-            // ASS formatını bozabilecek özel karakterleri temizle ({, }, \ ve satır sonları)
-            let cleanText = word.text
-                .replacingOccurrences(of: "\\", with: "")
-                .replacingOccurrences(of: "{", with: "")
-                .replacingOccurrences(of: "}", with: "")
-                .replacingOccurrences(of: "\n", with: " ")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if cleanText.isEmpty { continue }
+            let wordLength = word.text.count
+            if let lastWord = currentGroup.last {
+                let gap = word.start - lastWord.end
+                if currentGroup.count >= 4 || currentChars + wordLength > 18 || gap > 0.8 {
+                    groups.append(currentGroup)
+                    currentGroup = []
+                    currentChars = 0
+                }
+            }
+            currentGroup.append(word)
+            currentChars += wordLength + 1
+        }
+        if !currentGroup.isEmpty { groups.append(currentGroup) }
 
-            // Bitişin başlangıçtan önce olmasını engelle (düzenleyicide ters girilmiş olabilir)
-            let start = max(0, word.start)
-            let end = max(start + 0.1, word.end)
+        // Karaoke stili: satırın tamamı soluk (yarı saydam) görünür,
+        // söylenen kelimenin harfleri sırayla tam görünür hale gelir.
+        for group in groups {
+            guard let firstWord = group.first, let lastWord = group.last else { continue }
+            let groupStart = max(0, firstWord.start)
+            let groupEnd = max(groupStart + 0.2, lastWord.end)
 
-            let startStr = formatASSTime(start)
-            let endStr = formatASSTime(end)
-
-            // Dinamik Geçiş Efekti: her harf görünmez (FF) başlar ve sırayla görünür (00) hale gelir
-            let chars = Array(cleanText)
             var effectText = ""
-            let durationMs = (end - start) * 1000
-            let letterDur = durationMs / Double(chars.count)
+            for (wordIndex, word) in group.enumerated() {
+                // ASS formatını bozabilecek özel karakterleri temizle ({, }, \ ve satır sonları)
+                let cleanText = word.text
+                    .replacingOccurrences(of: "\\", with: "")
+                    .replacingOccurrences(of: "{", with: "")
+                    .replacingOccurrences(of: "}", with: "")
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if cleanText.isEmpty { continue }
 
-            for (i, char) in chars.enumerated() {
-                let lStartMs = Int(Double(i) * letterDur)
-                let fadeDur = max(20, min(100, Int(letterDur)))
-                effectText += "{\\alpha&HFF&\\t(\(lStartMs),\(lStartMs + fadeDur),\\alpha&H00&)}\(char)"
+                // Kelime zamanlarını grup içine kelepçele (ters girilmiş süreleri de düzeltir)
+                let wordStart = max(groupStart, word.start)
+                let wordEnd = max(wordStart + 0.05, word.end)
+                let wordStartMs = Int((wordStart - groupStart) * 1000)
+                let wordDurMs = max(50, Int((wordEnd - wordStart) * 1000))
+
+                let chars = Array(cleanText)
+                let letterDur = Double(wordDurMs) / Double(chars.count)
+
+                for (i, char) in chars.enumerated() {
+                    let lStartMs = wordStartMs + Int(Double(i) * letterDur)
+                    let fadeDur = max(20, min(100, Int(letterDur)))
+                    effectText += "{\\alpha&H80&\\t(\(lStartMs),\(lStartMs + fadeDur),\\alpha&H00&)}\(char)"
+                }
+
+                if wordIndex < group.count - 1 {
+                    effectText += " "
+                }
             }
 
-            assContent += "Dialogue: 0,\(startStr),\(endStr),Default,,0,0,0,,\(effectText)\n"
+            if effectText.isEmpty { continue }
+            assContent += "Dialogue: 0,\(formatASSTime(groupStart)),\(formatASSTime(groupEnd)),Default,,0,0,0,,\(effectText)\n"
         }
         
         let assURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".ass")
