@@ -140,26 +140,51 @@ class VideoProcessor: ObservableObject {
     }
     
     // 4. FFmpegKit ile Videoyu Oluşturma
-    func burnSubtitles(videoURL: URL, assURL: URL, completion: @escaping (URL?) -> Void) {
+    func burnSubtitles(videoURL: URL, assURL: URL, completion: @escaping (URL?, String?) -> Void) {
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
         
-        // Dosya yollarını FFmpeg'in anlayacağı şekle çevirme
+        // Font kütüphanesini FFmpegKit'e tanıtıyoruz (iOS sistem fontları için çok önemli)
+        FFmpegKitConfig.setFontDirectoryList(["/System/Library/Fonts", "/System/Library/Fonts/Core", "/System/Library/Fonts/AppFonts"], andFontNameMap: nil)
+        
         let inPath = videoURL.path
-        let assPath = assURL.path
         let outPath = outputURL.path
         
-        let cmd = "-y -i \"\(inPath)\" -vf \"ass=\(assPath)\" -c:v libx264 -b:v 15M -preset fast -c:a copy \"\(outPath)\""
+        // ASS filtresi içinde geçebilecek özel karakterleri FFmpeg için escape ediyoruz
+        let escapedAssPath = assURL.path
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: ":", with: "\\:")
+            .replacingOccurrences(of: ",", with: "\\,")
         
-        FFmpegKit.executeAsync(cmd) { session in
-            guard let returnCode = session?.getReturnCode() else {
-                completion(nil)
+        let vfString = "ass='\(escapedAssPath)'"
+        
+        // Argümanları dizi olarak vermek komut satırı açıklarını kapatır ve boşluk/tırnak hatalarını önler
+        let args = [
+            "-y",
+            "-i", inPath,
+            "-vf", vfString,
+            "-c:v", "libx264",
+            "-b:v", "15M",
+            "-preset", "fast",
+            "-c:a", "copy",
+            outPath
+        ]
+        
+        FFmpegKit.executeWithArgumentsAsync(args) { session in
+            guard let session = session else {
+                completion(nil, "Bilinmeyen bir oturum hatası")
                 return
             }
             
+            let returnCode = session.getReturnCode()
+            
             if ReturnCode.isSuccess(returnCode) {
-                completion(outputURL)
+                completion(outputURL, nil)
             } else {
-                completion(nil)
+                let logs = session.getLogsAsString() ?? "Log alınamadı"
+                print("FFMPEG HATASI: \(logs)")
+                // Sadece son 500 karakteri gösterelim ki ekrana sığsın
+                let shortLog = String(logs.suffix(500))
+                completion(nil, shortLog)
             }
         }
     }

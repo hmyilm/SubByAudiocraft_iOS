@@ -175,10 +175,10 @@ struct ContentView: View {
                 }
                 
                 DispatchQueue.main.async { self.statusMessage = "Altyazılar videoya gömülüyor (Bu işlem cihaz hızına göre biraz sürebilir)..." }
-                VideoProcessor.shared.burnSubtitles(videoURL: url, assURL: assURL) { outputURL in
+                VideoProcessor.shared.burnSubtitles(videoURL: url, assURL: assURL) { outputURL, errorMessage in
                     guard let outputURL = outputURL else {
                         DispatchQueue.main.async {
-                            self.statusMessage = "Hata: Video işlenirken sorun oluştu."
+                            self.statusMessage = "Hata: \(errorMessage ?? "Bilinmeyen FFmpeg hatası")"
                             self.isProcessing = false
                         }
                         return
