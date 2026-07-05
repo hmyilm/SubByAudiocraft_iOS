@@ -208,7 +208,7 @@ struct ContentView: View {
                                 VStack(alignment: .leading) {
                                     Text("Aşağı/Yukarı Konum: \(Int(marginV))")
                                         .fontWeight(.semibold)
-                                    Slider(value: $marginV, in: 0...500, step: 5)
+                                    Slider(value: $marginV, in: 30...950, step: 5)
                                         .accentColor(.purple)
                                 }
                             }
@@ -257,7 +257,7 @@ struct ContentView: View {
                                         }
                                         VStack(alignment: .leading) {
                                             Text("Konum: \(Int(marginV))").font(.caption).fontWeight(.semibold)
-                                            Slider(value: $marginV, in: 0...500, step: 5).accentColor(.purple)
+                                            Slider(value: $marginV, in: 30...950, step: 5).accentColor(.purple)
                                         }
                                     }
                                     .padding(.top, 4)
