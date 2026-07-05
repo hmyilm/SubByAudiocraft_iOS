@@ -150,6 +150,7 @@ class VideoProcessor: ObservableObject {
     // Font PostScript isimlerini libass/fontconfig'in tanıyacağı Font Family isimlerine dönüştürür.
     private func getFontFamilyName(for fontName: String) -> String {
         switch fontName {
+        case "Georgia": return "Georgia"
         case "Anton-Regular": return "Anton"
         case "Bangers-Regular": return "Bangers"
         case "BebasNeue-Regular": return "Bebas Neue"
@@ -235,15 +236,31 @@ class VideoProcessor: ObservableObject {
         }
         if !currentGroup.isEmpty { groups.append(currentGroup) }
 
-        // Karaoke stili: satırın tamamı soluk (yarı saydam) görünür,
-        // söylenen kelimenin harfleri sırayla tam görünür hale gelir.
-        for group in groups {
+        // Efekt (kullanıcının Python sistemiyle birebir aynı):
+        // Satırın tamamı TAM GÖRÜNÜR (&H00&) gelir; her harf, söylendiği anda
+        // yarı saydama (&HA0&) soluklaşır. Satır 0.2 sn erken görünüp 0.2 sn geç
+        // kaybolur; ardışık satırlar orta noktada kesişerek çakışma önlenir.
+        for (index, group) in groups.enumerated() {
             guard let firstWord = group.first, let lastWord = group.last else { continue }
-            let groupStart = max(0, firstWord.start)
-            let groupEnd = max(groupStart + 0.2, lastWord.end)
+            let rawStart = max(0, firstWord.start)
+            let rawEnd = max(rawStart + 0.2, lastWord.end)
+
+            var segStart = rawStart - 0.2
+            if index > 0, let prevLast = groups[index - 1].last {
+                let mid = (prevLast.end + rawStart) / 2
+                if segStart < mid { segStart = mid }
+            }
+            segStart = max(0, segStart)
+
+            var segEnd = rawEnd + 0.2
+            if index < groups.count - 1, let nextFirst = groups[index + 1].first {
+                let mid = (rawEnd + nextFirst.start) / 2
+                if segEnd > mid { segEnd = mid }
+            }
+            if segEnd < segStart + 0.2 { segEnd = segStart + 0.2 }
 
             var effectText = ""
-            for (wordIndex, word) in group.enumerated() {
+            for word in group {
                 // ASS formatını bozabilecek özel karakterleri temizle ({, }, \ ve satır sonları)
                 let cleanText = word.text
                     .replacingOccurrences(of: "\\", with: "")
@@ -253,28 +270,25 @@ class VideoProcessor: ObservableObject {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if cleanText.isEmpty { continue }
 
-                // Kelime zamanlarını grup içine kelepçele (ters girilmiş süreleri de düzeltir)
-                let wordStart = max(groupStart, word.start)
+                // Kelime zamanlarını kelepçele (ters girilmiş süreleri de düzeltir)
+                let wordStart = max(segStart, word.start)
                 let wordEnd = max(wordStart + 0.05, word.end)
-                let wordStartMs = Int((wordStart - groupStart) * 1000)
-                let wordDurMs = max(50, Int((wordEnd - wordStart) * 1000))
 
                 let chars = Array(cleanText)
-                let letterDur = Double(wordDurMs) / Double(chars.count)
+                let letterDur = (wordEnd - wordStart) / Double(chars.count)
 
                 for (i, char) in chars.enumerated() {
-                    let lStartMs = wordStartMs + Int(Double(i) * letterDur)
-                    let fadeDur = max(20, min(100, Int(letterDur)))
-                    effectText += "{\\alpha&H80&\\t(\(lStartMs),\(lStartMs + fadeDur),\\alpha&H00&)}\(char)"
+                    let lStartMs = Int((wordStart + Double(i) * letterDur - segStart) * 1000)
+                    let lEndMs = Int((wordStart + Double(i + 1) * letterDur - segStart) * 1000)
+                    let fadeEnd = max(lStartMs + 20, min(lEndMs, lStartMs + 100))
+                    effectText += "{\\alpha&H00&\\t(\(lStartMs),\(fadeEnd),\\alpha&HA0&)}\(char)"
                 }
 
-                if wordIndex < group.count - 1 {
-                    effectText += " "
-                }
+                effectText += " "
             }
 
-            if effectText.isEmpty { continue }
-            assContent += "Dialogue: 0,\(formatASSTime(groupStart)),\(formatASSTime(groupEnd)),Default,,0,0,0,,\(effectText)\n"
+            if effectText.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            assContent += "Dialogue: 0,\(formatASSTime(segStart)),\(formatASSTime(segEnd)),Default,,0,0,0,,\(effectText)\n"
         }
         
         let assURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".ass")

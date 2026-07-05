@@ -28,8 +28,9 @@ struct ContentView: View {
     @State private var fontSize: Double = 70.0
     @State private var marginV: Double = 120.0
 
-    // Popüler Özel Fontlar (Uygulamaya Gömülü - 15 Adet)
+    // Popüler Fontlar (Georgia iOS'ta yerleşiktir, diğerleri uygulamaya gömülüdür)
     let popularFonts = [
+        "Georgia",
         "Anton-Regular",
         "Bangers-Regular",
         "BebasNeue-Regular",
