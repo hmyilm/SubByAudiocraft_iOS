@@ -516,7 +516,7 @@ struct ContentView: View {
             
             self.audioURL = audioURL
             
-            DispatchQueue.main.async { self.statusMessage = "Yapay Zeka sözleri analiz ediyor..." }
+            DispatchQueue.main.async { self.statusMessage = "Yapay Zeka sözleri analiz ediyor (İlk açılışta model indirilir, lütfen bekleyin)..." }
             
             VideoProcessor.shared.runSpeechRecognition(audioURL: audioURL) { words, speechError in
                 if let speechError = speechError {

@@ -1,6 +1,6 @@
 import Foundation
 import AVFoundation
-import Speech
+import WhisperKit
 import Photos
 import ffmpegkit
 
@@ -55,66 +55,72 @@ class VideoProcessor: ObservableObject {
         }
     }
     
-    // 2. Apple Native Speech (Siri) ile Sesi Metne Çevirme (Detaylı hata ve izin kontrollü)
+    // 2. Yapay Zeka WhisperKit (CoreML) ile Sesi Metne Çevirme (Python hassasiyetinde kelime kelime zamanlama)
     func runSpeechRecognition(audioURL: URL, completion: @escaping ([WordTimestamp], String?) -> Void) {
-        SFSpeechRecognizer.requestAuthorization { authStatus in
-            switch authStatus {
-            case .authorized:
-                guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "tr-TR")) else {
-                    completion([], "Türkçe dil desteği bu cihazda mevcut değil.")
-                    return
-                }
+        Task {
+            do {
+                // 1. Model Klasörünü Hazırla (İlk çalıştırmada whisper-tiny modelini Hugging Face'den indirir ve kaydeder)
+                // Cihazın Neural Engine / Metal hızlandırıcılarını kullanarak yerel olarak deşifre eder.
+                let whisperKit = try await WhisperKit()
                 
-                let request = SFSpeechURLRecognitionRequest(url: audioURL)
-                request.shouldReportPartialResults = true
-                request.taskHint = .unspecified // Kesintisiz video konuşmalarını yakalamak için unspecified (varsayılan) moduna geçiyoruz (dictation modundaki erken durma hatasını çözer)
-                if #available(iOS 13.0, *) {
-                    request.requiresOnDeviceRecognition = false // İnternet desteği ile yüksek doğruluk ve tüm cihazlarda çalışma
-                }
+                // 2. Kod çözme ayarları (Türkçe dilini seçiyoruz ve en iyi transkripsiyonu istiyoruz)
+                var options = DecodingOptions()
+                options.language = "tr"
                 
-                var bestWords: [WordTimestamp] = []
-                var hasCompleted = false
+                // 3. Deşifre etme işlemini başlatıyoruz
+                let results = try await whisperKit.transcribe(audioPath: audioURL.path, decodeOptions: options)
                 
-                recognizer.recognitionTask(with: request) { result, error in
-                    if hasCompleted { return }
-                    
-                    if let result = result {
-                        var currentWords: [WordTimestamp] = []
-                        for segment in result.bestTranscription.segments {
-                            currentWords.append(WordTimestamp(
-                                text: segment.substring,
-                                start: segment.timestamp,
-                                end: segment.timestamp + segment.duration
-                            ))
-                        }
-                        if !currentWords.isEmpty {
-                            bestWords = currentWords
-                        }
-                        
-                        if result.isFinal {
-                            hasCompleted = true
-                            completion(bestWords, nil)
-                            return
+                // 4. Sonuçlardaki segmentleri kelime kelime ayrıştırıp diziye ekliyoruz
+                var words: [WordTimestamp] = []
+                
+                for result in results {
+                    if let segments = result.segments {
+                        for segment in segments {
+                            // Kelime düzeyinde zaman damgaları (Word-level timestamps) varsa alıyoruz
+                            if let segmentWords = segment.words, !segmentWords.isEmpty {
+                                for word in segmentWords {
+                                    let text = word.word.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        .replacingOccurrences(of: "[.,!?;:]", with: "", options: .regularExpression)
+                                    if !text.isEmpty {
+                                        words.append(WordTimestamp(
+                                            text: text,
+                                            start: Double(word.start),
+                                            end: Double(word.end)
+                                        ))
+                                    }
+                                }
+                            } else {
+                                // Eğer kelime zaman damgası yoksa segmenti kelimelere bölüp süreyi orantılı dağıtıyoruz
+                                let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                                let rawWords = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                                let duration = segment.end - segment.start
+                                let wordDur = duration / Double(max(1, rawWords.count))
+                                
+                                for (index, wordText) in rawWords.enumerated() {
+                                    let cleanText = wordText.replacingOccurrences(of: "[.,!?;:]", with: "", options: .regularExpression)
+                                    if !cleanText.isEmpty {
+                                        let start = segment.start + (Double(index) * wordDur)
+                                        words.append(WordTimestamp(
+                                            text: cleanText,
+                                            start: start,
+                                            end: start + wordDur
+                                        ))
+                                    }
+                                }
+                            }
                         }
                     }
-                    
-                    if let error = error {
-                        hasCompleted = true
-                        // Hata oluşsa bile (bağlantı kesintisi, zaman aşımı vb.), şimdiye kadar yakalanan kelimeleri geri dönüyoruz ki emek boşa gitmesin
-                        if !bestWords.isEmpty {
-                            completion(bestWords, nil)
-                        } else {
-                            completion([], "Ses analiz edilirken bir hata oluştu: \(error.localizedDescription)")
-                        }
-                        return
-                    }
                 }
-            case .denied, .restricted:
-                completion([], "Ses tanıma izni reddedildi. Lütfen Ayarlar'dan izin verin.")
-            case .notDetermined:
-                completion([], "Ses tanıma izni henüz verilmedi.")
-            @unknown default:
-                completion([], "Bilinmeyen ses tanıma yetki hatası.")
+                
+                if words.isEmpty {
+                    completion([], "Videoda deşifre edilebilecek net bir konuşma bulunamadı.")
+                } else {
+                    completion(words, nil)
+                }
+                
+            } catch {
+                print("WhisperKit hatası: \(error.localizedDescription)")
+                completion([], "WhisperKit yapay zeka analiz hatası: \(error.localizedDescription)")
             }
         }
     }
