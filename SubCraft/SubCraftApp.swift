@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct SubtitleStudioApp: App {
+struct SubCraftApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

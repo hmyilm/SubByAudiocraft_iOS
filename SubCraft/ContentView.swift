@@ -16,7 +16,7 @@ struct ContentView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
-                    Text("Dinamik Altyazı Stüdyosu")
+                    Text("SubCraft")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)

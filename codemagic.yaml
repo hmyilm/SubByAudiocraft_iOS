@@ -1,6 +1,6 @@
 workflows:
   ios-build:
-    name: Subtitle Studio iOS Build
+    name: SubCraft iOS Build
     environment:
       xcode: latest
       cocoapods: default
@@ -21,7 +21,7 @@ workflows:
           keychain initialize
       - name: Fetch signing files
         script: |
-          app-store-connect fetch-signing-files "com.hmyilm.SubtitleStudio" --type IOS_APP_STORE --create
+          app-store-connect fetch-signing-files "com.hmyilm.SubCraft" --type IOS_APP_STORE --create
       - name: Add certificates to keychain
         script: |
           keychain add-certificates
@@ -30,7 +30,7 @@ workflows:
           xcode-project use-profiles
       - name: Build App for TestFlight
         script: |
-          xcode-project build-ipa --workspace SubtitleStudio.xcworkspace --scheme SubtitleStudio
+          xcode-project build-ipa --workspace SubCraft.xcworkspace --scheme SubCraft
     artifacts:
       - build/ios/ipa/*.ipa
     publishing:
