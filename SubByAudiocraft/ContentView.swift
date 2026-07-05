@@ -16,7 +16,7 @@ struct ContentView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
-                    Text("SubCraft")
+                    Text("Sub by Audiocraft")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)

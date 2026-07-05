@@ -1,23 +1,23 @@
-name: SubCraft
+name: SubByAudiocraft
 options:
   bundleIdPrefix: com.hmyilm
 targets:
-  SubCraft:
+  SubByAudiocraft:
     type: application
     platform: iOS
     deploymentTarget: "16.0"
     settings:
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-      PRODUCT_BUNDLE_IDENTIFIER: com.hmyilm.SubCraft
+      PRODUCT_BUNDLE_IDENTIFIER: com.hmyilm.SubByAudiocraft
       MARKETING_VERSION: "1.0.0"
       CURRENT_PROJECT_VERSION: "1"
-    sources: [SubCraft]
+    sources: [SubByAudiocraft]
     info:
-      path: SubCraft/Info.plist
+      path: SubByAudiocraft/Info.plist
       properties:
         UILaunchScreen: {}
         CFBundleIconName: AppIcon
-        CFBundleDisplayName: SubCraft
+        CFBundleDisplayName: Sub by Audiocraft
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationPortraitUpsideDown

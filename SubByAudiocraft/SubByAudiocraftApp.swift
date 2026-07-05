@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct SubCraftApp: App {
+struct SubByAudiocraftApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
