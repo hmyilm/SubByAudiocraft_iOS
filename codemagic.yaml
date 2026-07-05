@@ -9,9 +9,7 @@ workflows:
         bundle_identifier: com.hmyilm.SubtitleStudio
     integrations:
       app_store_connect: BURAYA_API_KEY_ADINIZI_YAZIN
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.hmyilm.SubtitleStudio
+
     scripts:
       - name: Generate Xcode Project
         script: |
