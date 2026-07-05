@@ -14,7 +14,6 @@ struct ContentView: View {
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var statusMessage: String = "Video Seçin"
     @State private var isProcessing: Bool = false
-    @State private var segments: [String] = [] // Will hold Whisper results
     @State private var isFontListExpanded: Bool = false
     
     // Workflow States
@@ -107,11 +106,6 @@ struct ContentView: View {
                                                     .onAppear {
                                                         player.isMuted = true
                                                         player.play()
-                                                        // Döngüsel oynatma
-                                                        NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main) { _ in
-                                                            player.seek(to: .zero)
-                                                            player.play()
-                                                        }
                                                     }
                                                     .onDisappear {
                                                         player.pause()
@@ -237,7 +231,7 @@ struct ContentView: View {
                                                     }
                                             }
                                             
-                                            Text("Altyazı Ön İzleme")
+                                            Text(words.first?.text ?? "Altyazı Ön İzleme")
                                                 .font(.custom(fontName, size: CGFloat(fontSize) * (geo.size.height / 1080.0)))
                                                 .foregroundColor(.white)
                                                 .padding(.horizontal, 10)
@@ -255,7 +249,7 @@ struct ContentView: View {
                                     HStack(spacing: 12) {
                                         VStack(alignment: .leading) {
                                             Text("Boyut: \(Int(fontSize))").font(.caption).fontWeight(.semibold)
-                                            Slider(value: $fontSize, in: 30...150, step: 2).accentColor(logoYellow)
+                                            Slider(value: $fontSize, in: 30...150, step: 1).accentColor(logoYellow)
                                         }
                                         VStack(alignment: .leading) {
                                             Text("Konum: \(Int(marginV))").font(.caption).fontWeight(.semibold)
@@ -298,42 +292,49 @@ struct ContentView: View {
                                 
                                 ScrollView {
                                     VStack(spacing: 12) {
-                                        ForEach(0..<words.count, id: \.self) { index in
+                                        // Kimlik (id) tabanlı ForEach: indeks tabanlı yapı silme sırasında çökmeye yol açıyordu
+                                        ForEach($words) { $word in
                                             HStack(spacing: 8) {
                                                 // Kelime Giriş Alanı
-                                                TextField("Kelime", text: $words[index].text)
+                                                TextField("Kelime", text: $word.text)
                                                     .textFieldStyle(RoundedBorderTextFieldStyle())
                                                     .font(.body)
-                                                
-                                                // Süre Bilgisi ve Kontrolleri
+
+                                                // Süre Bilgisi ve Kontrolleri (başlangıç her zaman bitişten önce kalır)
                                                 VStack(spacing: 2) {
                                                     HStack(spacing: 4) {
-                                                        Button(action: { if words[index].start > 0.1 { words[index].start -= 0.1 } }) {
+                                                        Button(action: { $word.wrappedValue.start = max(0, word.start - 0.1) }) {
                                                             Image(systemName: "minus.circle").font(.caption).foregroundColor(.gray)
                                                         }
-                                                        Text(String(format: "%.1fs", words[index].start))
+                                                        Text(String(format: "%.1fs", word.start))
                                                             .font(.system(.caption, design: .monospaced))
                                                             .frame(width: 40)
-                                                        Button(action: { words[index].start += 0.1 }) {
+                                                        Button(action: {
+                                                            if word.start + 0.1 <= word.end - 0.1 {
+                                                                $word.wrappedValue.start += 0.1
+                                                            }
+                                                        }) {
                                                             Image(systemName: "plus.circle").font(.caption).foregroundColor(.gray)
                                                         }
                                                     }
                                                     HStack(spacing: 4) {
-                                                        Button(action: { if words[index].end > 0.1 { words[index].end -= 0.1 } }) {
+                                                        Button(action: {
+                                                            $word.wrappedValue.end = max(word.end - 0.1, word.start + 0.1)
+                                                        }) {
                                                             Image(systemName: "minus.circle").font(.caption).foregroundColor(.gray)
                                                         }
-                                                        Text(String(format: "%.1fs", words[index].end))
+                                                        Text(String(format: "%.1fs", word.end))
                                                             .font(.system(.caption, design: .monospaced))
                                                             .frame(width: 40)
-                                                        Button(action: { words[index].end += 0.1 }) {
+                                                        Button(action: { $word.wrappedValue.end += 0.1 }) {
                                                             Image(systemName: "plus.circle").font(.caption).foregroundColor(.gray)
                                                         }
                                                     }
                                                 }
-                                                
+
                                                 // Silme Butonu
                                                 Button(action: {
-                                                    words.remove(at: index)
+                                                    words.removeAll { $0.id == word.id }
                                                 }) {
                                                     Image(systemName: "trash")
                                                         .foregroundColor(.red)
@@ -472,13 +473,31 @@ struct ContentView: View {
                 }
             }
             .navigationBarHidden(true)
+            // Döngüsel oynatma (observer sızıntısı yaratmadan)
+            .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { note in
+                if let item = note.object as? AVPlayerItem, item === player?.currentItem {
+                    player?.seek(to: .zero)
+                    player?.play()
+                }
+            }
+            // Uzun süren analiz/kodlama sırasında ekranın kilitlenip işlemin kesilmesini önler
+            .onChange(of: isProcessing) { processing in
+                UIApplication.shared.isIdleTimerDisabled = processing
+            }
         }
     }
     
     // Galeriden seçilen videoyu kopyalayıp player'a yerleştirir
     func loadAndPreviewVideo() {
         guard let item = selectedItem else { return }
-        
+
+        // Yeni video seçildiğinde önceki videonun geçici dosyalarını temizle
+        player?.pause()
+        if let oldVideo = videoURL { VideoProcessor.shared.deleteFile(at: oldVideo) }
+        if let oldAudio = audioURL { VideoProcessor.shared.deleteFile(at: oldAudio) }
+        videoURL = nil
+        audioURL = nil
+
         item.loadTransferable(type: Movie.self) { result in
             DispatchQueue.main.async {
                 switch result {
@@ -506,18 +525,18 @@ struct ContentView: View {
         VideoProcessor.shared.extractAudio(from: url) { audioURL in
             guard let audioURL = audioURL else {
                 DispatchQueue.main.async {
-                    self.statusMessage = "Hata: Ses çıkarılamadı."
+                    // Video dosyası silinmez; kullanıcı tekrar deneyebilir
+                    self.statusMessage = "Hata: Ses çıkarılamadı. Lütfen tekrar deneyin."
                     self.isProcessing = false
                     self.currentStep = .selectVideo
-                    VideoProcessor.shared.deleteFile(at: url)
                 }
                 return
             }
-            
+
             self.audioURL = audioURL
-            
+
             DispatchQueue.main.async { self.statusMessage = "Yapay Zeka sözleri analiz ediyor (İlk açılışta model indirilir, lütfen bekleyin)..." }
-            
+
             VideoProcessor.shared.runSpeechRecognition(audioURL: audioURL) { words, speechError in
                 if let speechError = speechError {
                     DispatchQueue.main.async {
@@ -525,18 +544,18 @@ struct ContentView: View {
                         self.isProcessing = false
                         self.currentStep = .selectVideo
                         VideoProcessor.shared.deleteFile(at: audioURL)
-                        VideoProcessor.shared.deleteFile(at: url)
+                        self.audioURL = nil
                     }
                     return
                 }
-                
+
                 guard !words.isEmpty else {
                     DispatchQueue.main.async {
                         self.statusMessage = "Hata: Videoda net bir konuşma bulunamadı."
                         self.isProcessing = false
                         self.currentStep = .selectVideo
                         VideoProcessor.shared.deleteFile(at: audioURL)
-                        VideoProcessor.shared.deleteFile(at: url)
+                        self.audioURL = nil
                     }
                     return
                 }
@@ -585,6 +604,7 @@ struct ContentView: View {
             VideoProcessor.shared.burnSubtitles(videoURL: url, assURL: assURL) { outputURL, errorMessage in
                 guard let outputURL = outputURL else {
                     DispatchQueue.main.async {
+                        // Video ve ses dosyaları korunur; kullanıcı düzenleme ekranından tekrar deneyebilir
                         self.statusMessage = "Hata: \(errorMessage ?? "Bilinmeyen FFmpeg hatası")"
                         self.isProcessing = false
                         self.currentStep = .editSubtitles
@@ -592,31 +612,33 @@ struct ContentView: View {
                     }
                     return
                 }
-                
+
                 DispatchQueue.main.async { self.statusMessage = "Galeriye kaydediliyor..." }
-                
+
                 VideoProcessor.shared.saveToGallery(videoURL: outputURL) { success, galleryError in
                     DispatchQueue.main.async {
                         self.isProcessing = false
+                        VideoProcessor.shared.deleteFile(at: assURL)
+
                         if success {
                             self.statusMessage = "Tebrikler! Altyazılı video galerinize başarıyla kaydedildi. 🎉"
                             self.currentStep = .selectVideo
                             self.selectedItem = nil
                             self.player = nil
                             self.words = []
+
+                            // Başarılı bitişte tüm geçici dosyaları temizle
+                            VideoProcessor.shared.deleteFile(at: audioURL)
+                            VideoProcessor.shared.deleteFile(at: url)
+                            VideoProcessor.shared.deleteFile(at: outputURL)
+                            self.audioURL = nil
+                            self.videoURL = nil
                         } else {
+                            // Girdi dosyaları korunur: kullanıcı izni verip tekrar deneyebilir
                             self.statusMessage = "Hata: \(galleryError ?? "Galeriye kaydedilemedi.")"
                             self.currentStep = .editSubtitles
+                            VideoProcessor.shared.deleteFile(at: outputURL)
                         }
-                        
-                        // Garbage Collection (Tüm geçici dosyaları temizleme)
-                        VideoProcessor.shared.deleteFile(at: audioURL)
-                        VideoProcessor.shared.deleteFile(at: assURL)
-                        VideoProcessor.shared.deleteFile(at: url)
-                        VideoProcessor.shared.deleteFile(at: outputURL)
-                        
-                        self.audioURL = nil
-                        self.videoURL = nil
                     }
                 }
             }

@@ -24,14 +24,14 @@ class VideoProcessor: ObservableObject {
         
         let inPath = videoURL.path
         let outPath = outputURL.path
-        
-        // SFSpeechRecognizer için en kararlı format: 16kHz, Tek Kanal (Mono), 16-bit PCM WAV
-        // İnsan sesi dışındaki arka plan müzik baslarını ve tiz enstrümanları temizlemek için bandpass (ses) filtresi ekliyoruz
+
+        // Whisper için ideal format: 16kHz, Tek Kanal (Mono), 16-bit PCM WAV
+        // Not: Bandpass filtresi kullanılmıyor; Whisper tam bant ses ile eğitildiği için
+        // 3kHz üstünü kesmek ünsüz seslerini silip transkripsiyon kalitesini düşürür.
         let args = [
             "-y",
             "-i", inPath,
             "-vn",
-            "-af", "highpass=f=200, lowpass=f=3000",
             "-acodec", "pcm_s16le",
             "-ar", "16000",
             "-ac", "1",
@@ -55,18 +55,28 @@ class VideoProcessor: ObservableObject {
         }
     }
     
+    // Model bir kez yüklenir ve sonraki analizlerde tekrar kullanılır (her seferinde yeniden yüklemek çok yavaştır)
+    private var cachedWhisperKit: WhisperKit?
+
     // 2. Yapay Zeka WhisperKit (CoreML) ile Sesi Metne Çevirme (Python hassasiyetinde kelime kelime zamanlama)
     func runSpeechRecognition(audioURL: URL, completion: @escaping ([WordTimestamp], String?) -> Void) {
         Task {
             do {
-                // 1. Model Klasörünü Hazırla (İlk çalıştırmada whisper-tiny modelini Hugging Face'den indirir ve kaydeder)
+                // 1. Model Klasörünü Hazırla (İlk çalıştırmada modeli Hugging Face'den indirir ve kaydeder)
                 // Cihazın Neural Engine / Metal hızlandırıcılarını kullanarak yerel olarak deşifre eder.
-                let whisperKit = try await WhisperKit()
-                
-                // 2. Kod çözme ayarları (Türkçe dilini seçiyoruz ve en iyi transkripsiyonu istiyoruz)
+                let whisperKit: WhisperKit
+                if let cached = self.cachedWhisperKit {
+                    whisperKit = cached
+                } else {
+                    whisperKit = try await WhisperKit()
+                    self.cachedWhisperKit = whisperKit
+                }
+
+                // 2. Kod çözme ayarları (Türkçe dili ve kelime düzeyinde zaman damgaları)
                 var options = DecodingOptions()
                 options.language = "tr"
-                
+                options.wordTimestamps = true
+
                 // 3. Deşifre etme işlemini başlatıyoruz
                 let results = try await whisperKit.transcribe(audioPath: audioURL.path, decodeOptions: options)
                 
@@ -74,38 +84,37 @@ class VideoProcessor: ObservableObject {
                 var words: [WordTimestamp] = []
                 
                 for result in results {
-                    if let segments = result.segments {
-                        for segment in segments {
-                            // Kelime düzeyinde zaman damgaları (Word-level timestamps) varsa alıyoruz
-                            if let segmentWords = segment.words, !segmentWords.isEmpty {
-                                for word in segmentWords {
-                                    let text = word.word.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        .replacingOccurrences(of: "[.,!?;:]", with: "", options: .regularExpression)
-                                    if !text.isEmpty {
-                                        words.append(WordTimestamp(
-                                            text: text,
-                                            start: Double(word.start),
-                                            end: Double(word.end)
-                                        ))
-                                    }
+                    // Not: Bu WhisperKit sürümünde segments opsiyonel değildir; doğrudan geziyoruz
+                    for segment in result.segments {
+                        // Kelime düzeyinde zaman damgaları (Word-level timestamps) varsa alıyoruz
+                        if let segmentWords = segment.words, !segmentWords.isEmpty {
+                            for word in segmentWords {
+                                let text = word.word.trimmingCharacters(in: .whitespacesAndNewlines)
+                                    .replacingOccurrences(of: "[.,!?;:]", with: "", options: .regularExpression)
+                                if !text.isEmpty {
+                                    words.append(WordTimestamp(
+                                        text: text,
+                                        start: Double(word.start),
+                                        end: Double(word.end)
+                                    ))
                                 }
-                            } else {
-                                // Eğer kelime zaman damgası yoksa segmenti kelimelere bölüp süreyi orantılı dağıtıyoruz
-                                let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                                let rawWords = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-                                let duration = Double(segment.end) - Double(segment.start)
-                                let wordDur = duration / Double(max(1, rawWords.count))
-                                
-                                for (index, wordText) in rawWords.enumerated() {
-                                    let cleanText = wordText.replacingOccurrences(of: "[.,!?;:]", with: "", options: .regularExpression)
-                                    if !cleanText.isEmpty {
-                                        let start = Double(segment.start) + (Double(index) * wordDur)
-                                        words.append(WordTimestamp(
-                                            text: cleanText,
-                                            start: start,
-                                            end: start + wordDur
-                                        ))
-                                    }
+                            }
+                        } else {
+                            // Eğer kelime zaman damgası yoksa segmenti kelimelere bölüp süreyi orantılı dağıtıyoruz
+                            let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            let rawWords = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                            let duration = Double(segment.end) - Double(segment.start)
+                            let wordDur = duration / Double(max(1, rawWords.count))
+
+                            for (index, wordText) in rawWords.enumerated() {
+                                let cleanText = wordText.replacingOccurrences(of: "[.,!?;:]", with: "", options: .regularExpression)
+                                if !cleanText.isEmpty {
+                                    let start = Double(segment.start) + (Double(index) * wordDur)
+                                    words.append(WordTimestamp(
+                                        text: cleanText,
+                                        start: start,
+                                        end: start + wordDur
+                                    ))
                                 }
                             }
                         }
@@ -157,10 +166,16 @@ class VideoProcessor: ObservableObject {
               
         // Deprecated naturalSize yerine load(.naturalSize) kullanımı
         guard let size = try? await track.load(.naturalSize) else { return nil }
-        
-        let width = Double(abs(size.width))
-        let height = Double(abs(size.height))
-        
+
+        // Rotasyon metadatasını hesaba kat: dikey çekilen videolar naturalSize'ı yatay raporlar.
+        // preferredTransform uygulanmazsa dikey videolarda font oranı ve konum bozulur.
+        let transform = (try? await track.load(.preferredTransform)) ?? .identity
+        let rotatedRect = CGRect(origin: .zero, size: size).applying(transform)
+
+        let width = Double(abs(rotatedRect.width))
+        let height = Double(abs(rotatedRect.height))
+        guard width > 0, height > 0 else { return nil }
+
         let aspectRatio = width / height
         let virtualHeight = 1080
         let virtualWidth = Int(1080.0 * aspectRatio)
@@ -182,27 +197,38 @@ class VideoProcessor: ObservableObject {
         
         """
         
-        // Basit bir kelime birleştirici algoritması (yan yana gelenleri gruplama)
-        // Şimdilik her kelimeyi ayrı bir cümle gibi gösteriyoruz
-        for word in words {
-            let startStr = formatASSTime(word.start)
-            let endStr = formatASSTime(word.end)
-            
-            // Dinamik Geçiş Efekti
-            let text = word.text
-            let chars = Array(text)
+        // Kelimeler düzenleme sırasında karışmış olabilir; zamana göre sıralıyoruz
+        let sortedWords = words.sorted { $0.start < $1.start }
+
+        for word in sortedWords {
+            // ASS formatını bozabilecek özel karakterleri temizle ({, }, \ ve satır sonları)
+            let cleanText = word.text
+                .replacingOccurrences(of: "\\", with: "")
+                .replacingOccurrences(of: "{", with: "")
+                .replacingOccurrences(of: "}", with: "")
+                .replacingOccurrences(of: "\n", with: " ")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if cleanText.isEmpty { continue }
+
+            // Bitişin başlangıçtan önce olmasını engelle (düzenleyicide ters girilmiş olabilir)
+            let start = max(0, word.start)
+            let end = max(start + 0.1, word.end)
+
+            let startStr = formatASSTime(start)
+            let endStr = formatASSTime(end)
+
+            // Dinamik Geçiş Efekti: her harf görünmez (FF) başlar ve sırayla görünür (00) hale gelir
+            let chars = Array(cleanText)
             var effectText = ""
-            if chars.count > 0 {
-                let durationMs = (word.end - word.start) * 1000
-                let letterDur = durationMs / Double(chars.count)
-                
-                for (i, char) in chars.enumerated() {
-                    let lStartMs = Int(Double(i) * letterDur)
-                    let fadeEnd = lStartMs + 100
-                    effectText += "{\\alpha&H00&\\t(\(lStartMs),\(fadeEnd),\\alpha&HA0&)}\(char)"
-                }
+            let durationMs = (end - start) * 1000
+            let letterDur = durationMs / Double(chars.count)
+
+            for (i, char) in chars.enumerated() {
+                let lStartMs = Int(Double(i) * letterDur)
+                let fadeDur = max(20, min(100, Int(letterDur)))
+                effectText += "{\\alpha&HFF&\\t(\(lStartMs),\(lStartMs + fadeDur),\\alpha&H00&)}\(char)"
             }
-            
+
             assContent += "Dialogue: 0,\(startStr),\(endStr),Default,,0,0,0,,\(effectText)\n"
         }
         
@@ -235,26 +261,32 @@ class VideoProcessor: ObservableObject {
         let vfString = "ass='\(escapedAssPath)'"
         
         // Hardware accelerated encoding on iOS using h264_videotoolbox. Much faster and uses less battery.
+        // -allow_sw 1: donanım kodlayıcı kullanılamazsa yazılım kodlayıcıya düşerek çökmesini önler.
+        // 12M bitrate 1080p için yüksek kalite sağlar; 30M gereksiz büyük dosyalar üretiyordu.
         let args = [
             "-y",
             "-i", inPath,
             "-vf", vfString,
             "-c:v", "h264_videotoolbox",
-            "-b:v", "30M",
+            "-allow_sw", "1",
+            "-b:v", "12M",
+            "-movflags", "+faststart",
             "-c:a", "copy",
             outPath
         ]
-        
+
         FFmpegKit.execute(withArgumentsAsync: args) { session in
             guard let session = session else {
                 completion(nil, "Bilinmeyen bir oturum hatası")
                 return
             }
-            
+
             let returnCode = session.getReturnCode()
-            
+
             if ReturnCode.isSuccess(returnCode) {
                 completion(outputURL, nil)
+            } else if ReturnCode.isCancel(returnCode) {
+                completion(nil, "İşlem iptal edildi.")
             } else {
                 let logs = session.getLogsAsString() ?? "Log alınamadı"
                 print("FFMPEG HATASI: \(logs)")
