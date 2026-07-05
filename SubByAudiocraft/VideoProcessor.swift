@@ -68,7 +68,10 @@ class VideoProcessor: ObservableObject {
                 if let cached = self.cachedWhisperKit {
                     whisperKit = cached
                 } else {
-                    whisperKit = try await WhisperKit()
+                    // "small" modeli: varsayılan tiny/base modellere göre Türkçe'de çok daha
+                    // isabetli sonuç verir. İlk kullanımda ~500 MB indirilir ve cihazda saklanır.
+                    let config = WhisperKitConfig(model: "openai_whisper-small")
+                    whisperKit = try await WhisperKit(config)
                     self.cachedWhisperKit = whisperKit
                 }
 
