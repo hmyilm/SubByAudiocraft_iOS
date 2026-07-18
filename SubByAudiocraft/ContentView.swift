@@ -30,25 +30,11 @@ struct ContentView: View {
     @State private var fontSize: Double = 70.0
     @State private var marginV: Double = 120.0
 
-    // Popüler Fontlar (Georgia iOS'ta yerleşiktir, diğerleri uygulamaya gömülüdür)
-    let popularFonts = [
-        "Georgia",
-        "Anton-Regular",
-        "Bangers-Regular",
-        "BebasNeue-Regular",
-        "Lato-Bold",
-        "Pacifico-Regular",
-        "PermanentMarker-Regular",
-        "Poppins-Bold",
-        "Lobster-Regular",
-        "Creepster-Regular",
-        "AbrilFatface-Regular",
-        "AlfaSlabOne-Regular",
-        "Righteous-Regular",
-        "FrancoisOne-Regular",
-        "Shrikhand-Regular",
-        "BlackOpsOne-Regular"
-    ]
+    // Geçmiş (kaydedilmiş projeler): analizden sonra proje otomatik kaydedilir,
+    // buradan yeniden açılıp düzenlenebilir ve tekrar dışa aktarılabilir.
+    @ObservedObject private var store = ProjectStore.shared
+    @State private var showHistory = false
+    @State private var currentProjectID: UUID? = nil
 
     var body: some View {
         ZStack {
@@ -72,7 +58,7 @@ struct ContentView: View {
                                 fontName: $fontName,
                                 fontSize: $fontSize,
                                 marginV: $marginV,
-                                fonts: popularFonts
+                                fonts: FontCatalog.hepsi
                             )
                         case .editLines:
                             LineEditView(words: $words, breaks: $lineBreaks)
@@ -88,7 +74,13 @@ struct ContentView: View {
                         case .processing:
                             ProcessingView(stage: processingStage, message: statusMessage, downloadProgress: modelDownloadProgress)
                         case .done:
-                            SuccessView(onNewVideo: resetToImport)
+                            SuccessView(
+                                onNewVideo: resetToImport,
+                                onEditAgain: {
+                                    currentStep = .editSubtitles
+                                    statusMessage = "Düzenlemeye geri dönüldü. Değişiklik yapıp yeniden dışa aktarabilirsin."
+                                }
+                            )
                         }
 
                         if showBanner {
@@ -103,6 +95,9 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showHistory) {
+            HistoryView(store: store, onOpen: openProject)
+        }
         .onChange(of: selectedItem) { newValue in
             if newValue != nil {
                 statusMessage = "Video yüklendi. Stili ayarlayıp analizi başlatabilirsin."
@@ -144,6 +139,22 @@ struct ContentView: View {
                     .foregroundColor(.gray)
             }
             Spacer()
+
+            Button {
+                Theme.haptic()
+                showHistory = true
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "clock.arrow.circlepath")
+                    Text("Geçmiş")
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundColor(Theme.yellow)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(Color(white: 0.14)))
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -163,6 +174,7 @@ struct ContentView: View {
                 } else if currentStep == .editLines {
                     Button(action: {
                         currentStep = .editSubtitles
+                        saveProjectEdits(exported: false)
                         statusMessage = "Satırlar onaylandı. Şimdi zamanlamaları kontrol edebilirsin."
                     }) {
                         Label("Satırları Onayla", systemImage: "checkmark.circle.fill")
@@ -239,11 +251,13 @@ struct ContentView: View {
         guard let item = selectedItem else { return }
 
         // Yeni video seçildiğinde önceki videonun geçici dosyalarını temizle
+        // (proje klasörüne taşınmış videolar Geçmiş'e aittir, silinmez)
         player?.pause()
-        if let oldVideo = videoURL { VideoProcessor.shared.deleteFile(at: oldVideo) }
+        if let oldVideo = videoURL, !store.projeDosyasiMi(oldVideo) { VideoProcessor.shared.deleteFile(at: oldVideo) }
         if let oldAudio = audioURL { VideoProcessor.shared.deleteFile(at: oldAudio) }
         videoURL = nil
         audioURL = nil
+        currentProjectID = nil
 
         item.loadTransferable(type: Movie.self) { result in
             DispatchQueue.main.async {
@@ -321,6 +335,26 @@ struct ContentView: View {
                     self.modelDownloadProgress = nil
                     self.words = words
                     self.lineBreaks = VideoProcessor.shared.autoLineBreaks(for: words)
+
+                    // Projeyi Geçmiş'e kaydet: video kalıcı proje klasörüne taşınır,
+                    // player yeni adresle tazelenir. Böylece uygulama kapansa bile
+                    // proje sonradan açılıp yeniden düzenlenebilir.
+                    if let vURL = self.videoURL,
+                       let proje = self.store.olustur(
+                            videoURL: vURL,
+                            kelimeler: words,
+                            satirSonlari: self.lineBreaks,
+                            fontAdi: self.fontName,
+                            fontBoyu: self.fontSize,
+                            dikeyKonum: self.marginV
+                       ) {
+                        self.currentProjectID = proje.id
+                        let yeniURL = self.store.videoURL(proje)
+                        self.videoURL = yeniURL
+                        self.player = AVPlayer(url: yeniURL)
+                        self.player?.isMuted = true
+                    }
+
                     self.isProcessing = false
                     self.currentStep = .editLines
                     self.statusMessage = "Sözler çıkarıldı. Satır düzenini kontrol edip onaylayın."
@@ -329,10 +363,12 @@ struct ContentView: View {
         }
     }
 
-    // Adım 2'deki düzenlenmiş verilerle videoyu işler ve galeriye kaydeder
+    // Adım 2'deki düzenlenmiş verilerle videoyu işler ve galeriye kaydeder.
+    // Ses dosyası gerekmez: yalnız analiz aşamasında kullanılır; Geçmiş'ten açılan
+    // projelerde ses dosyası yoktur ama yeniden dışa aktarma yapılabilir.
     func burnFinalVideo() {
-        guard let url = videoURL, let audioURL = audioURL else {
-            statusMessage = "Hata: Video veya ses dosyası bulunamadı."
+        guard let url = videoURL else {
+            statusMessage = "Hata: Video dosyası bulunamadı."
             return
         }
 
@@ -382,26 +418,26 @@ struct ContentView: View {
                     DispatchQueue.main.async {
                         self.isProcessing = false
                         VideoProcessor.shared.deleteFile(at: assURL)
+                        VideoProcessor.shared.deleteFile(at: outputURL)
 
                         if success {
                             self.statusMessage = "Tebrikler! Altyazılı video galerinize başarıyla kaydedildi. 🎉"
                             self.currentStep = .done
-                            self.selectedItem = nil
-                            self.player = nil
-                            self.words = []
-                            self.lineBreaks = []
 
-                            // Başarılı bitişte tüm geçici dosyaları temizle
-                            VideoProcessor.shared.deleteFile(at: audioURL)
-                            VideoProcessor.shared.deleteFile(at: url)
-                            VideoProcessor.shared.deleteFile(at: outputURL)
-                            self.audioURL = nil
-                            self.videoURL = nil
+                            // Son düzenlemeleri Geçmiş'e işle (dışa aktarım sayacıyla)
+                            self.saveProjectEdits(exported: true)
+
+                            // Yalnız geçici dosyalar silinir. Kaynak video proje klasöründe
+                            // kalır ve düzenleyici durumu korunur: kullanıcı "Tekrar Düzenle"
+                            // ile geri dönüp beğenmediği yeri değiştirebilir.
+                            if let aURL = self.audioURL {
+                                VideoProcessor.shared.deleteFile(at: aURL)
+                                self.audioURL = nil
+                            }
                         } else {
                             // Girdi dosyaları korunur: kullanıcı izni verip tekrar deneyebilir
                             self.statusMessage = "Hata: \(galleryError ?? "Galeriye kaydedilemedi.")"
                             self.currentStep = .editSubtitles
-                            VideoProcessor.shared.deleteFile(at: outputURL)
                         }
                     }
                 }
@@ -410,9 +446,10 @@ struct ContentView: View {
     }
 
     // Adım 2'den vazgeçip sıfırlayarak geri döner
+    // (proje klasöründeki videolar Geçmiş'e aittir; yalnız geçici dosyalar silinir)
     func resetToImport() {
         player?.pause()
-        if let url = videoURL { VideoProcessor.shared.deleteFile(at: url) }
+        if let url = videoURL, !store.projeDosyasiMi(url) { VideoProcessor.shared.deleteFile(at: url) }
         if let aURL = audioURL { VideoProcessor.shared.deleteFile(at: aURL) }
 
         self.videoURL = nil
@@ -421,8 +458,55 @@ struct ContentView: View {
         self.selectedItem = nil
         self.words = []
         self.lineBreaks = []
+        self.currentProjectID = nil
         self.currentStep = .selectVideo
         self.statusMessage = "Video Seçin"
+    }
+
+    // Düzenleyicideki güncel durumu (sözler, satırlar, stil) açık projeye kaydeder
+    private func saveProjectEdits(exported: Bool) {
+        guard let pid = currentProjectID else { return }
+        store.guncelle(
+            id: pid,
+            kelimeler: words,
+            satirSonlari: lineBreaks,
+            fontAdi: fontName,
+            fontBoyu: fontSize,
+            dikeyKonum: marginV,
+            disaAktarildi: exported
+        )
+    }
+
+    // Geçmişten seçilen projeyi düzenleyicide açar
+    func openProject(_ proje: SavedProject) {
+        let url = store.videoURL(proje)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            showHistory = false
+            statusMessage = "Hata: Projenin video dosyası bulunamadı."
+            return
+        }
+
+        player?.pause()
+        if let old = videoURL, !store.projeDosyasiMi(old) { VideoProcessor.shared.deleteFile(at: old) }
+        if let aURL = audioURL {
+            VideoProcessor.shared.deleteFile(at: aURL)
+            audioURL = nil
+        }
+
+        videoURL = url
+        player = AVPlayer(url: url)
+        player?.isMuted = true
+        words = proje.kelimeler
+        lineBreaks = Set(proje.satirSonlari)
+        if FontCatalog.secenek(proje.fontAdi) != nil { fontName = proje.fontAdi }
+        fontSize = proje.fontBoyu
+        marginV = proje.dikeyKonum
+        currentProjectID = proje.id
+        selectedItem = nil
+
+        showHistory = false
+        currentStep = .editLines
+        statusMessage = "Proje geçmişten açıldı. Düzenleyip yeniden dışa aktarabilirsin."
     }
 }
 

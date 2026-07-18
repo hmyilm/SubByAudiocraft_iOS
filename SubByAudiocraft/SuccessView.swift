@@ -3,6 +3,7 @@ import SwiftUI
 // İşlem tamamlandığında gösterilen kutlama ekranı
 struct SuccessView: View {
     let onNewVideo: () -> Void
+    let onEditAgain: () -> Void
 
     var body: some View {
         VStack(spacing: 20) {
@@ -20,14 +21,21 @@ struct SuccessView: View {
                 .fontWeight(.bold)
                 .foregroundColor(.white)
 
-            Text("Altyazılı videon galerine kaydedildi.\nHemen paylaşabilirsin.")
+            Text("Altyazılı videon galerine kaydedildi.\nBeğenmediysen düzenlemeye geri dönebilirsin;\nprojen Geçmiş'te de saklanıyor.")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
 
-            Button("Yeni Video Oluştur", action: onNewVideo)
-                .buttonStyle(PrimaryButtonStyle())
-                .padding(.top, 8)
+            VStack(spacing: 10) {
+                Button(action: onEditAgain) {
+                    Label("Tekrar Düzenle", systemImage: "slider.horizontal.3")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                Button("Yeni Video Oluştur", action: onNewVideo)
+                    .buttonStyle(PrimaryButtonStyle())
+            }
+            .padding(.top, 8)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 44)

@@ -149,25 +149,8 @@ class VideoProcessor: ObservableObject {
     
     // Font PostScript isimlerini libass/fontconfig'in tanıyacağı Font Family isimlerine dönüştürür.
     private func getFontFamilyName(for fontName: String) -> String {
-        switch fontName {
-        case "Georgia": return "Georgia"
-        case "Anton-Regular": return "Anton"
-        case "Bangers-Regular": return "Bangers"
-        case "BebasNeue-Regular": return "Bebas Neue"
-        case "Lato-Bold": return "Lato"
-        case "Pacifico-Regular": return "Pacifico"
-        case "PermanentMarker-Regular": return "Permanent Marker"
-        case "Poppins-Bold": return "Poppins"
-        case "Lobster-Regular": return "Lobster"
-        case "Creepster-Regular": return "Creepster"
-        case "AbrilFatface-Regular": return "Abril Fatface"
-        case "AlfaSlabOne-Regular": return "Alfa Slab One"
-        case "Righteous-Regular": return "Righteous"
-        case "FrancoisOne-Regular": return "Francois One"
-        case "Shrikhand-Regular": return "Shrikhand"
-        case "BlackOpsOne-Regular": return "Black Ops One"
-        default: return fontName.replacingOccurrences(of: "-Bold", with: "").replacingOccurrences(of: "-Heavy", with: "").replacingOccurrences(of: "-Regular", with: "")
-        }
+        if let secenek = FontCatalog.secenek(fontName) { return secenek.assFamily }
+        return fontName.replacingOccurrences(of: "-Bold", with: "").replacingOccurrences(of: "-Heavy", with: "").replacingOccurrences(of: "-Regular", with: "")
     }
     
     // Kelimeler arası boşluk ve satır uzunluğuna göre otomatik satır önerisi üretir
@@ -229,20 +212,25 @@ class VideoProcessor: ObservableObject {
         let virtualWidth = Int(1080.0 * aspectRatio)
         
         let familyName = getFontFamilyName(for: fontName)
-        
+
+        // Bold bayrağı yalnız gerçekten kalın kesimi olan fontlarda açılır. Eskiden her font
+        // için -1 (açık) yazılıyordu; kalın kesimi olmayan fontlarda libass yapay kalınlaştırma
+        // uyguluyor ve gömülen yazı ön izlemedekinden farklı ("font değişmiş gibi") görünüyordu.
+        let boldFlag = (FontCatalog.secenek(fontName)?.kalin ?? fontName.contains("Bold")) ? -1 : 0
+
         var assContent = """
         [Script Info]
         ScriptType: v4.00+
         PlayResX: \(virtualWidth)
         PlayResY: \(virtualHeight)
-        
+
         [V4+ Styles]
         Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-        Style: Default,\(familyName),\(fontSize),&H00FFFFFF,&H000000FF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1,3,1.5,2,10,10,\(marginV),1
-        
+        Style: Default,\(familyName),\(fontSize),&H00FFFFFF,&H000000FF,&H00000000,&H00000000,\(boldFlag),0,0,0,100,100,0,0,1,3,1.5,2,10,10,\(marginV),1
+
         [Events]
         Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-        
+
         """
         
         // Satır grupları: kullanıcının satır düzenleyicide onayladığı düzen esas alınır;
@@ -264,29 +252,43 @@ class VideoProcessor: ObservableObject {
 
         // Efekt (kullanıcının Python sistemiyle birebir aynı):
         // Satırın tamamı TAM GÖRÜNÜR (&H00&) gelir; her harf, söylendiği anda
-        // yarı saydama (&HA0&) soluklaşır. Satır 0.2 sn erken görünüp 0.2 sn geç
-        // kaybolur; ardışık satırlar orta noktada kesişerek çakışma önlenir.
-        for (index, group) in groups.enumerated() {
+        // yarı saydama (&HA0&) soluklaşır. Satır 0.2 sn erken görünüp 0.2 sn geç kaybolur.
+        //
+        // ÖNEMLİ: Ardışık satırların zaman aralıkları KESİNLİKLE çakışmamalıdır.
+        // İki Dialogue satırı aynı anda ekrandaysa libass onları üst üste istifler:
+        // yeni satır önce yukarıda belirir, eski satır kaybolunca aşağı zıplar
+        // ("yazı hareket ediyor / font değişip geliyor" şikayetinin kaynağı buydu).
+        // Bu yüzden komşu satırlar arasında TEK ortak sınır hesaplanır ve bir imleç
+        // (cursor) ile hiçbir satırın bir öncekinden erken başlamaması garanti edilir.
+        var rawSegs: [(start: Double, end: Double, group: [WordTimestamp])] = []
+        for group in groups {
             guard let firstWord = group.first, let lastWord = group.last else { continue }
             let rawStart = max(0, firstWord.start)
             let rawEnd = max(rawStart + 0.2, lastWord.end)
+            rawSegs.append((rawStart, rawEnd, group))
+        }
 
-            var segStart = rawStart - 0.2
-            if index > 0, let prevLast = groups[index - 1].last {
-                let mid = (prevLast.end + rawStart) / 2
-                if segStart < mid { segStart = mid }
+        var boundaries: [Double] = []
+        if rawSegs.count > 1 {
+            for i in 0..<(rawSegs.count - 1) {
+                boundaries.append((rawSegs[i].end + rawSegs[i + 1].start) / 2)
             }
-            segStart = max(0, segStart)
+        }
 
-            var segEnd = rawEnd + 0.2
-            if index < groups.count - 1, let nextFirst = groups[index + 1].first {
-                let mid = (rawEnd + nextFirst.start) / 2
-                if segEnd > mid { segEnd = mid }
-            }
+        var cursor = 0.0
+        for (index, seg) in rawSegs.enumerated() {
+            var segStart = max(0, seg.start - 0.2)
+            if index > 0 { segStart = max(segStart, boundaries[index - 1]) }
+            segStart = max(segStart, cursor)
+
+            var segEnd = seg.end + 0.2
+            if index < rawSegs.count - 1 { segEnd = min(segEnd, boundaries[index]) }
+            // En az 0.2 sn görünürlük; imleç sayesinde bu uzatma da çakışma yaratamaz
             if segEnd < segStart + 0.2 { segEnd = segStart + 0.2 }
+            cursor = segEnd
 
             var effectText = ""
-            for word in group {
+            for word in seg.group {
                 // ASS formatını bozabilecek özel karakterleri temizle ({, }, \ ve satır sonları)
                 let cleanText = word.text
                     .replacingOccurrences(of: "\\", with: "")
@@ -332,7 +334,17 @@ class VideoProcessor: ObservableObject {
         let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
         
         // Font kütüphanesini FFmpegKit'e tanıtıyoruz (Özel yüklediğimiz fontlar uygulamanın kök dizininde yer alır)
-        FFmpegKitConfig.setFontDirectoryList([Bundle.main.bundlePath, "/System/Library/Fonts", "/System/Library/Fonts/Core"], with: nil)
+        // CoreAddition: Avenir Next, Futura, Marker Felt, Noteworthy gibi sistem fontları bu klasördedir;
+        // eklenmezse bu fontlar videoya gömülürken bulunamaz ve libass varsayılan fonta düşer.
+        FFmpegKitConfig.setFontDirectoryList([
+            Bundle.main.bundlePath,
+            "/System/Library/Fonts",
+            "/System/Library/Fonts/Core",
+            "/System/Library/Fonts/CoreAddition",
+            "/System/Library/Fonts/CoreUI",
+            "/System/Library/Fonts/AppFonts",
+            "/System/Library/Fonts/Extra"
+        ], with: nil)
         
         let inPath = videoURL.path
         let outPath = outputURL.path

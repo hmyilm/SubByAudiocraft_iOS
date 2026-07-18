@@ -9,7 +9,7 @@ struct SelectVideoView: View {
     @Binding var fontName: String
     @Binding var fontSize: Double
     @Binding var marginV: Double
-    let fonts: [String]
+    let fonts: [FontOption]
 
     var body: some View {
         VStack(spacing: 16) {

@@ -157,29 +157,23 @@ struct StatusBanner: View {
 
 // MARK: - Yatay Kaydırmalı Font Seçici Çipleri
 struct FontChipPicker: View {
-    let fonts: [String]
+    let fonts: [FontOption]
     @Binding var selection: String
-
-    private func displayName(_ font: String) -> String {
-        font.replacingOccurrences(of: "-Regular", with: "")
-            .replacingOccurrences(of: "-Bold", with: "")
-            .replacingOccurrences(of: "-Heavy", with: "")
-    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                ForEach(fonts, id: \.self) { font in
-                    let isSelected = font == selection
+                ForEach(fonts) { font in
+                    let isSelected = font.psName == selection
                     Button {
                         Theme.haptic()
-                        selection = font
+                        selection = font.psName
                     } label: {
                         VStack(spacing: 4) {
                             Text("Abc")
-                                .font(.custom(font, size: 22))
+                                .font(.custom(font.psName, size: 22))
                                 .foregroundColor(isSelected ? Theme.yellow : .white)
-                            Text(displayName(font))
+                            Text(font.display)
                                 .font(.caption2)
                                 .foregroundColor(isSelected ? Theme.yellow : .gray)
                                 .lineLimit(1)
