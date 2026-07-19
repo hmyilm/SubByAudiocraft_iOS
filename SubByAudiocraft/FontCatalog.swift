@@ -39,7 +39,15 @@ enum FontCatalog {
         FontOption(psName: "Righteous-Regular", display: "Righteous", assFamily: "Righteous", kalin: false),
         FontOption(psName: "FrancoisOne-Regular", display: "Francois One", assFamily: "Francois One", kalin: false),
         FontOption(psName: "Shrikhand-Regular", display: "Shrikhand", assFamily: "Shrikhand", kalin: false),
-        FontOption(psName: "BlackOpsOne-Regular", display: "Black Ops One", assFamily: "Black Ops One", kalin: false)
+        FontOption(psName: "BlackOpsOne-Regular", display: "Black Ops One", assFamily: "Black Ops One", kalin: false),
+        // El yazısı (bitişik) fontlar — Google Fonts, tam Türkçe karakter destekli
+        FontOption(psName: "GreatVibes-Regular", display: "Great Vibes", assFamily: "Great Vibes", kalin: false, bitisik: true),
+        FontOption(psName: "Allura-Regular", display: "Allura", assFamily: "Allura", kalin: false, bitisik: true),
+        FontOption(psName: "Sacramento-Regular", display: "Sacramento", assFamily: "Sacramento", kalin: false, bitisik: true),
+        FontOption(psName: "Parisienne-Regular", display: "Parisienne", assFamily: "Parisienne", kalin: false, bitisik: true),
+        FontOption(psName: "KaushanScript-Regular", display: "Kaushan", assFamily: "Kaushan Script", kalin: false, bitisik: true),
+        FontOption(psName: "MarckScript-Regular", display: "Marck Script", assFamily: "Marck Script", kalin: false, bitisik: true),
+        FontOption(psName: "Courgette-Regular", display: "Courgette", assFamily: "Courgette", kalin: false, bitisik: true)
     ]
 
     // iOS ile birlikte gelen sistem fontları — indirme gerektirmez, uygulamayı büyütmez.
@@ -58,6 +66,7 @@ enum FontCatalog {
         FontOption(psName: "GillSans-Bold", display: "Gill Sans", assFamily: "Gill Sans", kalin: true),
         FontOption(psName: "MarkerFelt-Wide", display: "Marker Felt", assFamily: "Marker Felt", kalin: true),
         FontOption(psName: "Noteworthy-Bold", display: "Noteworthy", assFamily: "Noteworthy", kalin: true),
+        FontOption(psName: "SavoyeLetPlain", display: "Savoye", assFamily: "Savoye LET", kalin: false, bitisik: true),
         FontOption(psName: "SnellRoundhand-Bold", display: "Snell Roundhand", assFamily: "Snell Roundhand", kalin: true, bitisik: true),
         FontOption(psName: "TimesNewRomanPS-BoldMT", display: "Times New Roman", assFamily: "Times New Roman", kalin: true),
         FontOption(psName: "TrebuchetMS-Bold", display: "Trebuchet", assFamily: "Trebuchet MS", kalin: true),

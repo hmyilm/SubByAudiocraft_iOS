@@ -207,6 +207,36 @@ class VideoProcessor: ObservableObject {
         return result
     }
 
+    // El yazısı süpürmesi için: satırdaki her karakterin BİTİŞ x konumunu ve toplam satır
+    // genişliğini ASS piksel biriminde ölçer. libass, font boyutunu "hücre yüksekliği"
+    // (çıkıcı+inici) olarak yorumlar (FreeType REAL_DIM); CoreText ise em puntosuyla
+    // çalışır — punto bu orana göre çevrilir. Ölçüm CTLine ile, bitişik şekillendirme
+    // (kern/liga/calt) açıkken yapılır; libass'ın HarfBuzz çıktısıyla örtüşür.
+    private func harfSinirlariniOlc(metin: String, fontName: String, assFontSize: Int) -> (genislik: Double, sinirlar: [Double])? {
+        guard !metin.isEmpty else { return nil }
+
+        let probe = CTFontCreateWithName(fontName as CFString, 1000, nil)
+        // CoreText fontu bulamayıp başka fonta düştüyse ölçüm geçersizdir
+        let resolvedName = CTFontCopyPostScriptName(probe) as String
+        guard resolvedName.caseInsensitiveCompare(fontName) == .orderedSame else { return nil }
+
+        let hucre = CTFontGetAscent(probe) + CTFontGetDescent(probe)
+        guard hucre > 0 else { return nil }
+        let punto = Double(assFontSize) * 1000.0 / Double(hucre)
+
+        let font = CTFontCreateWithName(fontName as CFString, CGFloat(punto), nil)
+        let attr = NSAttributedString(string: metin, attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font])
+        let line = CTLineCreateWithAttributedString(attr)
+        let genislik = CTLineGetTypographicBounds(line, nil, nil, nil)
+        guard genislik > 0 else { return nil }
+
+        var sinirlar: [Double] = []
+        for i in 1...metin.utf16.count {
+            sinirlar.append(Double(CTLineGetOffsetForStringIndex(line, i, nil)))
+        }
+        return (genislik, sinirlar)
+    }
+
     // 3. ASS Altyazı Dosyası Oluşturma (iOS 16+ uyumlu asenkron yapı)
     // lineBreaks: kullanıcının onayladığı satır sonları (boşsa otomatik öneri kullanılır)
     func generateASS(words: [WordTimestamp], lineBreaks: Set<UUID>, fontName: String, fontSize: Int, marginV: Int, videoURL: URL) async -> URL? {
@@ -314,8 +344,10 @@ class VideoProcessor: ObservableObject {
             if segEnd < segStart + 0.2 { segEnd = segStart + 0.2 }
             cursor = segEnd
 
-            var effectText = ""   // normal fontlar: tek katman; bitişik fontlar: üstteki eriyen katman
-            var plainText = ""    // bitişik fontlar: alt katmanın etiketsiz tam metni
+            var effectText = ""   // normal fontlar: tek katman; bitişik fontlarda yedek üst katman
+            var plainText = ""    // bitişik fontlar: etiketsiz tam satır metni
+            var harfZamanlar: [(sonUTF16: Int, s: Int, e: Int)] = []  // süpürme sınırı için harf zamanları
+            var utf16Pos = 0
             for word in seg.group {
                 // ASS formatını bozabilecek özel karakterleri temizle ({, }, \ ve satır sonları)
                 let cleanText = word.text
@@ -333,8 +365,8 @@ class VideoProcessor: ObservableObject {
                 let chars = Array(cleanText)
                 let letterDur = (wordEnd - wordStart) / Double(chars.count)
 
-                // Bitişik fontta üst katman harfi TAM SAYDAMA (&HFF&) erir — alttaki soluk
-                // bitişik kopya belirir. Normal fontta harf doğrudan yarı saydama (&HA0&) iner.
+                // Bitişik fontta yedek katman harfi TAM SAYDAMA (&HFF&) erir; normal fontta
+                // harf doğrudan yarı saydama (&HA0&) soluklaşır.
                 let hedefAlpha = bitisikFont ? "FF" : "A0"
 
                 for (i, char) in chars.enumerated() {
@@ -342,23 +374,50 @@ class VideoProcessor: ObservableObject {
                     let lEndMs = Int((wordStart + Double(i + 1) * letterDur - segStart) * 1000)
                     let fadeEnd = max(lStartMs + 20, min(lEndMs, lStartMs + 100))
                     effectText += "{\\alpha&H00&\\t(\(lStartMs),\(fadeEnd),\\alpha&H\(hedefAlpha)&)}\(char)"
+                    utf16Pos += String(char).utf16.count
+                    harfZamanlar.append((utf16Pos, lStartMs, max(lStartMs + 10, lEndMs)))
                 }
 
                 effectText += " "
                 plainText += cleanText + " "
+                utf16Pos += 1
             }
 
             if effectText.trimmingCharacters(in: .whitespaces).isEmpty { continue }
 
+            let t0 = formatASSTime(segStart)
+            let t1 = formatASSTime(segEnd)
+
             if bitisikFont {
-                // İki katman: alttaki (Layer 0) etiketsiz satır libass'ta tek parça
-                // şekillenir — harf bağları ve kontur her karede bitişik kalır. Üstteki
-                // (Layer 1) opak kopyanın harfleri sırası geldikçe eriyip altı ortaya
-                // çıkarır. Farklı Layer değerleri üst üste çizilir, istifleme yapmaz.
-                assContent += "Dialogue: 0,\(formatASSTime(segStart)),\(formatASSTime(segEnd)),Default,,0,0,0,,{\\alpha&HA0&}\(plainText)\n"
-                assContent += "Dialogue: 1,\(formatASSTime(segStart)),\(formatASSTime(segEnd)),Default,,0,0,0,,\(effectText)\n"
+                let metin = plainText.trimmingCharacters(in: .whitespaces)
+                // El yazısında harf takibi KAYAN KIRPMA SINIRIYLA (karaoke süpürmesi) yapılır:
+                // metnin içine tek etiket bile girmediği için satır tek parça şekillenir,
+                // harf bağları ve yerleşim hiçbir karede DEĞİŞEMEZ. Alt katman satırın soluk
+                // bitişik kopyası; üstteki opak kopyayı \clip penceresi soldan sağa eritir.
+                // Sınır her harfi tam kendi zaman aralığında geçer (CoreText ölçümü).
+                if let olcum = harfSinirlariniOlc(metin: metin, fontName: fontName, assFontSize: fontSize),
+                   olcum.genislik <= Double(virtualWidth - 40) {
+                    let x0 = (Double(virtualWidth) - olcum.genislik) / 2
+                    var tags = "{\\clip(0,0,\(virtualWidth),\(virtualHeight))"
+                    var cursorMs = 0
+                    for h in harfZamanlar where h.sonUTF16 - 1 < olcum.sinirlar.count {
+                        let s = max(h.s, cursorMs)
+                        let e = max(s + 10, h.e)
+                        cursorMs = e
+                        let x = min(max(0, Int((x0 + olcum.sinirlar[h.sonUTF16 - 1]).rounded())), virtualWidth)
+                        tags += "\\t(\(s),\(e),\\clip(\(x),0,\(virtualWidth),\(virtualHeight)))"
+                    }
+                    tags += "}"
+                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\alpha&HA0&}\(metin)\n"
+                    assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,\(tags)\(metin)\n"
+                } else {
+                    // Ölçüm yapılamadı veya satır ekrana sığmayıp sarılacak: yedek yöntem
+                    // (altta bitişik soluk kopya + üstte harf harf eriyen opak kopya)
+                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\alpha&HA0&}\(metin)\n"
+                    assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,\(effectText)\n"
+                }
             } else {
-                assContent += "Dialogue: 0,\(formatASSTime(segStart)),\(formatASSTime(segEnd)),Default,,0,0,0,,\(effectText)\n"
+                assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,\(effectText)\n"
             }
         }
         
