@@ -30,14 +30,17 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(breaks, Set(groups.compactMap { $0.last?.id }))
     }
 
-    func testRenderSpaceCheckAllowsSmallTemporaryInput() throws {
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("subby_test_" + UUID().uuidString)
-            .appendingPathExtension("mp4")
-        defer { try? FileManager.default.removeItem(at: url) }
-        try Data(repeating: 0, count: 1_024).write(to: url)
+    func testRenderSpaceRequirementUsesSafeMinimumAndScalesWithInput() {
+        let megabyte = Int64(1_024 * 1_024)
 
-        XCTAssertTrue(VideoProcessor.shared.hasEnoughSpaceToRender(videoURL: url))
+        XCTAssertEqual(
+            VideoProcessor.shared.renderSpaceRequirement(forInputBytes: 1 * megabyte),
+            350 * megabyte
+        )
+        XCTAssertEqual(
+            VideoProcessor.shared.renderSpaceRequirement(forInputBytes: 500 * megabyte),
+            1_000 * megabyte
+        )
     }
 
     private func makeWords(_ texts: [String]) -> [VideoProcessor.WordTimestamp] {

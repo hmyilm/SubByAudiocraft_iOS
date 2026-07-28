@@ -306,9 +306,15 @@ class VideoProcessor: ObservableObject {
             return true
         }
         let inputSize = Int64(values.fileSize ?? 0)
-        let minimum = Int64(350 * 1_024 * 1_024)
-        let required = max(minimum, inputSize * 2)
+        let required = renderSpaceRequirement(forInputBytes: inputSize)
         return available > required
+    }
+
+    func renderSpaceRequirement(forInputBytes inputSize: Int64) -> Int64 {
+        let minimum = Int64(350 * 1_024 * 1_024)
+        let safeInputSize = max(0, inputSize)
+        let scaledSize = safeInputSize > Int64.max / 2 ? Int64.max : safeInputSize * 2
+        return max(minimum, scaledSize)
     }
 
     // Yarım kalan analiz/kodlama işlemlerinin geçici dosyaları sonraki açılışlarda
