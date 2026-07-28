@@ -22,12 +22,16 @@ struct SavedProject: Identifiable, Codable {
     var kinetikStil: String?
     // Optional tutulur: eski projeler uygulamanın özgün altın vurgu rengiyle açılır.
     var kinetikVurgu: String?
+    // Optional tutulur: özel palet seçilmemiş eski projelerde güvenli varsayılan kullanılır.
+    var kinetikOzelRenk: String?
     // Optional tutulur: eski projelerde 1.8.0 görünümü Dengeli olarak korunur.
     var kinetikYogunluk: String?
     // Optional tutulur: seçilmemiş veya eski projelerde vurgu tamamen otomatik çözülür.
     var kinetikVurgular: [UUID]?
     // Optional tutulur: eski projeler harf ölçülerini değiştirmeyen Temiz görünümle açılır.
     var kinetikHarfStili: String?
+    // Optional tutulur: eski projelere kendiliğinden yeni arka katman eklenmez.
+    var kinetikOverlay: String?
     var videoDosyasi: String
     var disaAktarimSayisi: Int
 
@@ -43,6 +47,11 @@ struct SavedProject: Identifiable, Codable {
         KineticAccent.resolved(kinetikVurgu)
     }
 
+    var kineticCustomColorHex: String {
+        KineticResolvedColor.normalizedHex(kinetikOzelRenk)
+            ?? KineticAccent.defaultCustomHex
+    }
+
     var kineticIntensity: KineticIntensity {
         KineticIntensity.resolved(kinetikYogunluk)
     }
@@ -53,6 +62,10 @@ struct SavedProject: Identifiable, Codable {
 
     var kineticLetterStyle: KineticLetterStyle {
         KineticLetterStyle.resolved(kinetikHarfStili)
+    }
+
+    var kineticOverlayStyle: KineticOverlayStyle {
+        KineticOverlayStyle.resolved(kinetikOverlay)
     }
 }
 
@@ -138,9 +151,11 @@ final class ProjectStore: ObservableObject {
                  karaokeModu: KaraokeMode,
                  kinetikStil: KineticStyle,
                  kinetikVurgu: KineticAccent,
+                 kinetikOzelRenk: String,
                  kinetikYogunluk: KineticIntensity,
                  kinetikVurgular: Set<UUID>,
-                 kinetikHarfStili: KineticLetterStyle) -> SavedProject? {
+                 kinetikHarfStili: KineticLetterStyle,
+                 kinetikOverlay: KineticOverlayStyle) -> SavedProject? {
         let id = UUID()
         let fm = FileManager.default
         let hedefKlasor = klasor(id)
@@ -179,11 +194,14 @@ final class ProjectStore: ObservableObject {
             karaokeModu: karaokeModu.rawValue,
             kinetikStil: kinetikStil.rawValue,
             kinetikVurgu: kinetikVurgu.rawValue,
+            kinetikOzelRenk: KineticResolvedColor.normalizedHex(kinetikOzelRenk)
+                ?? KineticAccent.defaultCustomHex,
             kinetikYogunluk: kinetikYogunluk.rawValue,
             kinetikVurgular: kinetikVurgular.sorted {
                 $0.uuidString < $1.uuidString
             },
             kinetikHarfStili: kinetikHarfStili.rawValue,
+            kinetikOverlay: kinetikOverlay.rawValue,
             videoDosyasi: dosyaAdi,
             disaAktarimSayisi: 0
         )
@@ -217,9 +235,11 @@ final class ProjectStore: ObservableObject {
                   karaokeModu: KaraokeMode,
                   kinetikStil: KineticStyle,
                   kinetikVurgu: KineticAccent,
+                  kinetikOzelRenk: String,
                   kinetikYogunluk: KineticIntensity,
                   kinetikVurgular: Set<UUID>,
                   kinetikHarfStili: KineticLetterStyle,
+                  kinetikOverlay: KineticOverlayStyle,
                   disaAktarildi: Bool) {
         guard let idx = projeler.firstIndex(where: { $0.id == id }) else { return }
         var proje = projeler[idx]
@@ -231,11 +251,14 @@ final class ProjectStore: ObservableObject {
         proje.karaokeModu = karaokeModu.rawValue
         proje.kinetikStil = kinetikStil.rawValue
         proje.kinetikVurgu = kinetikVurgu.rawValue
+        proje.kinetikOzelRenk = KineticResolvedColor.normalizedHex(kinetikOzelRenk)
+            ?? KineticAccent.defaultCustomHex
         proje.kinetikYogunluk = kinetikYogunluk.rawValue
         proje.kinetikVurgular = kinetikVurgular.sorted {
             $0.uuidString < $1.uuidString
         }
         proje.kinetikHarfStili = kinetikHarfStili.rawValue
+        proje.kinetikOverlay = kinetikOverlay.rawValue
         proje.baslik = Self.baslikUret(kelimeler)
         proje.guncelleme = Date()
         if disaAktarildi { proje.disaAktarimSayisi += 1 }

@@ -142,6 +142,7 @@ enum KineticAccent: String, CaseIterable, Identifiable, Codable {
     case ice
     case violet
     case mint
+    case custom
 
     var id: String { rawValue }
 
@@ -152,33 +153,172 @@ enum KineticAccent: String, CaseIterable, Identifiable, Codable {
         case .ice: return "Buz"
         case .violet: return "Menekşe"
         case .mint: return "Nane"
+        case .custom: return "Özel"
         }
+    }
+
+    static let defaultCustomHex = "#FECC2F"
+
+    static var presetCases: [KineticAccent] {
+        allCases.filter { $0 != .custom }
+    }
+
+    private var presetHex: String {
+        switch self {
+        case .gold: return "#FECC2F"
+        case .coral: return "#FF5C7A"
+        case .ice: return "#58D5FF"
+        case .violet: return "#A78BFA"
+        case .mint: return "#54E6A5"
+        case .custom: return Self.defaultCustomHex
+        }
+    }
+
+    func resolvedColor(customHex: String?) -> KineticResolvedColor {
+        KineticResolvedColor(
+            hex: self == .custom
+                ? (customHex ?? Self.defaultCustomHex)
+                : presetHex
+        )
     }
 
     // ASS renkleri BBGGRR sırasındadır.
     var assColor: String {
-        switch self {
-        case .gold: return "2FCCFE"    // #FECC2F
-        case .coral: return "7A5CFF"   // #FF5C7A
-        case .ice: return "FFD558"     // #58D5FF
-        case .violet: return "FA8BA7"  // #A78BFA
-        case .mint: return "A5E654"    // #54E6A5
-        }
+        resolvedColor(customHex: nil).assColor
     }
 
     var rgb: (red: Double, green: Double, blue: Double) {
-        switch self {
-        case .gold: return (254.0 / 255.0, 204.0 / 255.0, 47.0 / 255.0)
-        case .coral: return (255.0 / 255.0, 92.0 / 255.0, 122.0 / 255.0)
-        case .ice: return (88.0 / 255.0, 213.0 / 255.0, 255.0 / 255.0)
-        case .violet: return (167.0 / 255.0, 139.0 / 255.0, 250.0 / 255.0)
-        case .mint: return (84.0 / 255.0, 230.0 / 255.0, 165.0 / 255.0)
-        }
+        let color = resolvedColor(customHex: nil)
+        return (color.red, color.green, color.blue)
     }
 
     static func resolved(_ rawValue: String?) -> KineticAccent {
         guard let rawValue else { return .gold }
         return KineticAccent(rawValue: rawValue) ?? .gold
+    }
+}
+
+struct KineticResolvedColor: Equatable {
+    let hex: String
+    let redByte: Int
+    let greenByte: Int
+    let blueByte: Int
+
+    init(hex rawValue: String) {
+        let normalized = Self.normalizedHex(rawValue) ?? KineticAccent.defaultCustomHex
+        let digits = String(normalized.dropFirst())
+        let value = UInt32(digits, radix: 16) ?? 0xFECC2F
+        hex = normalized
+        redByte = Int((value >> 16) & 0xFF)
+        greenByte = Int((value >> 8) & 0xFF)
+        blueByte = Int(value & 0xFF)
+    }
+
+    var red: Double { Double(redByte) / 255.0 }
+    var green: Double { Double(greenByte) / 255.0 }
+    var blue: Double { Double(blueByte) / 255.0 }
+
+    // ASS renkleri BBGGRR sırasındadır.
+    var assColor: String {
+        String(format: "%02X%02X%02X", blueByte, greenByte, redByte)
+    }
+
+    // WCAG göreli parlaklığın sadeleştirilmiş, video üstü metin için daha güvenli eşiği.
+    // Parlak kapsüllerde siyah, koyu kapsüllerde beyaz aktif metin kullanılır.
+    var usesDarkForeground: Bool {
+        let luminance = (red * 0.2126) + (green * 0.7152) + (blue * 0.0722)
+        return luminance >= 0.56
+    }
+
+    var foregroundASSColor: String {
+        usesDarkForeground ? "000000" : "FFFFFF"
+    }
+
+    static func normalizedHex(_ rawValue: String?) -> String? {
+        guard var digits = rawValue?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased(), !digits.isEmpty else {
+            return nil
+        }
+        if digits.hasPrefix("#") { digits.removeFirst() }
+        if digits.count == 3 {
+            digits = digits.map { "\($0)\($0)" }.joined()
+        }
+        guard digits.count == 6,
+              digits.unicodeScalars.allSatisfy({
+                  CharacterSet(charactersIn: "0123456789ABCDEF").contains($0)
+              }) else {
+            return nil
+        }
+        return "#" + digits
+    }
+}
+
+enum KineticOverlayStyle: String, CaseIterable, Identifiable, Codable {
+    case automatic
+    case none
+    case glass
+    case cinematicBand
+    case accentPanel
+    case spotlight
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .automatic: return "Otomatik"
+        case .none: return "Kapalı"
+        case .glass: return "Cam"
+        case .cinematicBand: return "Sinema"
+        case .accentPanel: return "Panel"
+        case .spotlight: return "Spot"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .automatic: return "wand.and.rays"
+        case .none: return "rectangle.slash"
+        case .glass: return "rectangle.fill"
+        case .cinematicBand: return "rectangle.split.3x1.fill"
+        case .accentPanel: return "rectangle.split.2x1.fill"
+        case .spotlight: return "scope"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .automatic:
+            return "Cümle yapısına göre Cam, Panel veya Spot katmanını seçer; nakarat tekrarlarında aynı görünümü korur."
+        case .none:
+            return "Arka katman kullanmaz; yalnız tipografi ve kelime vurguları görünür."
+        case .glass:
+            return "Yazı grubunu ince konturlu, yarı saydam sinematik bir kartta toplar."
+        case .cinematicBand:
+            return "Alt bölgeyi yatay bir film bandı ve ince vurgu çizgisiyle sakinleştirir."
+        case .accentPanel:
+            return "Editoryal kompozisyona koyu bir plaka ve renkli kenar imzası ekler."
+        case .spotlight:
+            return "Söylenen kelimenin arkasında ritimle değişen kontrollü bir odak plakası kullanır."
+        }
+    }
+
+    func resolved(for scene: KineticScene) -> KineticOverlayStyle {
+        guard self == .automatic else { return self }
+        switch scene {
+        case .phraseBuild, .captionWindow:
+            return .glass
+        case .editorialStack, .chorusLockup:
+            return .accentPanel
+        case .focusCut, .impactSequence:
+            return .spotlight
+        }
+    }
+
+    static func resolved(_ rawValue: String?) -> KineticOverlayStyle {
+        // Eski projelerin görünümü kendiliğinden değişmesin.
+        guard let rawValue else { return .none }
+        return KineticOverlayStyle(rawValue: rawValue) ?? .none
     }
 }
 
@@ -1629,7 +1769,7 @@ class VideoProcessor: ObservableObject {
         placement: KineticWordPlacement,
         word: WordTimestamp,
         plan: KineticTypographyPlan,
-        accent: KineticAccent,
+        accent: KineticResolvedColor,
         intensity: KineticIntensity,
         segmentStart: Double,
         segmentEnd: Double
@@ -1673,6 +1813,381 @@ class VideoProcessor: ObservableObject {
         return "Dialogue: 0,\(formatASSTime(start)),\(formatASSTime(end)),Default,,0,0,0,,\(tags)\(path)\n"
     }
 
+    private struct KineticOverlayGroup {
+        let placements: [KineticWordPlacement]
+        let start: Double
+        let end: Double
+    }
+
+    private struct KineticOverlayBounds {
+        let left: Int
+        let top: Int
+        let width: Int
+        let height: Int
+        let radius: Int
+    }
+
+    private func kineticOverlayGroups(
+        placements: [KineticWordPlacement],
+        cleaned: [(word: WordTimestamp, text: String)],
+        plan: KineticTypographyPlan,
+        overlay: KineticOverlayStyle,
+        segmentStart: Double,
+        segmentEnd: Double
+    ) -> [KineticOverlayGroup] {
+        if overlay == .spotlight {
+            return placements.compactMap { placement in
+                guard cleaned.indices.contains(placement.index) else { return nil }
+                let word = cleaned[placement.index].word
+                let start = max(segmentStart, word.start - 0.07)
+                let end = min(segmentEnd, max(start + 0.10, word.end + 0.09))
+                guard end > start else { return nil }
+                return KineticOverlayGroup(
+                    placements: [placement],
+                    start: start,
+                    end: end
+                )
+            }
+        }
+
+        if plan.scene == .captionWindow {
+            return plan.pages.compactMap { page in
+                let pagePlacements = placements.filter { page.contains($0.index) }
+                guard let firstIndex = page.first,
+                      let lastIndex = page.last,
+                      cleaned.indices.contains(firstIndex),
+                      cleaned.indices.contains(lastIndex),
+                      !pagePlacements.isEmpty else {
+                    return nil
+                }
+                let start = max(segmentStart, cleaned[firstIndex].word.start - 0.11)
+                let end = min(segmentEnd, cleaned[lastIndex].word.end + 0.13)
+                guard end > start else { return nil }
+                return KineticOverlayGroup(
+                    placements: pagePlacements,
+                    start: start,
+                    end: end
+                )
+            }
+        }
+
+        guard !placements.isEmpty, segmentEnd > segmentStart else { return [] }
+        return [
+            KineticOverlayGroup(
+                placements: placements,
+                start: segmentStart,
+                end: segmentEnd
+            )
+        ]
+    }
+
+    private func kineticOverlayBounds(
+        placements: [KineticWordPlacement],
+        style: KineticOverlayStyle,
+        virtualWidth: Int,
+        virtualHeight: Int
+    ) -> KineticOverlayBounds? {
+        guard !placements.isEmpty else { return nil }
+        let rawLeft = placements.map {
+            Double($0.x) - ($0.width / 2)
+        }.min() ?? 0
+        let rawRight = placements.map {
+            Double($0.x) + ($0.width / 2)
+        }.max() ?? Double(virtualWidth)
+        let rawTop = placements.map {
+            Double($0.y) - (Double($0.visualFontSize) * 0.62)
+        }.min() ?? 0
+        let rawBottom = placements.map {
+            Double($0.y) + (Double($0.visualFontSize) * 0.62)
+        }.max() ?? Double(virtualHeight)
+
+        let padX: Double
+        let padY: Double
+        switch style {
+        case .glass:
+            padX = 25
+            padY = 16
+        case .cinematicBand:
+            padX = 0
+            padY = 22
+        case .accentPanel:
+            padX = 32
+            padY = 21
+        case .spotlight:
+            padX = 17
+            padY = 11
+        case .automatic, .none:
+            return nil
+        }
+
+        let left: Int
+        let right: Int
+        if style == .cinematicBand {
+            left = 0
+            right = virtualWidth
+        } else {
+            left = max(8, Int(floor(rawLeft - padX)))
+            right = min(virtualWidth - 8, Int(ceil(rawRight + padX)))
+        }
+        let top = max(8, Int(floor(rawTop - padY)))
+        let bottom = min(virtualHeight - 8, Int(ceil(rawBottom + padY)))
+        guard right > left, bottom > top else { return nil }
+        let height = bottom - top
+        let radius: Int
+        switch style {
+        case .cinematicBand: radius = 1
+        case .spotlight: radius = max(7, min(18, height / 4))
+        case .glass, .accentPanel: radius = max(10, min(24, height / 5))
+        case .automatic, .none: radius = 1
+        }
+        return KineticOverlayBounds(
+            left: left,
+            top: top,
+            width: right - left,
+            height: height,
+            radius: radius
+        )
+    }
+
+    private func kineticOverlayShapeDialogue(
+        layer: Int,
+        start: Double,
+        end: Double,
+        bounds: KineticOverlayBounds,
+        color: String,
+        alpha: String,
+        extraTags: String = ""
+    ) -> String {
+        let path = kineticRoundedRectanglePath(
+            width: bounds.width,
+            height: bounds.height,
+            radius: bounds.radius
+        )
+        let tags = "{\\an7\\pos(\(bounds.left),\(bounds.top))\\p1\\bord0\\shad0" +
+            "\\c&H\(color)&\\alpha&H\(alpha)&\(extraTags)}"
+        return "Dialogue: \(layer),\(formatASSTime(start)),\(formatASSTime(end)),Default,,0,0,0,,\(tags)\(path)\n"
+    }
+
+    private func kineticOverlayDialogues(
+        placements: [KineticWordPlacement],
+        cleaned: [(word: WordTimestamp, text: String)],
+        plan: KineticTypographyPlan,
+        overlayStyle: KineticOverlayStyle,
+        accent: KineticResolvedColor,
+        intensity: KineticIntensity,
+        virtualWidth: Int,
+        virtualHeight: Int,
+        segmentStart: Double,
+        segmentEnd: Double
+    ) -> String {
+        let resolvedStyle = overlayStyle.resolved(for: plan.scene)
+        guard resolvedStyle != .none else { return "" }
+        let groups = kineticOverlayGroups(
+            placements: placements,
+            cleaned: cleaned,
+            plan: plan,
+            overlay: resolvedStyle,
+            segmentStart: segmentStart,
+            segmentEnd: segmentEnd
+        )
+        var result = ""
+        let spotlightAlpha: String
+        switch intensity {
+        case .subtle: spotlightAlpha = "82"
+        case .balanced: spotlightAlpha = "72"
+        case .energetic: spotlightAlpha = "64"
+        }
+
+        for group in groups {
+            guard let bounds = kineticOverlayBounds(
+                placements: group.placements,
+                style: resolvedStyle,
+                virtualWidth: virtualWidth,
+                virtualHeight: virtualHeight
+            ) else {
+                continue
+            }
+            switch resolvedStyle {
+            case .glass:
+                let shadowBounds = KineticOverlayBounds(
+                    left: bounds.left,
+                    top: bounds.top + 6,
+                    width: bounds.width,
+                    height: bounds.height,
+                    radius: bounds.radius
+                )
+                result += kineticOverlayShapeDialogue(
+                    layer: 0,
+                    start: group.start,
+                    end: group.end,
+                    bounds: shadowBounds,
+                    color: "000000",
+                    alpha: "82",
+                    extraTags: "\\blur5\\fad(75,100)"
+                )
+                result += kineticOverlayShapeDialogue(
+                    layer: 0,
+                    start: group.start,
+                    end: group.end,
+                    bounds: bounds,
+                    color: "0D0D10",
+                    alpha: "4E",
+                    extraTags: "\\bord1.2\\3c&HFFFFFF&\\3a&HD5&\\fad(75,100)"
+                )
+                let hairline = KineticOverlayBounds(
+                    left: bounds.left + max(12, bounds.radius),
+                    top: bounds.top,
+                    width: min(max(40, bounds.width / 3), 110),
+                    height: 3,
+                    radius: 1
+                )
+                result += kineticOverlayShapeDialogue(
+                    layer: 1,
+                    start: group.start,
+                    end: group.end,
+                    bounds: hairline,
+                    color: accent.assColor,
+                    alpha: "20",
+                    extraTags: "\\fad(90,100)"
+                )
+            case .cinematicBand:
+                result += kineticOverlayShapeDialogue(
+                    layer: 0,
+                    start: group.start,
+                    end: group.end,
+                    bounds: bounds,
+                    color: "08080A",
+                    alpha: "48",
+                    extraTags: "\\fad(100,120)"
+                )
+                let topLine = KineticOverlayBounds(
+                    left: 0,
+                    top: bounds.top,
+                    width: bounds.width,
+                    height: 2,
+                    radius: 1
+                )
+                result += kineticOverlayShapeDialogue(
+                    layer: 1,
+                    start: group.start,
+                    end: group.end,
+                    bounds: topLine,
+                    color: accent.assColor,
+                    alpha: "48",
+                    extraTags: "\\fad(120,120)"
+                )
+            case .accentPanel:
+                result += kineticOverlayShapeDialogue(
+                    layer: 0,
+                    start: group.start,
+                    end: group.end,
+                    bounds: bounds,
+                    color: "09090B",
+                    alpha: "42",
+                    extraTags: "\\bord1\\3c&HFFFFFF&\\3a&HE0&\\fad(80,110)"
+                )
+                let sideBar = KineticOverlayBounds(
+                    left: bounds.left,
+                    top: bounds.top + max(9, bounds.radius / 2),
+                    width: 5,
+                    height: max(12, bounds.height - max(18, bounds.radius)),
+                    radius: 2
+                )
+                result += kineticOverlayShapeDialogue(
+                    layer: 1,
+                    start: group.start,
+                    end: group.end,
+                    bounds: sideBar,
+                    color: accent.assColor,
+                    alpha: "08",
+                    extraTags: "\\fad(90,110)"
+                )
+            case .spotlight:
+                result += kineticOverlayShapeDialogue(
+                    layer: 0,
+                    start: group.start,
+                    end: group.end,
+                    bounds: bounds,
+                    color: accent.assColor,
+                    alpha: spotlightAlpha,
+                    extraTags: "\\bord1.4\\3c&H\(accent.assColor)&\\3a&H38&\\fad(45,80)"
+                )
+            case .automatic, .none:
+                break
+            }
+        }
+        return result
+    }
+
+    private func kineticWholeLineOverlayDialogues(
+        text: String,
+        measuredWidth: Double,
+        fontSize: Int,
+        marginV: Int,
+        virtualWidth: Int,
+        virtualHeight: Int,
+        plan: KineticTypographyPlan,
+        overlayStyle: KineticOverlayStyle,
+        accent: KineticResolvedColor,
+        intensity: KineticIntensity,
+        segmentStart: Double,
+        segmentEnd: Double
+    ) -> String {
+        guard !text.isEmpty, measuredWidth > 0, segmentEnd > segmentStart else { return "" }
+        let y = Int(min(
+            Double(virtualHeight - 30),
+            max(
+                Double(fontSize + 30),
+                Double(virtualHeight - marginV) - Double(fontSize) * 0.38
+            )
+        ).rounded())
+        let design = KineticGlyphDesign(
+            characters: Array(text),
+            scaleFactors: Array(repeating: 1, count: text.count),
+            trackingFactor: 0,
+            treatment: .standard
+        )
+        let placement = KineticWordPlacement(
+            index: 0,
+            rowIndex: 0,
+            fontSize: fontSize,
+            visualFontSize: fontSize,
+            width: min(measuredWidth, Double(virtualWidth - 24)),
+            x: virtualWidth / 2,
+            y: y,
+            glyphDesign: design
+        )
+        let word = WordTimestamp(
+            text: text,
+            start: segmentStart,
+            end: segmentEnd
+        )
+        // Bitişik font tek parça şekillendirilmeye devam eder. Plan yalnız overlay
+        // gruplamasında tek satıra indirgenir; gliflerin içine ASS etiketi sokulmaz.
+        let singleLinePlan = KineticTypographyPlan(
+            scene: plan.scene,
+            motion: plan.motion,
+            highlight: plan.highlight,
+            energy: plan.energy,
+            emphasisIndex: 0,
+            rows: [[0]],
+            pages: [[0]],
+            repeatCount: plan.repeatCount
+        )
+        return kineticOverlayDialogues(
+            placements: [placement],
+            cleaned: [(word: word, text: text)],
+            plan: singleLinePlan,
+            overlayStyle: overlayStyle,
+            accent: accent,
+            intensity: intensity,
+            virtualWidth: virtualWidth,
+            virtualHeight: virtualHeight,
+            segmentStart: segmentStart,
+            segmentEnd: segmentEnd
+        )
+    }
+
     // İç erişim, gerçek ASS üretiminin regresyon testlerinde doğrulanabilmesi içindir.
     func makeKineticDialogues(
         group: [WordTimestamp],
@@ -1686,8 +2201,10 @@ class VideoProcessor: ObservableObject {
         virtualHeight: Int,
         style: KineticStyle = .automatic,
         accent: KineticAccent = .gold,
+        customColorHex: String = KineticAccent.defaultCustomHex,
         intensity: KineticIntensity = .balanced,
         letterStyle: KineticLetterStyle = .clean,
+        overlayStyle: KineticOverlayStyle = .none,
         repeatCount: Int = 1,
         scenePlan: KineticTypographyPlan? = nil
     ) -> String {
@@ -1730,7 +2247,19 @@ class VideoProcessor: ObservableObject {
                 letterStyle: letterStyle
             )
         }
-        var result = ""
+        let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
+        var result = kineticOverlayDialogues(
+            placements: placements,
+            cleaned: cleaned,
+            plan: plan,
+            overlayStyle: overlayStyle,
+            accent: resolvedAccent,
+            intensity: intensity,
+            virtualWidth: virtualWidth,
+            virtualHeight: virtualHeight,
+            segmentStart: segStart,
+            segmentEnd: segEnd
+        )
 
         for placement in placements {
             let index = placement.index
@@ -1878,7 +2407,9 @@ class VideoProcessor: ObservableObject {
             }
             let colorInEnd = min(eventDurationMs, wordStartMs + 70)
             let colorOutEnd = min(eventDurationMs, wordEndMs + 100)
-            let activeColor = plan.highlight == .pill ? "000000" : accent.assColor
+            let activeColor = plan.highlight == .pill
+                ? resolvedAccent.foregroundASSColor
+                : resolvedAccent.assColor
             let shouldPulse = !isolatedWord && wordStartMs >= entryPeak
             let highlightScale = plan.highlight == .glow
                 ? min(112, intensity.activeScale + 2)
@@ -1895,7 +2426,7 @@ class VideoProcessor: ObservableObject {
                 tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&\(restingScaleTags))"
             }
             if plan.highlight == .glow {
-                tags += "\\4c&H\(accent.assColor)&\\4a&H55&\\shad2.4"
+                tags += "\\4c&H\(resolvedAccent.assColor)&\\4a&H55&\\shad2.4"
             }
             if emphasis {
                 tags += "\\3c&H3A2610&\\bord3.4"
@@ -1906,7 +2437,7 @@ class VideoProcessor: ObservableObject {
                 placement: placement,
                 word: item.word,
                 plan: plan,
-                accent: accent,
+                accent: resolvedAccent,
                 intensity: intensity,
                 segmentStart: eventStart,
                 segmentEnd: safeEventEnd
@@ -1928,8 +2459,10 @@ class VideoProcessor: ObservableObject {
         karaokeMode: KaraokeMode = .classic,
         kineticStyle: KineticStyle = .automatic,
         kineticAccent: KineticAccent = .gold,
+        kineticCustomColorHex: String = KineticAccent.defaultCustomHex,
         kineticIntensity: KineticIntensity = .balanced,
         kineticLetterStyle: KineticLetterStyle = .clean,
+        kineticOverlayStyle: KineticOverlayStyle = .none,
         kineticEmphasisWordIDs: Set<UUID> = [],
         videoURL: URL
     ) async -> URL? {
@@ -2085,12 +2618,36 @@ class VideoProcessor: ObservableObject {
                     virtualHeight: virtualHeight,
                     style: kineticStyle,
                     accent: kineticAccent,
+                    customColorHex: kineticCustomColorHex,
                     intensity: kineticIntensity,
                     letterStyle: kineticLetterStyle,
+                    overlayStyle: kineticOverlayStyle,
                     repeatCount: kineticPlans[index].repeatCount,
                     scenePlan: kineticPlans[index]
                 )
                 continue
+            }
+
+            if karaokeMode == .kinetic && bitisikFont {
+                let fittedLineWidth = harfSinirlariniOlc(
+                    metin: lineText,
+                    fontName: fontName,
+                    assFontSize: lineFontSize
+                )?.genislik ?? min(measuredWidth, maximumLineWidth)
+                assContent += kineticWholeLineOverlayDialogues(
+                    text: lineText,
+                    measuredWidth: fittedLineWidth,
+                    fontSize: lineFontSize,
+                    marginV: marginV,
+                    virtualWidth: virtualWidth,
+                    virtualHeight: virtualHeight,
+                    plan: kineticPlans[index],
+                    overlayStyle: kineticOverlayStyle,
+                    accent: kineticAccent.resolvedColor(customHex: kineticCustomColorHex),
+                    intensity: kineticIntensity,
+                    segmentStart: segStart,
+                    segmentEnd: segEnd
+                )
             }
 
             // Bitişik el yazısı fontlarında kelimeyi ayrı katmanlara bölmek harf bağlarını

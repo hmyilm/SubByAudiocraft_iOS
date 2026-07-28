@@ -612,6 +612,87 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertFalse(ass.contains("\\frz"))
     }
 
+    func testCustomAccentNormalizesHexASSOrderAndForegroundContrast() {
+        XCTAssertEqual(KineticResolvedColor.normalizedHex(" #1a3bc4 "), "#1A3BC4")
+        XCTAssertEqual(KineticResolvedColor.normalizedHex("#f80"), "#FF8800")
+        XCTAssertNil(KineticResolvedColor.normalizedHex("turuncu"))
+
+        let dark = KineticAccent.custom.resolvedColor(customHex: "#123ABC")
+        let light = KineticAccent.custom.resolvedColor(customHex: "#F4E55A")
+        XCTAssertEqual(dark.hex, "#123ABC")
+        XCTAssertEqual(dark.assColor, "BC3A12")
+        XCTAssertFalse(dark.usesDarkForeground)
+        XCTAssertEqual(dark.foregroundASSColor, "FFFFFF")
+        XCTAssertTrue(light.usesDarkForeground)
+        XCTAssertEqual(light.foregroundASSColor, "000000")
+    }
+
+    func testAutomaticOverlayResolvesBySceneFamilyAndLegacyStaysOff() {
+        XCTAssertEqual(
+            KineticOverlayStyle.automatic.resolved(for: .phraseBuild),
+            .glass
+        )
+        XCTAssertEqual(
+            KineticOverlayStyle.automatic.resolved(for: .editorialStack),
+            .accentPanel
+        )
+        XCTAssertEqual(
+            KineticOverlayStyle.automatic.resolved(for: .impactSequence),
+            .spotlight
+        )
+        XCTAssertEqual(KineticOverlayStyle.resolved(nil), .none)
+        XCTAssertEqual(KineticOverlayStyle.resolved("bilinmeyen"), .none)
+    }
+
+    func testGlassOverlayAndCustomAccentAreWrittenToASSBelowWords() {
+        let words = makeWords(["gece", "sana", "dönerim"])
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.4,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            style: .cinematic,
+            accent: .custom,
+            customColorHex: "#123ABC",
+            overlayStyle: .glass
+        )
+
+        XCTAssertTrue(ass.contains("\\p1\\bord0\\shad0\\c&H0D0D10&"))
+        XCTAssertTrue(ass.contains("\\c&HBC3A12&"))
+        XCTAssertTrue(ass.contains("\\3c&HFFFFFF&"))
+        XCTAssertTrue(ass.contains("Dialogue: 0,"))
+        XCTAssertTrue(ass.contains("Dialogue: 2,") || ass.contains("Dialogue: 3,"))
+        XCTAssertFalse(ass.contains("\\frz"))
+    }
+
+    func testSpotlightOverlayCreatesOneTimedPlatePerWord() {
+        let words = makeWords(["kal", "benimle", "bu", "gece"])
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.7,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            style: .impact,
+            overlayStyle: .spotlight
+        )
+
+        XCTAssertEqual(
+            ass.components(separatedBy: "\\alpha&H72&").count - 1,
+            words.count
+        )
+        XCTAssertTrue(ass.contains("\\3a&H38&"))
+    }
+
     func testUnknownAndLegacyKaraokeModesResolveToClassic() {
         XCTAssertEqual(KaraokeMode.resolved(nil), .classic)
         XCTAssertEqual(KaraokeMode.resolved("bilinmeyen"), .classic)
@@ -628,6 +709,7 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(KineticLetterStyle.resolved(nil), .clean)
         XCTAssertEqual(KineticLetterStyle.resolved("bilinmeyen"), .clean)
         XCTAssertEqual(KineticLetterStyle.resolved("poster"), .poster)
+        XCTAssertEqual(KineticOverlayStyle.resolved("glass"), .glass)
     }
 
     func testLegacyProjectWithoutKaraokeModeDecodesAsClassic() throws {
@@ -652,15 +734,19 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertNil(project.karaokeModu)
         XCTAssertNil(project.kinetikStil)
         XCTAssertNil(project.kinetikVurgu)
+        XCTAssertNil(project.kinetikOzelRenk)
         XCTAssertNil(project.kinetikYogunluk)
         XCTAssertNil(project.kinetikVurgular)
         XCTAssertNil(project.kinetikHarfStili)
+        XCTAssertNil(project.kinetikOverlay)
         XCTAssertEqual(project.karaokeMode, .classic)
         XCTAssertEqual(project.kineticStyle, .automatic)
         XCTAssertEqual(project.kineticAccent, .gold)
+        XCTAssertEqual(project.kineticCustomColorHex, KineticAccent.defaultCustomHex)
         XCTAssertEqual(project.kineticIntensity, .balanced)
         XCTAssertTrue(project.kineticEmphasisWordIDs.isEmpty)
         XCTAssertEqual(project.kineticLetterStyle, .clean)
+        XCTAssertEqual(project.kineticOverlayStyle, .none)
     }
 
     private func makeWords(_ texts: [String]) -> [VideoProcessor.WordTimestamp] {

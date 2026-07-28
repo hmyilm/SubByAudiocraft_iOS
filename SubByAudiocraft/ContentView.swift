@@ -40,8 +40,10 @@ struct ContentView: View {
     @AppStorage("subtitle.karaokeMode") private var karaokeModeRaw: String = KaraokeMode.classic.rawValue
     @AppStorage("subtitle.kineticStyle") private var kineticStyleRaw: String = KineticStyle.automatic.rawValue
     @AppStorage("subtitle.kineticAccent") private var kineticAccentRaw: String = KineticAccent.gold.rawValue
+    @AppStorage("subtitle.kineticCustomColorHex") private var kineticCustomColorHex: String = KineticAccent.defaultCustomHex
     @AppStorage("subtitle.kineticIntensity") private var kineticIntensityRaw: String = KineticIntensity.balanced.rawValue
     @AppStorage("subtitle.kineticLetterStyle") private var kineticLetterStyleRaw: String = KineticLetterStyle.automatic.rawValue
+    @AppStorage("subtitle.kineticOverlayStyle") private var kineticOverlayStyleRaw: String = KineticOverlayStyle.automatic.rawValue
     @AppStorage("analysis.quality") private var analysisQualityRaw: String = AnalysisQuality.balanced.rawValue
 
     // Geçmiş (kaydedilmiş projeler): analizden sonra proje otomatik kaydedilir,
@@ -75,8 +77,10 @@ struct ContentView: View {
                                 karaokeMode: karaokeModeBinding,
                                 kineticStyle: kineticStyleBinding,
                                 kineticAccent: kineticAccentBinding,
+                                kineticCustomColorHex: $kineticCustomColorHex,
                                 kineticIntensity: kineticIntensityBinding,
                                 kineticLetterStyle: kineticLetterStyleBinding,
+                                kineticOverlayStyle: kineticOverlayStyleBinding,
                                 analysisQuality: analysisQualityBinding,
                                 isLoadingVideo: isLoadingVideo,
                                 fonts: FontCatalog.hepsi
@@ -94,8 +98,10 @@ struct ContentView: View {
                                 karaokeMode: karaokeModeBinding,
                                 kineticStyle: kineticStyleBinding,
                                 kineticAccent: kineticAccentBinding,
+                                kineticCustomColorHex: $kineticCustomColorHex,
                                 kineticIntensity: kineticIntensityBinding,
                                 kineticLetterStyle: kineticLetterStyleBinding,
+                                kineticOverlayStyle: kineticOverlayStyleBinding,
                                 kineticEmphasisWordIDs: $kineticEmphasisWordIDs
                             )
                         case .processing:
@@ -134,9 +140,14 @@ struct ContentView: View {
             karaokeModeRaw = KaraokeMode.resolved(karaokeModeRaw).rawValue
             kineticStyleRaw = KineticStyle.resolved(kineticStyleRaw).rawValue
             kineticAccentRaw = KineticAccent.resolved(kineticAccentRaw).rawValue
+            kineticCustomColorHex = KineticResolvedColor.normalizedHex(kineticCustomColorHex)
+                ?? KineticAccent.defaultCustomHex
             kineticIntensityRaw = KineticIntensity.resolved(kineticIntensityRaw).rawValue
             kineticLetterStyleRaw = KineticLetterStyle(rawValue: kineticLetterStyleRaw)?.rawValue
                 ?? KineticLetterStyle.automatic.rawValue
+            kineticOverlayStyleRaw = KineticOverlayStyle(
+                rawValue: kineticOverlayStyleRaw
+            )?.rawValue ?? KineticOverlayStyle.automatic.rawValue
             VideoProcessor.shared.cleanupStaleTemporaryFiles()
         }
         .sheet(isPresented: $showHistory) {
@@ -168,8 +179,10 @@ struct ContentView: View {
         .onChange(of: karaokeModeRaw) { _ in editorContentDidChange() }
         .onChange(of: kineticStyleRaw) { _ in editorContentDidChange() }
         .onChange(of: kineticAccentRaw) { _ in editorContentDidChange() }
+        .onChange(of: kineticCustomColorHex) { _ in editorContentDidChange() }
         .onChange(of: kineticIntensityRaw) { _ in editorContentDidChange() }
         .onChange(of: kineticLetterStyleRaw) { _ in editorContentDidChange() }
+        .onChange(of: kineticOverlayStyleRaw) { _ in editorContentDidChange() }
         .onChange(of: scenePhase) { phase in
             if phase != .active {
                 autosaveWorkItem?.cancel()
@@ -357,6 +370,15 @@ struct ContentView: View {
         )
     }
 
+    private var kineticOverlayStyleBinding: Binding<KineticOverlayStyle> {
+        Binding(
+            get: {
+                KineticOverlayStyle(rawValue: kineticOverlayStyleRaw) ?? .automatic
+            },
+            set: { kineticOverlayStyleRaw = $0.rawValue }
+        )
+    }
+
     // MARK: - İş Mantığı
 
     // Galeriden seçilen videoyu kopyalayıp player'a yerleştirir
@@ -496,10 +518,14 @@ struct ContentView: View {
                         karaokeModu: KaraokeMode.resolved(self.karaokeModeRaw),
                         kinetikStil: KineticStyle.resolved(self.kineticStyleRaw),
                         kinetikVurgu: KineticAccent.resolved(self.kineticAccentRaw),
+                        kinetikOzelRenk: self.kineticCustomColorHex,
                         kinetikYogunluk: KineticIntensity.resolved(self.kineticIntensityRaw),
                         kinetikVurgular: self.kineticEmphasisWordIDs,
                         kinetikHarfStili: KineticLetterStyle(
                             rawValue: self.kineticLetterStyleRaw
+                        ) ?? .automatic,
+                        kinetikOverlay: KineticOverlayStyle(
+                            rawValue: self.kineticOverlayStyleRaw
                         ) ?? .automatic
                    ) {
                     self.currentProjectID = proje.id
@@ -560,9 +586,13 @@ struct ContentView: View {
                 karaokeMode: KaraokeMode.resolved(karaokeModeRaw),
                 kineticStyle: KineticStyle.resolved(kineticStyleRaw),
                 kineticAccent: KineticAccent.resolved(kineticAccentRaw),
+                kineticCustomColorHex: kineticCustomColorHex,
                 kineticIntensity: KineticIntensity.resolved(kineticIntensityRaw),
                 kineticLetterStyle: KineticLetterStyle(
                     rawValue: kineticLetterStyleRaw
+                ) ?? .automatic,
+                kineticOverlayStyle: KineticOverlayStyle(
+                    rawValue: kineticOverlayStyleRaw
                 ) ?? .automatic,
                 kineticEmphasisWordIDs: kineticEmphasisWordIDs,
                 videoURL: url
@@ -715,10 +745,14 @@ struct ContentView: View {
             karaokeModu: KaraokeMode.resolved(karaokeModeRaw),
             kinetikStil: KineticStyle.resolved(kineticStyleRaw),
             kinetikVurgu: KineticAccent.resolved(kineticAccentRaw),
+            kinetikOzelRenk: kineticCustomColorHex,
             kinetikYogunluk: KineticIntensity.resolved(kineticIntensityRaw),
             kinetikVurgular: kineticEmphasisWordIDs,
             kinetikHarfStili: KineticLetterStyle(
                 rawValue: kineticLetterStyleRaw
+            ) ?? .automatic,
+            kinetikOverlay: KineticOverlayStyle(
+                rawValue: kineticOverlayStyleRaw
             ) ?? .automatic,
             disaAktarildi: exported
         )
@@ -755,8 +789,10 @@ struct ContentView: View {
         karaokeModeRaw = proje.karaokeMode.rawValue
         kineticStyleRaw = proje.kineticStyle.rawValue
         kineticAccentRaw = proje.kineticAccent.rawValue
+        kineticCustomColorHex = proje.kineticCustomColorHex
         kineticIntensityRaw = proje.kineticIntensity.rawValue
         kineticLetterStyleRaw = proje.kineticLetterStyle.rawValue
+        kineticOverlayStyleRaw = proje.kineticOverlayStyle.rawValue
         currentProjectID = proje.id
         selectedItem = nil
 

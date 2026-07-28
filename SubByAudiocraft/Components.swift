@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import AVKit
 import UIKit
@@ -203,8 +204,10 @@ struct KaraokeModePicker: View {
     @Binding var selection: KaraokeMode
     @Binding var kineticStyle: KineticStyle
     @Binding var kineticAccent: KineticAccent
+    @Binding var kineticCustomColorHex: String
     @Binding var kineticIntensity: KineticIntensity
     @Binding var kineticLetterStyle: KineticLetterStyle
+    @Binding var kineticOverlayStyle: KineticOverlayStyle
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -328,25 +331,67 @@ struct KaraokeModePicker: View {
                     }
 
                     VStack(alignment: .leading, spacing: 7) {
+                        Text("Arka Katman / Overlay")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(KineticOverlayStyle.allCases) { overlayStyle in
+                                    let isSelected = overlayStyle == kineticOverlayStyle
+                                    Button {
+                                        Theme.haptic()
+                                        kineticOverlayStyle = overlayStyle
+                                    } label: {
+                                        Label(overlayStyle.title, systemImage: overlayStyle.icon)
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundColor(isSelected ? .black : .white)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 7)
+                                            .background(
+                                                Capsule()
+                                                    .fill(
+                                                        isSelected
+                                                            ? Theme.yellow
+                                                            : Color.white.opacity(0.08)
+                                                    )
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        Text(kineticOverlayStyle.detail)
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(alignment: .leading, spacing: 7) {
                         HStack {
                             Text("Vurgu Rengi")
                                 .font(.caption.weight(.semibold))
                                 .foregroundColor(.white)
                             Spacer()
-                            Text(kineticAccent.title)
+                            Text(
+                                kineticAccent == .custom
+                                    ? kineticAccent.title + " " + resolvedAccent.hex
+                                    : kineticAccent.title
+                            )
                                 .font(.caption2.weight(.semibold))
-                                .foregroundColor(kineticAccent.previewColor)
+                                .foregroundColor(resolvedAccent.previewColor)
                         }
 
                         HStack(spacing: 10) {
-                            ForEach(KineticAccent.allCases) { accent in
+                            ForEach(KineticAccent.presetCases) { accent in
                                 let isSelected = accent == kineticAccent
                                 Button {
                                     Theme.haptic()
                                     kineticAccent = accent
                                 } label: {
                                     Circle()
-                                        .fill(accent.previewColor)
+                                        .fill(accent.previewColor(customHex: nil))
                                         .frame(width: 26, height: 26)
                                         .overlay(
                                             Circle()
@@ -366,11 +411,35 @@ struct KaraokeModePicker: View {
                                 }
                                 .buttonStyle(.plain)
                             }
+
+                            ColorPicker(
+                                "Özel vurgu rengi",
+                                selection: customColorBinding,
+                                supportsOpacity: false
+                            )
+                            .labelsHidden()
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                                Circle()
+                                    .stroke(
+                                        kineticAccent == .custom
+                                            ? Color.white
+                                            : Color.white.opacity(0.2),
+                                        lineWidth: kineticAccent == .custom ? 2.5 : 1
+                                    )
+                                    .allowsHitTesting(false)
+                            )
+                            .accessibilityLabel("Özel vurgu rengi")
                         }
+
+                        Text("Özel renk seçildiğinde aktif yazı rengi kontrasta göre otomatik siyah veya beyaz olur.")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Label(
-                        "Kelime sayfası, aktif kapsül/alt çizgi ve sahne geçişleri sabit yerleşim üzerinde çalışır.",
+                        "Overlay, vurgu rengi, harf tasarımı ve geçişler aynı sahne planından beslenir; rastgele üst üste bindirilmez.",
                         systemImage: "scope"
                     )
                     .font(.caption2)
@@ -380,6 +449,38 @@ struct KaraokeModePicker: View {
                 .padding(.top, 2)
             }
         }
+    }
+
+    private var resolvedAccent: KineticResolvedColor {
+        kineticAccent.resolvedColor(customHex: kineticCustomColorHex)
+    }
+
+    private var customColorBinding: Binding<Color> {
+        Binding(
+            get: { KineticResolvedColor(hex: kineticCustomColorHex).previewColor },
+            set: { color in
+                let uiColor = UIColor(color)
+                var red: CGFloat = 0
+                var green: CGFloat = 0
+                var blue: CGFloat = 0
+                var alpha: CGFloat = 0
+                guard uiColor.getRed(
+                    &red,
+                    green: &green,
+                    blue: &blue,
+                    alpha: &alpha
+                ) else {
+                    return
+                }
+                kineticCustomColorHex = String(
+                    format: "#%02X%02X%02X",
+                    Int((red * 255).rounded()),
+                    Int((green * 255).rounded()),
+                    Int((blue * 255).rounded())
+                )
+                kineticAccent = .custom
+            }
+        )
     }
 }
 
@@ -424,8 +525,10 @@ struct SubtitlePreviewPlayer: View {
     let karaokeMode: KaraokeMode
     let kineticStyle: KineticStyle
     let kineticAccent: KineticAccent
+    let kineticCustomColorHex: String
     let kineticIntensity: KineticIntensity
     let kineticLetterStyle: KineticLetterStyle
+    let kineticOverlayStyle: KineticOverlayStyle
     let kineticLineIndex: Int
     let kineticRepeatCount: Int
     let kineticScenePlan: KineticTypographyPlan?
@@ -443,8 +546,10 @@ struct SubtitlePreviewPlayer: View {
         karaokeMode: KaraokeMode = .classic,
         kineticStyle: KineticStyle = .automatic,
         kineticAccent: KineticAccent = .gold,
+        kineticCustomColorHex: String = KineticAccent.defaultCustomHex,
         kineticIntensity: KineticIntensity = .balanced,
         kineticLetterStyle: KineticLetterStyle = .clean,
+        kineticOverlayStyle: KineticOverlayStyle = .none,
         kineticLineIndex: Int = 0,
         kineticRepeatCount: Int = 1,
         kineticScenePlan: KineticTypographyPlan? = nil
@@ -461,8 +566,10 @@ struct SubtitlePreviewPlayer: View {
         self.karaokeMode = karaokeMode
         self.kineticStyle = kineticStyle
         self.kineticAccent = kineticAccent
+        self.kineticCustomColorHex = kineticCustomColorHex
         self.kineticIntensity = kineticIntensity
         self.kineticLetterStyle = kineticLetterStyle
+        self.kineticOverlayStyle = kineticOverlayStyle
         self.kineticLineIndex = kineticLineIndex
         self.kineticRepeatCount = kineticRepeatCount
         self.kineticScenePlan = kineticScenePlan
@@ -504,8 +611,10 @@ struct SubtitlePreviewPlayer: View {
                                     : playbackTime,
                                 previewHeight: geo.size.height,
                                 accent: kineticAccent,
+                                customColorHex: kineticCustomColorHex,
                                 intensity: kineticIntensity,
-                                letterStyle: kineticLetterStyle
+                                letterStyle: kineticLetterStyle,
+                                overlayStyle: kineticOverlayStyle
                             )
                         } else if karaokeWords.isEmpty {
                             Text(sampleText)
@@ -586,8 +695,10 @@ private struct KineticPreviewLockup: View {
     let playbackTime: Double
     let previewHeight: CGFloat
     let accent: KineticAccent
+    let customColorHex: String
     let intensity: KineticIntensity
     let letterStyle: KineticLetterStyle
+    let overlayStyle: KineticOverlayStyle
 
     private var activeIndex: Int? {
         words.firstIndex { playbackTime >= $0.start && playbackTime < $0.end }
@@ -639,24 +750,32 @@ private struct KineticPreviewLockup: View {
                             )
                                 .foregroundColor(
                                     isActive
-                                        ? (plan.highlight == .pill ? .black : accent.previewColor)
+                                        ? (
+                                            plan.highlight == .pill
+                                                ? resolvedAccent.foregroundPreviewColor
+                                                : resolvedAccent.previewColor
+                                        )
                                         : (isPast ? .white.opacity(0.35) : .white)
                                 )
-                                .padding(.horizontal, plan.highlight == .pill ? 5 : 0)
-                                .padding(.vertical, plan.highlight == .pill ? 2 : 0)
+                                .padding(
+                                    .horizontal,
+                                    plan.highlight == .pill || resolvedOverlay == .spotlight ? 6 : 0
+                                )
+                                .padding(
+                                    .vertical,
+                                    plan.highlight == .pill || resolvedOverlay == .spotlight ? 3 : 0
+                                )
                                 .background(
                                     RoundedRectangle(cornerRadius: 5, style: .continuous)
                                         .fill(
-                                            isActive && plan.highlight == .pill
-                                                ? accent.previewColor
-                                                : Color.clear
+                                            activeWordBackground(isActive: isActive)
                                         )
                                 )
                                 .overlay(alignment: .bottom) {
                                     Capsule()
                                         .fill(
                                             isActive && plan.highlight == .underline
-                                                ? accent.previewColor
+                                                ? resolvedAccent.previewColor
                                                 : Color.clear
                                         )
                                         .frame(height: max(2, previewHeight / 135))
@@ -665,7 +784,7 @@ private struct KineticPreviewLockup: View {
                                 .scaleEffect(isActive ? previewActiveScale : 1)
                                 .shadow(
                                     color: isActive && plan.highlight == .glow
-                                        ? accent.previewColor.opacity(0.55)
+                                        ? resolvedAccent.previewColor.opacity(0.55)
                                         : .black.opacity(0.8),
                                     radius: isActive ? 4 : 2
                                 )
@@ -676,10 +795,106 @@ private struct KineticPreviewLockup: View {
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .center)
+                .frame(
+                    maxWidth: resolvedOverlay == .cinematicBand ? .infinity : nil,
+                    alignment: .center
+                )
             }
         }
+        .padding(.horizontal, groupOverlayHorizontalPadding)
+        .padding(.vertical, groupOverlayVerticalPadding)
+        .frame(
+            maxWidth: resolvedOverlay == .cinematicBand ? .infinity : nil,
+            alignment: .center
+        )
+        .background { groupOverlayBackground }
         .animation(.easeOut(duration: previewAnimationDuration), value: activeIndex)
+    }
+
+    private var resolvedAccent: KineticResolvedColor {
+        accent.resolvedColor(customHex: customColorHex)
+    }
+
+    private var resolvedOverlay: KineticOverlayStyle {
+        overlayStyle.resolved(for: plan.scene)
+    }
+
+    private var groupOverlayHorizontalPadding: CGFloat {
+        switch resolvedOverlay {
+        case .glass: return max(10, previewHeight / 42)
+        case .cinematicBand: return max(12, previewHeight / 36)
+        case .accentPanel: return max(14, previewHeight / 34)
+        case .automatic, .none, .spotlight: return 0
+        }
+    }
+
+    private var groupOverlayVerticalPadding: CGFloat {
+        switch resolvedOverlay {
+        case .glass: return max(7, previewHeight / 64)
+        case .cinematicBand: return max(10, previewHeight / 52)
+        case .accentPanel: return max(9, previewHeight / 55)
+        case .automatic, .none, .spotlight: return 0
+        }
+    }
+
+    private func activeWordBackground(isActive: Bool) -> Color {
+        guard isActive else { return .clear }
+        if plan.highlight == .pill {
+            return resolvedAccent.previewColor
+        }
+        if resolvedOverlay == .spotlight {
+            let opacity: Double
+            switch intensity {
+            case .subtle: opacity = 0.34
+            case .balanced: opacity = 0.46
+            case .energetic: opacity = 0.56
+            }
+            return resolvedAccent.previewColor.opacity(opacity)
+        }
+        return .clear
+    }
+
+    @ViewBuilder
+    private var groupOverlayBackground: some View {
+        switch resolvedOverlay {
+        case .glass:
+            ZStack(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(Color.black.opacity(0.62))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 11, style: .continuous)
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                    )
+                    .shadow(color: .black.opacity(0.45), radius: 7, y: 4)
+                Capsule()
+                    .fill(resolvedAccent.previewColor.opacity(0.9))
+                    .frame(width: max(28, previewHeight / 3.8), height: 2)
+                    .padding(.leading, 12)
+            }
+        case .cinematicBand:
+            ZStack(alignment: .top) {
+                Rectangle()
+                    .fill(Color.black.opacity(0.66))
+                Rectangle()
+                    .fill(resolvedAccent.previewColor.opacity(0.55))
+                    .frame(height: 1)
+            }
+        case .accentPanel:
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color.black.opacity(0.68))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    )
+                Capsule()
+                    .fill(resolvedAccent.previewColor)
+                    .frame(width: 3)
+                    .padding(.vertical, 9)
+            }
+        case .automatic, .none, .spotlight:
+            Color.clear
+        }
     }
 
     private var previewActiveScale: CGFloat {
@@ -771,6 +986,20 @@ private struct KineticGlyphRun: View {
 
 private extension KineticAccent {
     var previewColor: Color {
-        Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
+        previewColor(customHex: nil)
+    }
+
+    func previewColor(customHex: String?) -> Color {
+        resolvedColor(customHex: customHex).previewColor
+    }
+}
+
+private extension KineticResolvedColor {
+    var previewColor: Color {
+        Color(red: red, green: green, blue: blue)
+    }
+
+    var foregroundPreviewColor: Color {
+        usesDarkForeground ? .black : .white
     }
 }

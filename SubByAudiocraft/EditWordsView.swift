@@ -12,8 +12,10 @@ struct EditWordsView: View {
     @Binding var karaokeMode: KaraokeMode
     @Binding var kineticStyle: KineticStyle
     @Binding var kineticAccent: KineticAccent
+    @Binding var kineticCustomColorHex: String
     @Binding var kineticIntensity: KineticIntensity
     @Binding var kineticLetterStyle: KineticLetterStyle
+    @Binding var kineticOverlayStyle: KineticOverlayStyle
     @Binding var kineticEmphasisWordIDs: Set<UUID>
 
     @State private var expandedWordID: UUID? = nil
@@ -56,15 +58,17 @@ struct EditWordsView: View {
                         karaokeMode: karaokeMode,
                         kineticStyle: kineticStyle,
                         kineticAccent: kineticAccent,
+                        kineticCustomColorHex: kineticCustomColorHex,
                         kineticIntensity: kineticIntensity,
                         kineticLetterStyle: kineticLetterStyle,
+                        kineticOverlayStyle: kineticOverlayStyle,
                         kineticLineIndex: previewLineIndex,
                         kineticRepeatCount: previewPlan?.repeatCount ?? 1,
                         kineticScenePlan: previewPlan
                     )
 
                     Label(
-                        "Sarı kelime o anda söylenen bölümü gösterir; sesi dinleyerek zamanlamayı kontrol edebilirsin.",
+                        "Vurgulanan kelime o anda söylenen bölümü gösterir; sesi dinleyerek zamanlamayı kontrol edebilirsin.",
                         systemImage: "waveform"
                     )
                     .font(.caption2)
@@ -74,8 +78,10 @@ struct EditWordsView: View {
                         selection: $karaokeMode,
                         kineticStyle: $kineticStyle,
                         kineticAccent: $kineticAccent,
+                        kineticCustomColorHex: $kineticCustomColorHex,
                         kineticIntensity: $kineticIntensity,
-                        kineticLetterStyle: $kineticLetterStyle
+                        kineticLetterStyle: $kineticLetterStyle,
+                        kineticOverlayStyle: $kineticOverlayStyle
                     )
 
                     // Font burada da değiştirilebilir: Geçmiş'ten açılan projelerde
