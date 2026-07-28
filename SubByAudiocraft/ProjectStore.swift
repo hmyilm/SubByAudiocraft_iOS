@@ -29,7 +29,8 @@ final class ProjectStore: ObservableObject {
     private let kokKlasor: URL
 
     init() {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
         kokKlasor = docs.appendingPathComponent("Projeler", isDirectory: true)
         try? FileManager.default.createDirectory(at: kokKlasor, withIntermediateDirectories: true)
         yukle()
@@ -50,7 +51,9 @@ final class ProjectStore: ObservableObject {
     // Bir dosyanın proje klasörüne ait olup olmadığı: proje videoları geçici dosya
     // temizliklerinde SİLİNMEMELİDİR (yalnız Geçmiş'ten silinirler).
     func projeDosyasiMi(_ url: URL) -> Bool {
-        url.path.hasPrefix(kokKlasor.path)
+        let rootPath = kokKlasor.standardizedFileURL.path
+        let filePath = url.standardizedFileURL.path
+        return filePath == rootPath || filePath.hasPrefix(rootPath + "/")
     }
 
     private func yukle() {
@@ -60,16 +63,26 @@ final class ProjectStore: ObservableObject {
         for dir in klasorler {
             let json = dir.appendingPathComponent("proje.json")
             if let data = try? Data(contentsOf: json),
-               let proje = try? JSONDecoder().decode(SavedProject.self, from: data) {
+               let proje = try? JSONDecoder().decode(SavedProject.self, from: data),
+               fm.fileExists(atPath: videoURL(proje).path) {
                 liste.append(proje)
             }
         }
         projeler = liste.sorted { $0.guncelleme > $1.guncelleme }
     }
 
-    private func yaz(_ proje: SavedProject) {
-        guard let data = try? JSONEncoder().encode(proje) else { return }
-        try? data.write(to: klasor(proje.id).appendingPathComponent("proje.json"), options: .atomic)
+    @discardableResult
+    private func yaz(_ proje: SavedProject) -> Bool {
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let data = try encoder.encode(proje)
+            try data.write(to: klasor(proje.id).appendingPathComponent("proje.json"), options: .atomic)
+            return true
+        } catch {
+            print("Proje kaydedilemedi: \(error.localizedDescription)")
+            return false
+        }
     }
 
     private static func baslikUret(_ kelimeler: [VideoProcessor.WordTimestamp]) -> String {
@@ -97,8 +110,10 @@ final class ProjectStore: ObservableObject {
         let uzanti = kaynak.pathExtension.isEmpty ? "mp4" : kaynak.pathExtension
         let dosyaAdi = "video." + uzanti
         let hedef = hedefKlasor.appendingPathComponent(dosyaAdi)
+        var kaynakTasindi = false
         do {
             try fm.moveItem(at: kaynak, to: hedef)
+            kaynakTasindi = true
         } catch {
             do {
                 try fm.copyItem(at: kaynak, to: hedef)
@@ -121,7 +136,21 @@ final class ProjectStore: ObservableObject {
             videoDosyasi: dosyaAdi,
             disaAktarimSayisi: 0
         )
-        yaz(proje)
+
+        guard yaz(proje) else {
+            // Taşıma yapıldıysa kullanıcı akışındaki geçici kaynağı geri koymayı dene.
+            if kaynakTasindi, !fm.fileExists(atPath: kaynak.path) {
+                try? fm.moveItem(at: hedef, to: kaynak)
+            }
+            try? fm.removeItem(at: hedefKlasor)
+            return nil
+        }
+
+        // moveItem dosya sağlayıcısı nedeniyle başarısız olup kopyalama kullanıldıysa,
+        // kalıcı proje güvenle yazıldıktan sonra artık geçici kopyaya ihtiyaç yoktur.
+        if !kaynakTasindi {
+            try? fm.removeItem(at: kaynak)
+        }
         projeler.insert(proje, at: 0)
         kapakOlustur(proje)
         return proje
@@ -145,14 +174,21 @@ final class ProjectStore: ObservableObject {
         proje.baslik = Self.baslikUret(kelimeler)
         proje.guncelleme = Date()
         if disaAktarildi { proje.disaAktarimSayisi += 1 }
+        guard yaz(proje) else { return }
         projeler.remove(at: idx)
         projeler.insert(proje, at: 0)
-        yaz(proje)
     }
 
     func sil(_ proje: SavedProject) {
-        try? FileManager.default.removeItem(at: klasor(proje.id))
-        projeler.removeAll { $0.id == proje.id }
+        let folder = klasor(proje.id)
+        do {
+            if FileManager.default.fileExists(atPath: folder.path) {
+                try FileManager.default.removeItem(at: folder)
+            }
+            projeler.removeAll { $0.id == proje.id }
+        } catch {
+            print("Proje silinemedi: \(error.localizedDescription)")
+        }
     }
 
     // Liste için küçük kapak görseli (videonun ilk yarım saniyesinden bir kare)

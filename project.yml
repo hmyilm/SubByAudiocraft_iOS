@@ -4,19 +4,19 @@ options:
 packages:
   WhisperKit:
     url: https://github.com/argmaxinc/WhisperKit
-    from: 0.7.2
+    exactVersion: 0.18.0
 targets:
   SubByAudiocraft:
     type: application
     platform: iOS
     deploymentTarget: "16.0"
-    version: 1.4.0
-    build: 26
+    version: 1.5.0
+    build: 27
     settings:
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       PRODUCT_BUNDLE_IDENTIFIER: com.hmyilm.SubByAudiocraft
-      MARKETING_VERSION: "1.4.0"
-      CURRENT_PROJECT_VERSION: "26"
+      MARKETING_VERSION: "1.5.0"
+      CURRENT_PROJECT_VERSION: "27"
     sources: [SubByAudiocraft]
     dependencies:
       - package: WhisperKit
@@ -49,8 +49,8 @@ targets:
         UILaunchScreen: {}
         CFBundleIconName: AppIcon
         CFBundleDisplayName: Sub by Audiocraft
-        CFBundleShortVersionString: "1.4.0"
-        CFBundleVersion: "26"
+        CFBundleShortVersionString: "1.5.0"
+        CFBundleVersion: "27"
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -68,3 +68,19 @@ targets:
         # verdiği için Apple bu açıklama metinlerini zorunlu tutuyor (ITMS-90683).
         NSCameraUsageDescription: "Uygulama kamerayı kullanmaz. Bu izin metni, video işleme motorunun (FFmpeg) sistem gereksinimleri nedeniyle bulunmaktadır."
         NSMicrophoneUsageDescription: "Uygulama mikrofonu kullanmaz. Bu izin metni, video işleme motorunun (FFmpeg) sistem gereksinimleri nedeniyle bulunmaktadır."
+  SubByAudiocraftTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources: [SubByAudiocraftTests]
+    dependencies:
+      - target: SubByAudiocraft
+schemes:
+  SubByAudiocraft:
+    build:
+      targets:
+        SubByAudiocraft: all
+        SubByAudiocraftTests: [test]
+    test:
+      targets:
+        - SubByAudiocraftTests

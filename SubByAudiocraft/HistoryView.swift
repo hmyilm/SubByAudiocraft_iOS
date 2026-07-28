@@ -4,6 +4,7 @@ import SwiftUI
 // açılır; sözler, satır düzeni ve stil ayarları kaldığı yerden devam eder.
 struct HistoryView: View {
     @ObservedObject var store: ProjectStore
+    let protectedProjectID: UUID?
     let onOpen: (SavedProject) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -106,15 +107,25 @@ struct HistoryView: View {
 
             Spacer(minLength: 0)
 
-            Button {
-                silinecek = proje
-            } label: {
-                Image(systemName: "trash")
-                    .font(.subheadline)
-                    .foregroundColor(.red.opacity(0.8))
-                    .padding(8)
+            if proje.id == protectedProjectID {
+                Text("Açık")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(Theme.yellow)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Theme.yellow.opacity(0.12)))
+            } else {
+                Button {
+                    silinecek = proje
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.subheadline)
+                        .foregroundColor(.red.opacity(0.8))
+                        .padding(8)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Projeyi sil")
             }
-            .buttonStyle(.plain)
         }
         .padding(10)
         .background(

@@ -11,9 +11,12 @@ enum AppStep {
 }
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var statusMessage: String = "Video Seçin"
     @State private var isProcessing: Bool = false
+    @State private var isLoadingVideo: Bool = false
 
     // Workflow States
     @State private var currentStep: AppStep = .selectVideo
@@ -23,12 +26,17 @@ struct ContentView: View {
     @State private var lineBreaks: Set<UUID> = []
     @State private var videoURL: URL? = nil
     @State private var audioURL: URL? = nil
+    @State private var pendingOutputURL: URL? = nil
     @State private var player: AVPlayer? = nil
+    @State private var videoLoadID: UUID? = nil
+    @State private var activeOperationID: UUID? = nil
+    @State private var autosaveWorkItem: DispatchWorkItem? = nil
 
     // Config
-    @State private var fontName: String = "Anton-Regular"
-    @State private var fontSize: Double = 70.0
-    @State private var marginV: Double = 120.0
+    @AppStorage("subtitle.fontName") private var fontName: String = "Anton-Regular"
+    @AppStorage("subtitle.fontSize") private var fontSize: Double = 70.0
+    @AppStorage("subtitle.marginV") private var marginV: Double = 120.0
+    @AppStorage("analysis.quality") private var analysisQualityRaw: String = AnalysisQuality.balanced.rawValue
 
     // Geçmiş (kaydedilmiş projeler): analizden sonra proje otomatik kaydedilir,
     // buradan yeniden açılıp düzenlenebilir ve tekrar dışa aktarılabilir.
@@ -58,6 +66,8 @@ struct ContentView: View {
                                 fontName: $fontName,
                                 fontSize: $fontSize,
                                 marginV: $marginV,
+                                analysisQuality: analysisQualityBinding,
+                                isLoadingVideo: isLoadingVideo,
                                 fonts: FontCatalog.hepsi
                             )
                         case .editLines:
@@ -65,14 +75,19 @@ struct ContentView: View {
                         case .editSubtitles:
                             EditWordsView(
                                 words: $words,
-                                lines: currentLines,
+                                breaks: $lineBreaks,
                                 player: player,
                                 fontName: $fontName,
                                 fontSize: $fontSize,
                                 marginV: $marginV
                             )
                         case .processing:
-                            ProcessingView(stage: processingStage, message: statusMessage, downloadProgress: modelDownloadProgress)
+                            ProcessingView(
+                                stage: processingStage,
+                                message: statusMessage,
+                                downloadProgress: modelDownloadProgress,
+                                onCancel: processingStage == .saving ? nil : cancelCurrentOperation
+                            )
                         case .done:
                             SuccessView(
                                 onNewVideo: resetToImport,
@@ -95,12 +110,18 @@ struct ContentView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            if FontCatalog.secenek(fontName) == nil { fontName = "Anton-Regular" }
+            fontSize = min(max(fontSize, 30), 150)
+            marginV = min(max(marginV, 30), 950)
+            VideoProcessor.shared.cleanupStaleTemporaryFiles()
+        }
         .sheet(isPresented: $showHistory) {
-            HistoryView(store: store, onOpen: openProject)
+            HistoryView(store: store, protectedProjectID: currentProjectID, onOpen: openProject)
         }
         .onChange(of: selectedItem) { newValue in
             if newValue != nil {
-                statusMessage = "Video yüklendi. Stili ayarlayıp analizi başlatabilirsin."
+                statusMessage = "Video yükleniyor..."
                 loadAndPreviewVideo()
             }
         }
@@ -114,6 +135,20 @@ struct ContentView: View {
         // Uzun süren analiz/kodlama sırasında ekranın kilitlenip işlemin kesilmesini önler
         .onChange(of: isProcessing) { processing in
             UIApplication.shared.isIdleTimerDisabled = processing
+        }
+        .onChange(of: words) { _ in editorContentDidChange() }
+        .onChange(of: lineBreaks) { _ in editorContentDidChange() }
+        .onChange(of: fontName) { _ in editorContentDidChange() }
+        .onChange(of: fontSize) { _ in editorContentDidChange() }
+        .onChange(of: marginV) { _ in editorContentDidChange() }
+        .onChange(of: scenePhase) { phase in
+            if phase != .active {
+                autosaveWorkItem?.cancel()
+                saveProjectEdits(exported: false)
+            }
+        }
+        .onDisappear {
+            UIApplication.shared.isIdleTimerDisabled = false
         }
     }
 
@@ -142,6 +177,7 @@ struct ContentView: View {
 
             Button {
                 Theme.haptic()
+                saveProjectEdits(exported: false)
                 showHistory = true
             } label: {
                 HStack(spacing: 5) {
@@ -155,6 +191,8 @@ struct ContentView: View {
                 .background(Capsule().fill(Color(white: 0.14)))
             }
             .buttonStyle(.plain)
+            .disabled(isProcessing || isLoadingVideo)
+            .opacity(isProcessing || isLoadingVideo ? 0.45 : 1)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
@@ -167,10 +205,10 @@ struct ContentView: View {
             VStack(spacing: 10) {
                 if currentStep == .selectVideo {
                     Button(action: startAnalysis) {
-                        Label("Analizi Başlat", systemImage: "wand.and.stars")
+                        Label(isLoadingVideo ? "Video Yükleniyor" : "Analizi Başlat", systemImage: isLoadingVideo ? "hourglass" : "wand.and.stars")
                     }
-                    .buttonStyle(PrimaryButtonStyle(enabled: selectedItem != nil && !isProcessing))
-                    .disabled(selectedItem == nil || isProcessing)
+                    .buttonStyle(PrimaryButtonStyle(enabled: videoURL != nil && !isLoadingVideo && !isProcessing))
+                    .disabled(videoURL == nil || isLoadingVideo || isProcessing)
                 } else if currentStep == .editLines {
                     Button(action: {
                         currentStep = .editSubtitles
@@ -187,12 +225,29 @@ struct ContentView: View {
                             .foregroundColor(.gray)
                     }
                 } else {
-                    Button(action: burnFinalVideo) {
-                        Label("Videoya Göm ve Kaydet", systemImage: "square.and.arrow.down")
+                    if pendingOutputURL != nil {
+                        Button(action: retryGallerySave) {
+                            Label("Hazır Videoyu Galeriye Kaydet", systemImage: "photo.badge.arrow.down")
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+
+                        Button {
+                            discardPendingOutput()
+                            burnFinalVideo()
+                        } label: {
+                            Text("Videoyu Yeniden Oluştur")
+                                .font(.footnote)
+                                .foregroundColor(Theme.yellow)
+                        }
+                    } else {
+                        Button(action: burnFinalVideo) {
+                            Label("Videoya Göm ve Kaydet", systemImage: "square.and.arrow.down")
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
                     }
-                    .buttonStyle(PrimaryButtonStyle())
 
                     Button(action: {
+                        saveProjectEdits(exported: false)
                         currentStep = .editLines
                         statusMessage = "Satır düzenine dönüldü."
                     }) {
@@ -223,25 +278,17 @@ struct ContentView: View {
         }
     }
 
-    // Kullanıcının onayladığı satır düzeni (ön izleme ve ASS üretimi bunları kullanır)
-    private var currentLines: [[VideoProcessor.WordTimestamp]] {
-        var groups: [[VideoProcessor.WordTimestamp]] = []
-        var current: [VideoProcessor.WordTimestamp] = []
-        for word in words {
-            current.append(word)
-            if lineBreaks.contains(word.id) {
-                groups.append(current)
-                current = []
-            }
-        }
-        if !current.isEmpty { groups.append(current) }
-        return groups
-    }
-
     // Banner yalnızca hata ve anlamlı başarı mesajlarında görünür
     private var showBanner: Bool {
         guard currentStep == .selectVideo || currentStep == .editLines || currentStep == .editSubtitles else { return false }
         return statusMessage.hasPrefix("Hata:") || statusMessage.contains("başarıyla")
+    }
+
+    private var analysisQualityBinding: Binding<AnalysisQuality> {
+        Binding(
+            get: { AnalysisQuality(rawValue: analysisQualityRaw) ?? .balanced },
+            set: { analysisQualityRaw = $0.rawValue }
+        )
     }
 
     // MARK: - İş Mantığı
@@ -249,9 +296,15 @@ struct ContentView: View {
     // Galeriden seçilen videoyu kopyalayıp player'a yerleştirir
     func loadAndPreviewVideo() {
         guard let item = selectedItem else { return }
+        let loadID = UUID()
+        videoLoadID = loadID
+        isLoadingVideo = true
 
         // Yeni video seçildiğinde önceki videonun geçici dosyalarını temizle
         // (proje klasörüne taşınmış videolar Geçmiş'e aittir, silinmez)
+        saveProjectEdits(exported: false)
+        cancelCurrentOperation(showMessage: false)
+        discardPendingOutput()
         player?.pause()
         if let oldVideo = videoURL, !store.projeDosyasiMi(oldVideo) { VideoProcessor.shared.deleteFile(at: oldVideo) }
         if let oldAudio = audioURL { VideoProcessor.shared.deleteFile(at: oldAudio) }
@@ -261,13 +314,29 @@ struct ContentView: View {
 
         item.loadTransferable(type: Movie.self) { result in
             DispatchQueue.main.async {
+                guard self.videoLoadID == loadID else {
+                    if case .success(let staleMovie?) = result {
+                        VideoProcessor.shared.deleteFile(at: staleMovie.url)
+                    }
+                    return
+                }
+                self.isLoadingVideo = false
+                self.videoLoadID = nil
+
                 switch result {
                 case .success(let movie?):
+                    guard FileManager.default.fileExists(atPath: movie.url.path) else {
+                        self.statusMessage = "Hata: Seçilen video dosyasına erişilemedi."
+                        return
+                    }
                     self.videoURL = movie.url
                     self.player = AVPlayer(url: movie.url)
                     self.player?.isMuted = true
-                case .success(nil), .failure(_):
-                    self.statusMessage = "Hata: Ön izleme yüklenirken sorun oluştu."
+                    self.statusMessage = "Video hazır. Analiz kalitesini ve altyazı stilini seçebilirsin."
+                case .success(nil):
+                    self.statusMessage = "Hata: Seçilen video yüklenemedi."
+                case .failure(let error):
+                    self.statusMessage = "Hata: Video yüklenemedi: \(error.localizedDescription)"
                 }
             }
         }
@@ -279,85 +348,98 @@ struct ContentView: View {
             statusMessage = "Öncelikle video seçmelisiniz."
             return
         }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            statusMessage = "Hata: Video dosyası artık mevcut değil. Lütfen yeniden seçin."
+            return
+        }
+
+        let operationID = UUID()
+        activeOperationID = operationID
+        let quality = AnalysisQuality(rawValue: analysisQualityRaw) ?? .balanced
         isProcessing = true
         statusMessage = "Video dosyası hazırlanıyor..."
         processingStage = .extractingAudio
         currentStep = .processing
 
         VideoProcessor.shared.extractAudio(from: url) { audioURL in
+            guard self.activeOperationID == operationID else {
+                if let audioURL { VideoProcessor.shared.deleteFile(at: audioURL) }
+                return
+            }
             guard let audioURL = audioURL else {
-                DispatchQueue.main.async {
-                    // Video dosyası silinmez; kullanıcı tekrar deneyebilir
-                    self.statusMessage = "Hata: Ses çıkarılamadı. Lütfen tekrar deneyin."
-                    self.isProcessing = false
-                    self.currentStep = .selectVideo
-                }
+                self.activeOperationID = nil
+                self.statusMessage = "Hata: Videoda kullanılabilir bir ses parçası bulunamadı veya ses çıkarılamadı."
+                self.isProcessing = false
+                self.currentStep = .selectVideo
                 return
             }
 
             self.audioURL = audioURL
+            self.processingStage = .transcribing
+            self.statusMessage = "\(quality.title) yapay zeka modeli sözleri analiz ediyor. İlk kullanımda model indirilir; Wi‑Fi önerilir."
 
-            DispatchQueue.main.async {
-                self.processingStage = .transcribing
-                self.statusMessage = "Yapay Zeka sözleri analiz ediyor (İlk kullanımda ~600 MB model indirilir, Wi-Fi önerilir)..."
-            }
-
-            VideoProcessor.shared.runSpeechRecognition(audioURL: audioURL, downloadProgress: { fraction in
+            VideoProcessor.shared.runSpeechRecognition(audioURL: audioURL, quality: quality, downloadProgress: { fraction in
                 DispatchQueue.main.async {
+                    guard self.activeOperationID == operationID else { return }
                     self.modelDownloadProgress = fraction >= 1.0 ? nil : fraction
                 }
             }) { words, speechError in
+                VideoProcessor.shared.deleteFile(at: audioURL)
+                if self.audioURL == audioURL { self.audioURL = nil }
+
+                guard self.activeOperationID == operationID else { return }
+                self.activeOperationID = nil
+
                 if let speechError = speechError {
-                    DispatchQueue.main.async {
-                        self.modelDownloadProgress = nil
+                    self.modelDownloadProgress = nil
+                    if speechError == "İşlem iptal edildi." {
+                        self.statusMessage = speechError
+                    } else {
                         self.statusMessage = "Hata: \(speechError)"
-                        self.isProcessing = false
-                        self.currentStep = .selectVideo
-                        VideoProcessor.shared.deleteFile(at: audioURL)
-                        self.audioURL = nil
                     }
+                    self.isProcessing = false
+                    self.currentStep = .selectVideo
                     return
                 }
 
                 guard !words.isEmpty else {
-                    DispatchQueue.main.async {
-                        self.modelDownloadProgress = nil
-                        self.statusMessage = "Hata: Videoda net bir konuşma bulunamadı."
-                        self.isProcessing = false
-                        self.currentStep = .selectVideo
-                        VideoProcessor.shared.deleteFile(at: audioURL)
-                        self.audioURL = nil
-                    }
+                    self.modelDownloadProgress = nil
+                    self.statusMessage = "Hata: Videoda net bir konuşma bulunamadı."
+                    self.isProcessing = false
+                    self.currentStep = .selectVideo
                     return
                 }
 
-                DispatchQueue.main.async {
-                    self.modelDownloadProgress = nil
-                    self.words = words
-                    self.lineBreaks = VideoProcessor.shared.autoLineBreaks(for: words)
+                self.modelDownloadProgress = nil
+                self.words = words
+                self.lineBreaks = VideoProcessor.shared.autoLineBreaks(for: words)
 
-                    // Projeyi Geçmiş'e kaydet: video kalıcı proje klasörüne taşınır,
-                    // player yeni adresle tazelenir. Böylece uygulama kapansa bile
-                    // proje sonradan açılıp yeniden düzenlenebilir.
-                    if let vURL = self.videoURL,
-                       let proje = self.store.olustur(
-                            videoURL: vURL,
-                            kelimeler: words,
-                            satirSonlari: self.lineBreaks,
-                            fontAdi: self.fontName,
-                            fontBoyu: self.fontSize,
-                            dikeyKonum: self.marginV
-                       ) {
-                        self.currentProjectID = proje.id
-                        let yeniURL = self.store.videoURL(proje)
-                        self.videoURL = yeniURL
-                        self.player = AVPlayer(url: yeniURL)
-                        self.player?.isMuted = true
-                    }
+                // Projeyi Geçmiş'e kaydet: video kalıcı proje klasörüne taşınır,
+                // player yeni adresle tazelenir.
+                var projectWasSaved = false
+                if let vURL = self.videoURL,
+                   let proje = self.store.olustur(
+                        videoURL: vURL,
+                        kelimeler: words,
+                        satirSonlari: self.lineBreaks,
+                        fontAdi: self.fontName,
+                        fontBoyu: self.fontSize,
+                        dikeyKonum: self.marginV
+                   ) {
+                    self.currentProjectID = proje.id
+                    let yeniURL = self.store.videoURL(proje)
+                    self.videoURL = yeniURL
+                    self.player = AVPlayer(url: yeniURL)
+                    self.player?.isMuted = true
+                    projectWasSaved = true
+                }
 
-                    self.isProcessing = false
-                    self.currentStep = .editLines
+                self.isProcessing = false
+                self.currentStep = .editLines
+                if projectWasSaved {
                     self.statusMessage = "Sözler çıkarıldı. Satır düzenini kontrol edip onaylayın."
+                } else {
+                    self.statusMessage = "Hata: Sözler çıkarıldı ancak proje Geçmiş'e kaydedilemedi. Cihazdaki boş alanı kontrol edin."
                 }
             }
         }
@@ -371,7 +453,18 @@ struct ContentView: View {
             statusMessage = "Hata: Video dosyası bulunamadı."
             return
         }
+        guard !words.isEmpty else {
+            statusMessage = "Hata: Dışa aktarılacak altyazı bulunamadı."
+            return
+        }
+        guard VideoProcessor.shared.hasEnoughSpaceToRender(videoURL: url) else {
+            statusMessage = "Hata: Videoyu oluşturmak için yeterli boş alan yok. Cihazda yer açıp tekrar dene."
+            return
+        }
 
+        discardPendingOutput()
+        let operationID = UUID()
+        activeOperationID = operationID
         currentStep = .processing
         processingStage = .burning
         statusMessage = "Altyazı dosyası hazırlanıyor..."
@@ -384,63 +477,80 @@ struct ContentView: View {
             let actualFontName = fontName
             let assURL = await VideoProcessor.shared.generateASS(words: words, lineBreaks: lineBreaks, fontName: actualFontName, fontSize: Int(fontSize), marginV: Int(marginV), videoURL: url)
 
+            guard self.activeOperationID == operationID else {
+                if let assURL { VideoProcessor.shared.deleteFile(at: assURL) }
+                return
+            }
             guard let assURL = assURL else {
-                DispatchQueue.main.async {
-                    self.statusMessage = "Hata: Altyazı dosyası oluşturulamadı."
-                    self.isProcessing = false
-                    self.currentStep = .editSubtitles
-                }
+                self.activeOperationID = nil
+                self.statusMessage = "Hata: Altyazı dosyası oluşturulamadı."
+                self.isProcessing = false
+                self.currentStep = .editSubtitles
                 return
             }
 
-            DispatchQueue.main.async {
-                self.statusMessage = "Altyazılar videoya gömülüyor (Bu işlem cihaz hızına göre biraz sürebilir)..."
-            }
+            self.statusMessage = "Altyazılar videoya gömülüyor. Bu işlem video süresine ve cihaz hızına göre biraz sürebilir..."
 
             VideoProcessor.shared.burnSubtitles(videoURL: url, assURL: assURL, fontName: actualFontName) { outputURL, errorMessage in
+                VideoProcessor.shared.deleteFile(at: assURL)
+
+                guard self.activeOperationID == operationID else {
+                    if let outputURL { VideoProcessor.shared.deleteFile(at: outputURL) }
+                    return
+                }
                 guard let outputURL = outputURL else {
-                    DispatchQueue.main.async {
-                        // Video ve ses dosyaları korunur; kullanıcı düzenleme ekranından tekrar deneyebilir
-                        self.statusMessage = "Hata: \(errorMessage ?? "Bilinmeyen FFmpeg hatası")"
-                        self.isProcessing = false
-                        self.currentStep = .editSubtitles
-                        VideoProcessor.shared.deleteFile(at: assURL)
-                    }
+                    self.activeOperationID = nil
+                    self.statusMessage = "Hata: \(errorMessage ?? "Bilinmeyen video işleme hatası")"
+                    self.isProcessing = false
+                    self.currentStep = .editSubtitles
                     return
                 }
 
-                DispatchQueue.main.async {
-                    self.processingStage = .saving
-                    self.statusMessage = "Galeriye kaydediliyor..."
-                }
+                self.pendingOutputURL = outputURL
+                self.savePendingOutput(operationID: operationID)
+            }
+        }
+    }
 
-                VideoProcessor.shared.saveToGallery(videoURL: outputURL) { success, galleryError in
-                    DispatchQueue.main.async {
-                        self.isProcessing = false
-                        VideoProcessor.shared.deleteFile(at: assURL)
-                        VideoProcessor.shared.deleteFile(at: outputURL)
+    private func retryGallerySave() {
+        guard pendingOutputURL != nil else { return }
+        let operationID = UUID()
+        activeOperationID = operationID
+        savePendingOutput(operationID: operationID)
+    }
 
-                        if success {
-                            self.statusMessage = "Tebrikler! Altyazılı video galerinize başarıyla kaydedildi. 🎉"
-                            self.currentStep = .done
+    private func savePendingOutput(operationID: UUID) {
+        guard let outputURL = pendingOutputURL,
+              FileManager.default.fileExists(atPath: outputURL.path) else {
+            activeOperationID = nil
+            discardPendingOutput()
+            statusMessage = "Hata: Hazır video dosyası bulunamadı. Videoyu yeniden oluşturun."
+            currentStep = .editSubtitles
+            isProcessing = false
+            return
+        }
 
-                            // Son düzenlemeleri Geçmiş'e işle (dışa aktarım sayacıyla)
-                            self.saveProjectEdits(exported: true)
+        currentStep = .processing
+        processingStage = .saving
+        statusMessage = "Galeriye kaydediliyor..."
+        isProcessing = true
 
-                            // Yalnız geçici dosyalar silinir. Kaynak video proje klasöründe
-                            // kalır ve düzenleyici durumu korunur: kullanıcı "Tekrar Düzenle"
-                            // ile geri dönüp beğenmediği yeri değiştirebilir.
-                            if let aURL = self.audioURL {
-                                VideoProcessor.shared.deleteFile(at: aURL)
-                                self.audioURL = nil
-                            }
-                        } else {
-                            // Girdi dosyaları korunur: kullanıcı izni verip tekrar deneyebilir
-                            self.statusMessage = "Hata: \(galleryError ?? "Galeriye kaydedilemedi.")"
-                            self.currentStep = .editSubtitles
-                        }
-                    }
-                }
+        VideoProcessor.shared.saveToGallery(videoURL: outputURL) { success, galleryError in
+            guard self.activeOperationID == operationID else { return }
+            self.activeOperationID = nil
+            self.isProcessing = false
+
+            if success {
+                VideoProcessor.shared.deleteFile(at: outputURL)
+                self.pendingOutputURL = nil
+                self.statusMessage = "Tebrikler! Altyazılı video galerinize başarıyla kaydedildi. 🎉"
+                self.currentStep = .done
+                self.saveProjectEdits(exported: true)
+            } else {
+                // Kodlanmış dosyayı koru; kullanıcı izni düzelttikten sonra yeniden
+                // video kodlamadan yalnız galeri kaydını tekrar deneyebilir.
+                self.statusMessage = "Hata: \(galleryError ?? "Galeriye kaydedilemedi.")"
+                self.currentStep = .editSubtitles
             }
         }
     }
@@ -448,6 +558,9 @@ struct ContentView: View {
     // Adım 2'den vazgeçip sıfırlayarak geri döner
     // (proje klasöründeki videolar Geçmiş'e aittir; yalnız geçici dosyalar silinir)
     func resetToImport() {
+        saveProjectEdits(exported: false)
+        cancelCurrentOperation(showMessage: false)
+        discardPendingOutput()
         player?.pause()
         if let url = videoURL, !store.projeDosyasiMi(url) { VideoProcessor.shared.deleteFile(at: url) }
         if let aURL = audioURL { VideoProcessor.shared.deleteFile(at: aURL) }
@@ -461,6 +574,40 @@ struct ContentView: View {
         self.currentProjectID = nil
         self.currentStep = .selectVideo
         self.statusMessage = "Video Seçin"
+    }
+
+    private func cancelCurrentOperation() {
+        cancelCurrentOperation(showMessage: true)
+    }
+
+    private func cancelCurrentOperation(showMessage: Bool) {
+        guard isProcessing || activeOperationID != nil else { return }
+        let wasExporting = processingStage == .burning || processingStage == .saving
+        activeOperationID = nil
+        VideoProcessor.shared.cancelAllProcessing()
+        modelDownloadProgress = nil
+        isProcessing = false
+        currentStep = wasExporting ? .editSubtitles : .selectVideo
+        if showMessage {
+            statusMessage = "İşlem iptal edildi. Kaynak videon korunuyor; hazır olduğunda tekrar deneyebilirsin."
+        }
+    }
+
+    private func discardPendingOutput() {
+        guard let url = pendingOutputURL else { return }
+        VideoProcessor.shared.deleteFile(at: url)
+        pendingOutputURL = nil
+    }
+
+    private func editorContentDidChange() {
+        discardPendingOutput()
+        autosaveWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem {
+            self.saveProjectEdits(exported: false)
+        }
+        autosaveWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8, execute: workItem)
     }
 
     // Düzenleyicideki güncel durumu (sözler, satırlar, stil) açık projeye kaydeder
@@ -486,6 +633,9 @@ struct ContentView: View {
             return
         }
 
+        saveProjectEdits(exported: false)
+        cancelCurrentOperation(showMessage: false)
+        discardPendingOutput()
         player?.pause()
         if let old = videoURL, !store.projeDosyasiMi(old) { VideoProcessor.shared.deleteFile(at: old) }
         if let aURL = audioURL {
@@ -524,10 +674,10 @@ struct Movie: Transferable {
                     received.file.stopAccessingSecurityScopedResource()
                 }
             }
-            let copy = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(received.file.lastPathComponent)
-            if FileManager.default.fileExists(atPath: copy.path) {
-                try? FileManager.default.removeItem(at: copy)
-            }
+            let ext = received.file.pathExtension.isEmpty ? "mov" : received.file.pathExtension
+            let copy = FileManager.default.temporaryDirectory
+                .appendingPathComponent("subby_source_" + UUID().uuidString)
+                .appendingPathExtension(ext)
             try FileManager.default.copyItem(at: received.file, to: copy)
             return Self.init(url: copy)
         }

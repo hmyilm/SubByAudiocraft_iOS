@@ -35,36 +35,38 @@ struct LineEditView: View {
                     .foregroundColor(.gray)
 
                 // Hızlı bölme: türkü hece ölçüsüne göre 2'li, 3'lü, 4'lü, 5'li kelime grupları
-                HStack(spacing: 8) {
-                    Text("Hızlı:")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.gray)
-                    ForEach([2, 3, 4, 5], id: \.self) { n in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        Text("Hızlı:")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.gray)
+                        ForEach([2, 3, 4, 5], id: \.self) { n in
+                            Button {
+                                Theme.haptic()
+                                splitEvery(n)
+                            } label: {
+                                Text("\(n)'li")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundColor(.black)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Capsule().fill(Theme.yellow))
+                            }
+                            .buttonStyle(.plain)
+                        }
                         Button {
                             Theme.haptic()
-                            splitEvery(n)
+                            breaks = VideoProcessor.shared.autoLineBreaks(for: words)
                         } label: {
-                            Text("\(n)'li")
+                            Text("Otomatik")
                                 .font(.caption.weight(.bold))
-                                .foregroundColor(.black)
+                                .foregroundColor(Theme.yellow)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
-                                .background(Capsule().fill(Theme.yellow))
+                                .background(Capsule().stroke(Theme.yellow, lineWidth: 1))
                         }
                         .buttonStyle(.plain)
                     }
-                    Button {
-                        Theme.haptic()
-                        breaks = VideoProcessor.shared.autoLineBreaks(for: words)
-                    } label: {
-                        Text("Otomatik")
-                            .font(.caption.weight(.bold))
-                            .foregroundColor(Theme.yellow)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(Capsule().stroke(Theme.yellow, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
                 }
             }
             .card()
@@ -145,8 +147,7 @@ struct LineEditView: View {
                 Label("Kelimeyi Düzenle", systemImage: "pencil")
             }
             Button(role: .destructive) {
-                breaks.remove(word.id)
-                words.removeAll { $0.id == word.id }
+                deleteWord(word.id)
             } label: {
                 Label("Kelimeyi Sil", systemImage: "trash")
             }
@@ -168,6 +169,17 @@ struct LineEditView: View {
             newBreaks.insert(word.id)
         }
         breaks = newBreaks
+    }
+
+    private func deleteWord(_ id: UUID) {
+        guard let index = words.firstIndex(where: { $0.id == id }) else { return }
+        let endedLine = breaks.remove(id) != nil
+        if endedLine, index > 0 {
+            // Satırın son kelimesi silinince satır düzenini korumak için sonu bir
+            // önceki kelimeye taşı; aksi halde iki satır fark edilmeden birleşir.
+            breaks.insert(words[index - 1].id)
+        }
+        words.remove(at: index)
     }
 }
 

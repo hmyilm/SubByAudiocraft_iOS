@@ -4,7 +4,7 @@ import AVKit
 // Adım 2: Ön izleme + kelime düzenleme listesi
 struct EditWordsView: View {
     @Binding var words: [VideoProcessor.WordTimestamp]
-    let lines: [[VideoProcessor.WordTimestamp]]
+    @Binding var breaks: Set<UUID>
     let player: AVPlayer?
     @Binding var fontName: String
     @Binding var fontSize: Double
@@ -12,6 +12,20 @@ struct EditWordsView: View {
 
     @State private var expandedWordID: UUID? = nil
     @State private var previewLine: String = ""
+
+    private var lines: [[VideoProcessor.WordTimestamp]] {
+        var groups: [[VideoProcessor.WordTimestamp]] = []
+        var current: [VideoProcessor.WordTimestamp] = []
+        for word in words {
+            current.append(word)
+            if breaks.contains(word.id) {
+                groups.append(current)
+                current = []
+            }
+        }
+        if !current.isEmpty { groups.append(current) }
+        return groups
+    }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -33,9 +47,15 @@ struct EditWordsView: View {
                     // 1. adıma (video seçme) dönüş yoktur, stilin tamamı bu ekrandan yönetilir.
                     FontChipPicker(fonts: FontCatalog.hepsi, selection: $fontName)
 
-                    HStack(spacing: 12) {
-                        LabeledSlider(icon: "textformat.size", title: "Boyut", value: $fontSize, range: 30...150, step: 1)
-                        LabeledSlider(icon: "arrow.up.and.down", title: "Konum", value: $marginV, range: 30...950, step: 5)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 12) {
+                            LabeledSlider(icon: "textformat.size", title: "Boyut", value: $fontSize, range: 30...150, step: 1)
+                            LabeledSlider(icon: "arrow.up.and.down", title: "Konum", value: $marginV, range: 30...950, step: 5)
+                        }
+                        VStack(spacing: 12) {
+                            LabeledSlider(icon: "textformat.size", title: "Boyut", value: $fontSize, range: 30...150, step: 1)
+                            LabeledSlider(icon: "arrow.up.and.down", title: "Konum", value: $marginV, range: 30...950, step: 5)
+                        }
                     }
                 }
                 .card()
@@ -85,9 +105,14 @@ struct EditWordsView: View {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         expandedWordID = (expandedWordID == word.id) ? nil : word.id
                                     }
+                                    player?.seek(
+                                        to: CMTime(seconds: max(0, word.start), preferredTimescale: 600),
+                                        toleranceBefore: .zero,
+                                        toleranceAfter: .zero
+                                    )
                                 },
                                 onDelete: {
-                                    words.removeAll { $0.id == word.id }
+                                    deleteWord(word.id)
                                 }
                             )
                         }
@@ -121,6 +146,16 @@ struct EditWordsView: View {
         } else {
             previewLine = ""
         }
+    }
+
+    private func deleteWord(_ id: UUID) {
+        guard let index = words.firstIndex(where: { $0.id == id }) else { return }
+        let endedLine = breaks.remove(id) != nil
+        if endedLine, index > 0 {
+            breaks.insert(words[index - 1].id)
+        }
+        words.remove(at: index)
+        if expandedWordID == id { expandedWordID = nil }
     }
 }
 

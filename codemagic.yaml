@@ -16,6 +16,18 @@ workflows:
       - name: Install Dependencies
         script: |
           pod install
+      - name: Run Unit Tests
+        script: |
+          SIMULATOR_ID=$(xcrun simctl list devices available | sed -nE 's/.*\(([0-9A-F-]{36})\) \((Shutdown|Booted)\)$/\1/p' | head -1)
+          if [ -z "$SIMULATOR_ID" ]; then
+            echo "No available iOS Simulator found"
+            exit 1
+          fi
+          xcodebuild test \
+            -workspace SubByAudiocraft.xcworkspace \
+            -scheme SubByAudiocraft \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            CODE_SIGNING_ALLOWED=NO
       - name: Set up keychain
         script: |
           keychain initialize

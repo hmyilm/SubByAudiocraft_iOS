@@ -22,6 +22,7 @@ struct ProcessingView: View {
     let stage: ProcessingStage
     let message: String
     var downloadProgress: Double? = nil
+    var onCancel: (() -> Void)? = nil
 
     @State private var pulse = false
 
@@ -87,6 +88,14 @@ struct ProcessingView: View {
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
+
+            if let onCancel {
+                Button(role: .cancel, action: onCancel) {
+                    Label("İşlemi İptal Et", systemImage: "xmark.circle")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .padding(.horizontal, 16)
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 36)

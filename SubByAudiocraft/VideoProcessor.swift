@@ -5,6 +5,48 @@ import Photos
 import ffmpegkit
 import CoreText
 
+enum AnalysisQuality: String, CaseIterable, Identifiable {
+    case fast
+    case balanced
+    case best
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .fast: return "Hızlı"
+        case .balanced: return "Dengeli"
+        case .best: return "En İyi"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .fast:
+            return "Daha küçük model • eski cihazlar ve konuşma için"
+        case .balanced:
+            return "Önerilen • iyi Türkçe doğruluğu ve düşük çökme riski"
+        case .best:
+            return "Şarkı sözlerinde daha isabetli • daha fazla bellek kullanır"
+        }
+    }
+
+    fileprivate var modelCandidates: [String] {
+        switch self {
+        case .fast:
+            return ["openai_whisper-base"]
+        case .balanced:
+            return ["openai_whisper-small", "openai_whisper-base"]
+        case .best:
+            return [
+                "openai_whisper-large-v3-v20240930_626MB",
+                "openai_whisper-small",
+                "openai_whisper-base"
+            ]
+        }
+    }
+}
+
 class VideoProcessor: ObservableObject {
     static let shared = VideoProcessor()
     
@@ -16,11 +58,10 @@ class VideoProcessor: ObservableObject {
         var end: Double
     }
     
-    // 1. Sesi Videodan Çıkarma
-    // 1. Sesi Videodan 16kHz Mono WAV (PCM) Olarak Çıkarma (Siri ses tanıma motorunun yarıda kesilmesini önler)
+    // 1. Sesi Videodan 16kHz Mono WAV (PCM) olarak çıkarma
     func extractAudio(from videoURL: URL, completion: @escaping (URL?) -> Void) {
         let outputURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("subby_audio_" + UUID().uuidString)
             .appendingPathExtension("wav")
         
         let inPath = videoURL.path
@@ -31,6 +72,8 @@ class VideoProcessor: ObservableObject {
         // 3kHz üstünü kesmek ünsüz seslerini silip transkripsiyon kalitesini düşürür.
         let args = [
             "-y",
+            "-hide_banner",
+            "-loglevel", "error",
             "-i", inPath,
             "-vn",
             "-acodec", "pcm_s16le",
@@ -41,130 +84,302 @@ class VideoProcessor: ObservableObject {
         
         FFmpegKit.execute(withArgumentsAsync: args) { session in
             guard let session = session else {
-                completion(nil)
+                self.completeOnMain { completion(nil) }
                 return
             }
             
             let returnCode = session.getReturnCode()
-            if ReturnCode.isSuccess(returnCode) {
-                completion(outputURL)
+            if ReturnCode.isSuccess(returnCode),
+               FileManager.default.fileExists(atPath: outputURL.path) {
+                self.completeOnMain { completion(outputURL) }
             } else {
                 let logs = session.getLogsAsString() ?? ""
                 print("FFmpeg ses çıkarma hatası: \(logs)")
-                completion(nil)
+                self.deleteFile(at: outputURL)
+                self.completeOnMain { completion(nil) }
             }
         }
     }
-    
-    // Model bir kez yüklenir ve sonraki analizlerde tekrar kullanılır (her seferinde yeniden yüklemek çok yavaştır)
-    private var cachedWhisperKit: WhisperKit?
 
-    // Model tercih sırası: large-v3-turbo'nun 626 MB'lık nicelenmiş hali Türkçe'de
-    // (özellikle şarkı/türkü sözlerinde) small'dan ÇOK daha isabetlidir ve boyutu
-    // small (~500 MB) ile hemen hemen aynıdır. İndirilemez veya cihaz kaldıramazsa
-    // sıradaki modele düşülür; small en garantili yedektir.
-    private let modelAdaylari = [
-        "openai_whisper-large-v3-v20240930_626MB",
-        "openai_whisper-small"
-    ]
+    private let recognitionLock = NSLock()
+    private var recognitionTask: Task<Void, Never>?
+    private var recognitionID: UUID?
 
-    // Aday listesindeki ilk çalışan modeli indirir ve yükler
-    private func enIyiModeliYukle(downloadProgress: @escaping (Double) -> Void) async throws -> WhisperKit {
-        var sonHata: Error?
-        for aday in modelAdaylari {
+    // Seçilen kalite için ilk çalışan modeli indirir. prewarm, Core ML modellerini
+    // sırayla özelleştirip tepe bellek kullanımını belirgin biçimde düşürür.
+    private func loadModel(
+        quality: AnalysisQuality,
+        downloadProgress: @escaping (Double) -> Void
+    ) async throws -> WhisperKit {
+        var lastError: Error?
+        for candidate in quality.modelCandidates {
+            try Task.checkCancellation()
             do {
                 let modelFolder = try await WhisperKit.download(
-                    variant: aday,
+                    variant: candidate,
                     progressCallback: { progress in
-                        downloadProgress(progress.fractionCompleted)
+                        downloadProgress(min(max(progress.fractionCompleted, 0), 1))
                     }
                 )
                 downloadProgress(1.0)
 
-                let config = WhisperKitConfig(modelFolder: modelFolder.path)
+                let config = WhisperKitConfig(
+                    modelFolder: modelFolder.path,
+                    verbose: false,
+                    prewarm: true
+                )
                 return try await WhisperKit(config)
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
-                print("Model '\(aday)' yüklenemedi, sıradakine geçiliyor: \(error.localizedDescription)")
-                sonHata = error
+                print("Model '\(candidate)' yüklenemedi, sıradakine geçiliyor: \(error.localizedDescription)")
+                lastError = error
             }
         }
-        throw sonHata ?? NSError(domain: "VideoProcessor", code: -1, userInfo: [NSLocalizedDescriptionKey: "Hiçbir yapay zeka modeli yüklenemedi."])
+        throw lastError ?? NSError(
+            domain: "VideoProcessor",
+            code: -1,
+            userInfo: [NSLocalizedDescriptionKey: "Hiçbir yapay zeka modeli yüklenemedi."]
+        )
     }
 
     // 2. Yapay Zeka WhisperKit (CoreML) ile Sesi Metne Çevirme (Python hassasiyetinde kelime kelime zamanlama)
     // downloadProgress: model ilk kez indirilirken 0.0-1.0 arası ilerleme bildirir
-    func runSpeechRecognition(audioURL: URL, downloadProgress: @escaping (Double) -> Void, completion: @escaping ([WordTimestamp], String?) -> Void) {
-        Task {
-            do {
-                // 1. Model Klasörünü Hazırla (İlk çalıştırmada modeli Hugging Face'den indirir ve kaydeder)
-                // Cihazın Neural Engine / Metal hızlandırıcılarını kullanarak yerel olarak deşifre eder.
-                let whisperKit: WhisperKit
-                if let cached = self.cachedWhisperKit {
-                    whisperKit = cached
-                } else {
-                    whisperKit = try await self.enIyiModeliYukle(downloadProgress: downloadProgress)
-                    self.cachedWhisperKit = whisperKit
-                }
+    func runSpeechRecognition(
+        audioURL: URL,
+        quality: AnalysisQuality,
+        downloadProgress: @escaping (Double) -> Void,
+        completion: @escaping ([WordTimestamp], String?) -> Void
+    ) {
+        cancelSpeechRecognition()
+        let recognitionID = UUID()
+        recognitionLock.lock()
+        self.recognitionID = recognitionID
+        recognitionLock.unlock()
 
-                // 2. Kod çözme ayarları (Türkçe dili ve kelime düzeyinde zaman damgaları)
+        let task = Task(priority: .userInitiated) {
+            var whisperKit: WhisperKit?
+            do {
+                // Model ilk kullanımda indirilir; daha sonraki analizlerde disk önbelleğinden yüklenir.
+                let loadedModel = try await self.loadModel(
+                    quality: quality,
+                    downloadProgress: downloadProgress
+                )
+                whisperKit = loadedModel
+                try Task.checkCancellation()
+
+                // VAD uzun müzik dosyalarını konuşma bölgelerine böler. Tek işçi kullanmak,
+                // büyük modelde birden fazla Core ML çözümlemesinin aynı anda belleğe
+                // binmesini ve iOS'un uygulamayı sonlandırmasını önler.
                 var options = DecodingOptions()
                 options.language = "tr"
                 options.wordTimestamps = true
+                options.chunkingStrategy = .vad
+                options.concurrentWorkerCount = 1
 
-                // 3. Deşifre etme işlemini başlatıyoruz
-                let results = try await whisperKit.transcribe(audioPath: audioURL.path, decodeOptions: options)
-                
-                // 4. Sonuçlardaki segmentleri kelime kelime ayrıştırıp diziye ekliyoruz
+                let results = try await loadedModel.transcribe(
+                    audioPath: audioURL.path,
+                    decodeOptions: options,
+                    callback: { [weak self] _ in
+                        self?.isRecognitionActive(recognitionID) ?? false
+                    }
+                )
+
                 var words: [WordTimestamp] = []
-                
                 for result in results {
-                    // Not: Bu WhisperKit sürümünde segments opsiyonel değildir; doğrudan geziyoruz
                     for segment in result.segments {
-                        // Kelime düzeyinde zaman damgaları (Word-level timestamps) varsa alıyoruz
                         if let segmentWords = segment.words, !segmentWords.isEmpty {
                             for word in segmentWords {
-                                let text = word.word.trimmingCharacters(in: .whitespacesAndNewlines)
-                                    .replacingOccurrences(of: "[.,!?;:]", with: "", options: .regularExpression)
-                                if !text.isEmpty {
+                                let text = self.cleanRecognizedText(word.word)
+                                let start = Double(word.start)
+                                let end = Double(word.end)
+                                if !text.isEmpty, start.isFinite, end.isFinite {
                                     words.append(WordTimestamp(
                                         text: text,
-                                        start: Double(word.start),
-                                        end: Double(word.end)
+                                        start: max(0, start),
+                                        end: max(max(0, start) + 0.05, end)
                                     ))
                                 }
                             }
                         } else {
-                            // Eğer kelime zaman damgası yoksa segmenti kelimelere bölüp süreyi orantılı dağıtıyoruz
                             let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
                             let rawWords = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
                             let duration = Double(segment.end) - Double(segment.start)
                             let wordDur = duration / Double(max(1, rawWords.count))
 
                             for (index, wordText) in rawWords.enumerated() {
-                                let cleanText = wordText.replacingOccurrences(of: "[.,!?;:]", with: "", options: .regularExpression)
-                                if !cleanText.isEmpty {
+                                let cleanText = self.cleanRecognizedText(wordText)
+                                let segmentStart = Double(segment.start)
+                                if !cleanText.isEmpty, segmentStart.isFinite, duration.isFinite {
                                     let start = Double(segment.start) + (Double(index) * wordDur)
                                     words.append(WordTimestamp(
                                         text: cleanText,
-                                        start: start,
-                                        end: start + wordDur
+                                        start: max(0, start),
+                                        end: max(max(0, start) + 0.05, start + wordDur)
                                     ))
                                 }
                             }
                         }
                     }
                 }
-                
-                if words.isEmpty {
-                    completion([], "Videoda deşifre edilebilecek net bir konuşma bulunamadı.")
-                } else {
-                    completion(words, nil)
+
+                try Task.checkCancellation()
+                let normalizedWords = self.normalizeRecognizedWords(words)
+                await loadedModel.unloadModels()
+                whisperKit = nil
+
+                self.completeOnMain {
+                    if normalizedWords.isEmpty {
+                        completion([], "Videoda deşifre edilebilecek net bir konuşma bulunamadı.")
+                    } else {
+                        completion(normalizedWords, nil)
+                    }
                 }
-                
+            } catch is CancellationError {
+                if let whisperKit {
+                    await whisperKit.unloadModels()
+                }
+                self.completeOnMain {
+                    completion([], "İşlem iptal edildi.")
+                }
             } catch {
+                if let whisperKit {
+                    await whisperKit.unloadModels()
+                }
                 print("WhisperKit hatası: \(error.localizedDescription)")
-                completion([], "WhisperKit yapay zeka analiz hatası: \(error.localizedDescription)")
+                let message = self.friendlyRecognitionError(error)
+                self.completeOnMain {
+                    completion([], message)
+                }
             }
+
+            self.recognitionLock.lock()
+            if self.recognitionID == recognitionID {
+                self.recognitionTask = nil
+                self.recognitionID = nil
+            }
+            self.recognitionLock.unlock()
+        }
+
+        recognitionLock.lock()
+        if self.recognitionID == recognitionID {
+            recognitionTask = task
+        } else {
+            task.cancel()
+        }
+        recognitionLock.unlock()
+    }
+
+    func cancelSpeechRecognition() {
+        recognitionLock.lock()
+        let task = recognitionTask
+        recognitionTask = nil
+        recognitionID = nil
+        recognitionLock.unlock()
+        task?.cancel()
+    }
+
+    private func isRecognitionActive(_ id: UUID) -> Bool {
+        recognitionLock.lock()
+        defer { recognitionLock.unlock() }
+        return recognitionID == id
+    }
+
+    func cancelAllProcessing() {
+        cancelSpeechRecognition()
+        FFmpegKit.cancel()
+    }
+
+    // Render sırasında kaynak video ile çıktı bir süre aynı anda diskte kalır.
+    // En az 350 MB veya kaynak boyutunun iki katı boşluk yoksa işlemi başlatmayarak
+    // yarım çıktı ve anlaşılmaz FFmpeg hatalarının önüne geçer.
+    func hasEnoughSpaceToRender(videoURL: URL) -> Bool {
+        let keys: Set<URLResourceKey> = [
+            .fileSizeKey,
+            .volumeAvailableCapacityForImportantUsageKey
+        ]
+        guard let values = try? videoURL.resourceValues(forKeys: keys),
+              let available = values.volumeAvailableCapacityForImportantUsage else {
+            // Kapasite sorgusu bazı dosya sağlayıcılarında desteklenmez; FFmpeg'in
+            // gerçek hatasına izin vermek, geçerli videoyu yanlışlıkla engellemekten iyidir.
+            return true
+        }
+        let inputSize = Int64(values.fileSize ?? 0)
+        let minimum = Int64(350 * 1_024 * 1_024)
+        let required = max(minimum, inputSize * 2)
+        return available > required
+    }
+
+    // Yarım kalan analiz/kodlama işlemlerinin geçici dosyaları sonraki açılışlarda
+    // depolamayı şişirmesin. Yalnız uygulamanın kendi önekleri hedeflenir.
+    func cleanupStaleTemporaryFiles(olderThan age: TimeInterval = 24 * 60 * 60) {
+        let fileManager = FileManager.default
+        let directory = fileManager.temporaryDirectory
+        let keys: [URLResourceKey] = [.contentModificationDateKey]
+        guard let files = try? fileManager.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        ) else { return }
+
+        let cutoff = Date().addingTimeInterval(-age)
+        for file in files {
+            let name = file.lastPathComponent
+            guard name.hasPrefix("subby_") || name.hasPrefix("ass_fonts_") else { continue }
+            let values = try? file.resourceValues(forKeys: Set(keys))
+            guard (values?.contentModificationDate ?? .distantPast) < cutoff else { continue }
+            try? fileManager.removeItem(at: file)
+        }
+    }
+
+    private func cleanRecognizedText(_ text: String) -> String {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "[.,!?;:]+$", with: "", options: .regularExpression)
+    }
+
+    // VAD sınırlarında oluşabilen yinelenen kelimeleri temizler ve bozuk zamanları ayıklar.
+    private func normalizeRecognizedWords(_ words: [WordTimestamp]) -> [WordTimestamp] {
+        let sorted = words.sorted {
+            if $0.start == $1.start { return $0.end < $1.end }
+            return $0.start < $1.start
+        }
+        var normalized: [WordTimestamp] = []
+        for word in sorted {
+            guard word.start.isFinite, word.end.isFinite, !word.text.isEmpty else { continue }
+            if let previous = normalized.last,
+               previous.text.compare(word.text, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame,
+               abs(previous.start - word.start) < 0.35 {
+                if word.end > previous.end {
+                    normalized[normalized.count - 1].end = word.end
+                }
+                continue
+            }
+            normalized.append(word)
+        }
+        return normalized
+    }
+
+    private func friendlyRecognitionError(_ error: Error) -> String {
+        let description = error.localizedDescription
+        let lowercased = description.lowercased()
+        if lowercased.contains("network") || lowercased.contains("internet") ||
+            lowercased.contains("offline") || lowercased.contains("timed out") {
+            return "Yapay zeka modeli indirilemedi. İnternet bağlantını kontrol edip tekrar dene."
+        }
+        if lowercased.contains("space") || lowercased.contains("disk") {
+            return "Model için yeterli boş alan yok. Cihazda yer açıp tekrar dene."
+        }
+        if lowercased.contains("memory") || lowercased.contains("allocation") {
+            return "Cihaz belleği bu model için yetersiz kaldı. Analiz kalitesini “Dengeli” veya “Hızlı” seçip tekrar dene."
+        }
+        return "Yapay zeka analizi tamamlanamadı: \(description)"
+    }
+
+    private func completeOnMain(_ work: @escaping () -> Void) {
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
         }
     }
     
@@ -468,7 +683,7 @@ class VideoProcessor: ObservableObject {
 
     // 4. FFmpegKit ile Videoyu Oluşturma
     func burnSubtitles(videoURL: URL, assURL: URL, fontName: String, completion: @escaping (URL?, String?) -> Void) {
-        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".mp4")
+        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent("subby_render_" + UUID().uuidString + ".mp4")
 
         // Yedek yol: fontconfig sistem klasörlerini de tanır (fontsdir başarısız olursa)
         FFmpegKitConfig.setFontDirectoryList([
@@ -497,13 +712,17 @@ class VideoProcessor: ObservableObject {
         // 12M bitrate 1080p için yüksek kalite sağlar; 30M gereksiz büyük dosyalar üretiyordu.
         let args = [
             "-y",
+            "-hide_banner",
+            "-loglevel", "error",
             "-i", inPath,
             "-vf", vfString,
             "-c:v", "h264_videotoolbox",
             "-allow_sw", "1",
             "-b:v", "12M",
             "-movflags", "+faststart",
-            "-c:a", "copy",
+            // Kaynak videodaki PCM/Opus gibi MP4 ile uyumsuz sesleri de güvenle dışa aktar.
+            "-c:a", "aac",
+            "-b:a", "192k",
             outPath
         ]
 
@@ -514,22 +733,24 @@ class VideoProcessor: ObservableObject {
             }
 
             guard let session = session else {
-                completion(nil, "Bilinmeyen bir oturum hatası")
+                self.deleteFile(at: outputURL)
+                self.completeOnMain { completion(nil, "Bilinmeyen bir oturum hatası") }
                 return
             }
 
             let returnCode = session.getReturnCode()
 
             if ReturnCode.isSuccess(returnCode) {
-                completion(outputURL, nil)
+                self.completeOnMain { completion(outputURL, nil) }
             } else if ReturnCode.isCancel(returnCode) {
-                completion(nil, "İşlem iptal edildi.")
+                self.deleteFile(at: outputURL)
+                self.completeOnMain { completion(nil, "İşlem iptal edildi.") }
             } else {
                 let logs = session.getLogsAsString() ?? "Log alınamadı"
                 print("FFMPEG HATASI: \(logs)")
-                // Tam logu veya en azından son 5000 karakteri göstererek hatayı yakalıyoruz
-                let shortLog = String(logs.suffix(5000))
-                completion(nil, shortLog)
+                self.deleteFile(at: outputURL)
+                let shortLog = String(logs.suffix(2000))
+                self.completeOnMain { completion(nil, shortLog) }
             }
         }
     }
@@ -537,14 +758,16 @@ class VideoProcessor: ObservableObject {
     // 5. Videoyu Galeriye Kaydet (iOS 14+ addOnly ile daha güvenli ve detaylı hata dönüşlü)
     func saveToGallery(videoURL: URL, completion: @escaping (Bool, String?) -> Void) {
         let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        if status == .authorized {
+        if status == .authorized || status == .limited {
             performSave(videoURL: videoURL, completion: completion)
         } else {
             PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
-                if newStatus == .authorized {
+                if newStatus == .authorized || newStatus == .limited {
                     self.performSave(videoURL: videoURL, completion: completion)
                 } else {
-                    completion(false, "Galeriye kaydetme izni reddedildi. Lütfen Ayarlar'dan izin verin.")
+                    self.completeOnMain {
+                        completion(false, "Galeriye kaydetme izni reddedildi. Ayarlar > Gizlilik ve Güvenlik > Fotoğraflar bölümünden izin verip tekrar dene.")
+                    }
                 }
             }
         }
@@ -554,10 +777,12 @@ class VideoProcessor: ObservableObject {
         PHPhotoLibrary.shared().performChanges({
             PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: videoURL)
         }) { success, error in
-            if success {
-                completion(true, nil)
-            } else {
-                completion(false, error?.localizedDescription ?? "Bilinmeyen galeri kaydetme hatası.")
+            self.completeOnMain {
+                if success {
+                    completion(true, nil)
+                } else {
+                    completion(false, error?.localizedDescription ?? "Bilinmeyen galeri kaydetme hatası.")
+                }
             }
         }
     }

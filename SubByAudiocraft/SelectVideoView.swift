@@ -9,26 +9,22 @@ struct SelectVideoView: View {
     @Binding var fontName: String
     @Binding var fontSize: Double
     @Binding var marginV: Double
+    @Binding var analysisQuality: AnalysisQuality
+    let isLoadingVideo: Bool
     let fonts: [FontOption]
 
     var body: some View {
         VStack(spacing: 16) {
             if player == nil {
-                // Boş durum: kesikli konturlu büyük yükleme kartı
-                PhotosPicker(selection: $selectedItem, matching: .videos, photoLibrary: .shared()) {
+                if isLoadingVideo {
                     VStack(spacing: 14) {
-                        ZStack {
-                            Circle()
-                                .fill(Theme.yellow.opacity(0.15))
-                                .frame(width: 72, height: 72)
-                            Image(systemName: "video.badge.plus")
-                                .font(.system(size: 30))
-                                .foregroundColor(Theme.yellow)
-                        }
-                        Text("Galeriden Video Seç")
+                        ProgressView()
+                            .tint(Theme.yellow)
+                            .scaleEffect(1.2)
+                        Text("Video hazırlanıyor")
                             .font(.system(.headline, design: .rounded))
                             .foregroundColor(.white)
-                        Text("Videondaki konuşma veya şarkı sözleri\notomatik olarak altyazıya dönüştürülür.")
+                        Text("Büyük videoların kopyalanması birkaç saniye sürebilir.")
                             .font(.footnote)
                             .foregroundColor(.gray)
                             .multilineTextAlignment(.center)
@@ -44,6 +40,38 @@ struct SelectVideoView: View {
                             .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [7]))
                             .foregroundColor(Theme.yellow.opacity(0.5))
                     )
+                } else {
+                    // Boş durum: kesikli konturlu büyük yükleme kartı
+                    PhotosPicker(selection: $selectedItem, matching: .videos, photoLibrary: .shared()) {
+                        VStack(spacing: 14) {
+                            ZStack {
+                                Circle()
+                                    .fill(Theme.yellow.opacity(0.15))
+                                    .frame(width: 72, height: 72)
+                                Image(systemName: "video.badge.plus")
+                                    .font(.system(size: 30))
+                                    .foregroundColor(Theme.yellow)
+                            }
+                            Text("Galeriden Video Seç")
+                                .font(.system(.headline, design: .rounded))
+                                .foregroundColor(.white)
+                            Text("Videondaki konuşma veya şarkı sözleri\notomatik olarak altyazıya dönüştürülür.")
+                                .font(.footnote)
+                                .foregroundColor(.gray)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 44)
+                        .background(
+                            RoundedRectangle(cornerRadius: Theme.corner, style: .continuous)
+                                .fill(Theme.card)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.corner, style: .continuous)
+                                .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [7]))
+                                .foregroundColor(Theme.yellow.opacity(0.5))
+                        )
+                    }
                 }
             } else {
                 // Video seçili: canlı ön izleme + video değiştirme
@@ -63,6 +91,29 @@ struct SelectVideoView: View {
                         Label("Videoyu Değiştir", systemImage: "arrow.triangle.2.circlepath")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(Theme.yellow)
+                    }
+                }
+                .card()
+
+                VStack(alignment: .leading, spacing: 12) {
+                    SectionHeader(icon: "cpu.fill", title: "Analiz Kalitesi")
+
+                    Picker("Analiz Kalitesi", selection: $analysisQuality) {
+                        ForEach(AnalysisQuality.allCases) { quality in
+                            Text(quality.title).tag(quality)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(analysisQuality.detail)
+                        .font(.caption)
+                        .foregroundColor(analysisQuality == .best ? .orange : .gray)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if analysisQuality == .best {
+                        Label("Eski veya belleği düşük cihazlarda “Dengeli” daha kararlıdır.", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
                     }
                 }
                 .card()
