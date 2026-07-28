@@ -1,4 +1,4 @@
-platform :ios, '16.0'
+platform :ios, '18.0'
 use_frameworks!
 
 target 'SubByAudiocraft' do

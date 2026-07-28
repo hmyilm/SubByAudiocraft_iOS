@@ -71,12 +71,12 @@ struct ProcessingView: View {
             }
             .padding(.horizontal, 8)
 
-            // Model ilk kez indirilirken ilerleme çubuğu gösterilir
+            // İlk kullanımda indirme, sonraki kullanımlarda model hazırlama ilerlemesi.
             if let progress = downloadProgress, progress < 1.0 {
                 VStack(spacing: 6) {
                     ProgressView(value: progress)
                         .tint(Theme.yellow)
-                    Text("Yapay zeka modeli indiriliyor: %\(Int(progress * 100))")
+                    Text("Yapay zeka modelleri hazırlanıyor: %\(Int(progress * 100))")
                         .font(.caption2)
                         .foregroundColor(.gray)
                 }

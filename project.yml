@@ -4,22 +4,27 @@ options:
 packages:
   WhisperKit:
     url: https://github.com/argmaxinc/WhisperKit
-    exactVersion: 0.18.0
+    exactVersion: 1.0.0
+  Qwen3Speech:
+    url: https://github.com/soniqo/speech-swift
+    exactVersion: 0.0.23
 targets:
   SubByAudiocraft:
     type: application
     platform: iOS
-    deploymentTarget: "16.0"
-    version: 1.16.0
-    build: 40
+    deploymentTarget: "18.0"
+    version: 1.17.0
+    build: 41
     settings:
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       PRODUCT_BUNDLE_IDENTIFIER: com.hmyilm.SubByAudiocraft
-      MARKETING_VERSION: "1.16.0"
-      CURRENT_PROJECT_VERSION: "40"
+      MARKETING_VERSION: "1.17.0"
+      CURRENT_PROJECT_VERSION: "41"
     sources: [SubByAudiocraft]
     dependencies:
       - package: WhisperKit
+      - package: Qwen3Speech
+        product: Qwen3ASR
     info:
       path: SubByAudiocraft/Info.plist
       properties:
@@ -54,8 +59,8 @@ targets:
         UILaunchScreen: {}
         CFBundleIconName: AppIcon
         CFBundleDisplayName: Sub by Audiocraft
-        CFBundleShortVersionString: "1.16.0"
-        CFBundleVersion: "40"
+        CFBundleShortVersionString: "1.17.0"
+        CFBundleVersion: "41"
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -76,7 +81,7 @@ targets:
   SubByAudiocraftTests:
     type: bundle.unit-test
     platform: iOS
-    deploymentTarget: "16.0"
+    deploymentTarget: "18.0"
     sources: [SubByAudiocraftTests]
     dependencies:
       - target: SubByAudiocraft

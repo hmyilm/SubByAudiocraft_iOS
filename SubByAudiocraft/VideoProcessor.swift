@@ -1,6 +1,7 @@
 import Foundation
 import AVFoundation
 import WhisperKit
+import Qwen3ASR
 import Photos
 import ffmpegkit
 import CoreText
@@ -10,11 +11,16 @@ enum AnalysisQuality: String, CaseIterable, Identifiable {
     case balanced
     case best
 
-    // large-v3 Turbo modeli 626 MB olsa da Core ML özelleştirme ve çözümleme
+    // large-v3 modeli sıkıştırılmış olsa da Core ML özelleştirme ve çözümleme
     // sırasında bunun birkaç katı geçici bellek kullanabilir. 8 GB altındaki
     // cihazlarda iOS uygulamayı hata vermeden (jetsam) kapatabildiği için bu
-    // cihazlarda "En İyi" seçiminde small modele güvenli biçimde düşülür.
+    // cihazlarda zaman hizalaması small modele güvenli biçimde düşürülür.
+    // Şarkı sözlerini ise large Whisper yerine, şarkı/BGM tanıma için eğitilmiş
+    // Qwen3-ASR 0.6B çözer. İki model hiçbir zaman aynı anda bellekte tutulmaz.
     static let largeModelMinimumPhysicalMemory = UInt64(8) * 1_024 * 1_024 * 1_024
+    // iOS, ayrılmış sistem belleği nedeniyle 6 GB donanımı ProcessInfo'da biraz
+    // daha düşük raporlayabilir. 5 GB eşiği iPhone 14 sınıfını güvenle kapsar.
+    static let qwenFiveBitMinimumPhysicalMemory = UInt64(5) * 1_024 * 1_024 * 1_024
 
     var id: String { rawValue }
 
@@ -29,19 +35,37 @@ enum AnalysisQuality: String, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .fast:
-            return "Daha küçük model • eski cihazlar ve konuşma için"
+            return "Yalnız yerel Whisper • en az indirme ve en hızlı analiz"
         case .balanced:
-            return "Önerilen • iyi Türkçe doğruluğu ve düşük çökme riski"
+            return "Önerilen • Qwen3 şarkı modeli + hassas kelime zamanlaması"
         case .best:
             if usesMemorySafeFallback {
-                return "Bu cihazda çökme riskini azaltmak için bellek dostu model kullanılır"
+                return "Qwen3 söz motoru + çift geçişli, bellek dostu zaman hizalama"
             }
-            return "Şarkı sözlerinde daha isabetli • daha fazla bellek kullanır"
+            return "Qwen3 söz motoru + büyük modelle çift geçişli zaman hizalama"
         }
     }
 
     var usesMemorySafeFallback: Bool {
         self == .best && ProcessInfo.processInfo.physicalMemory < Self.largeModelMinimumPhysicalMemory
+    }
+
+    var usesDedicatedLyricModel: Bool {
+        self != .fast
+    }
+
+    var usesSecondTimingPass: Bool {
+        self != .fast
+    }
+
+    func qwenModelID(
+        physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory
+    ) -> String? {
+        guard usesDedicatedLyricModel else { return nil }
+        if physicalMemory >= Self.qwenFiveBitMinimumPhysicalMemory {
+            return "aufklarer/Qwen3-ASR-0.6B-MLX-5bit"
+        }
+        return "aufklarer/Qwen3-ASR-0.6B-MLX-4bit"
     }
 
     func modelCandidates(physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> [String] {
@@ -666,6 +690,18 @@ class VideoProcessor: ObservableObject {
         var start: Double
         var end: Double
     }
+
+    struct LyricRecognitionWindow: Equatable {
+        let wordRange: Range<Int>
+        let start: Double
+        let end: Double
+    }
+
+    private enum SequenceStep: UInt8 {
+        case diagonal
+        case deletion
+        case insertion
+    }
     
     // 1. Sesi Videodan 16kHz Mono WAV (PCM) olarak çıkarma
     func extractAudio(from videoURL: URL, completion: @escaping (URL?) -> Void) {
@@ -718,6 +754,7 @@ class VideoProcessor: ObservableObject {
     // sırayla özelleştirip tepe bellek kullanımını belirgin biçimde düşürür.
     private func loadModel(
         quality: AnalysisQuality,
+        progressRange: ClosedRange<Double> = 0...1,
         downloadProgress: @escaping (Double) -> Void
     ) async throws -> WhisperKit {
         var lastError: Error?
@@ -727,11 +764,14 @@ class VideoProcessor: ObservableObject {
                 let modelFolder = try await WhisperKit.download(
                     variant: candidate,
                     progressCallback: { progress in
-                        downloadProgress(min(max(progress.fractionCompleted, 0), 1))
+                        let fraction = min(max(progress.fractionCompleted, 0), 1)
+                        let mapped = progressRange.lowerBound
+                            + ((progressRange.upperBound - progressRange.lowerBound) * fraction)
+                        downloadProgress(mapped)
                     }
                 )
                 try Task.checkCancellation()
-                downloadProgress(1.0)
+                downloadProgress(progressRange.upperBound)
 
                 let config = WhisperKitConfig(
                     modelFolder: modelFolder.path,
@@ -753,7 +793,7 @@ class VideoProcessor: ObservableObject {
         )
     }
 
-    // 2. Yapay Zeka WhisperKit (CoreML) ile Sesi Metne Çevirme (Python hassasiyetinde kelime kelime zamanlama)
+    // 2. WhisperKit ile zaman çıkarma, Qwen3-ASR ile şarkı sözünü düzeltme.
     // downloadProgress: model ilk kez indirilirken 0.0-1.0 arası ilerleme bildirir
     func runSpeechRecognition(
         audioURL: URL,
@@ -769,81 +809,94 @@ class VideoProcessor: ObservableObject {
 
         let task = Task(priority: .userInitiated) {
             var whisperKit: WhisperKit?
+            var qwenModel: Qwen3ASRModel?
             do {
-                // Model ilk kullanımda indirilir; daha sonraki analizlerde disk önbelleğinden yüklenir.
+                // Whisper yalnız kelime başlangıç/bitişlerini bulur. Qwen kullanılacaksa
+                // indirme göstergesinin ilk %40'ı hizalama modeline ayrılır.
+                let whisperProgressRange: ClosedRange<Double> = quality.usesDedicatedLyricModel
+                    ? 0...0.4
+                    : 0...1
                 let loadedModel = try await self.loadModel(
                     quality: quality,
+                    progressRange: whisperProgressRange,
                     downloadProgress: downloadProgress
                 )
                 whisperKit = loadedModel
                 try Task.checkCancellation()
 
-                // VAD uzun müzik dosyalarını konuşma bölgelerine böler. Tek işçi kullanmak,
-                // büyük modelde birden fazla Core ML çözümlemesinin aynı anda belleğe
-                // binmesini ve iOS'un uygulamayı sonlandırmasını önler.
-                var options = DecodingOptions()
-                options.language = "tr"
-                options.wordTimestamps = true
-                options.skipSpecialTokens = true
-                options.chunkingStrategy = .vad
-                options.concurrentWorkerCount = 1
-
-                let results = try await loadedModel.transcribe(
-                    audioPath: audioURL.path,
-                    decodeOptions: options,
-                    callback: { [weak self] _ in
-                        self?.isRecognitionActive(recognitionID) ?? false
-                    }
+                let vadWords = try await self.transcribeTimingPass(
+                    model: loadedModel,
+                    audioURL: audioURL,
+                    chunkingStrategy: .vad,
+                    recognitionID: recognitionID
                 )
 
-                var words: [WordTimestamp] = []
-                for result in results {
-                    for segment in result.segments {
-                        if let segmentWords = segment.words, !segmentWords.isEmpty {
-                            for word in segmentWords {
-                                let text = self.cleanRecognizedText(word.word)
-                                let start = Double(word.start)
-                                let end = Double(word.end)
-                                if !text.isEmpty, start.isFinite, end.isFinite {
-                                    words.append(WordTimestamp(
-                                        text: text,
-                                        start: max(0, start),
-                                        end: max(max(0, start) + 0.05, end)
-                                    ))
-                                }
-                            }
-                        } else {
-                            let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let rawWords = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-                            let rawStart = Double(segment.start)
-                            let rawEnd = Double(segment.end)
-                            guard rawStart.isFinite, rawEnd.isFinite, !rawWords.isEmpty else { continue }
-                            let segmentStart = max(0, rawStart)
-                            let minimumDuration = Double(rawWords.count) * 0.05
-                            let segmentEnd = max(segmentStart + minimumDuration, rawEnd)
-                            let wordDur = (segmentEnd - segmentStart) / Double(rawWords.count)
-
-                            for (index, wordText) in rawWords.enumerated() {
-                                let cleanText = self.cleanRecognizedText(wordText)
-                                if !cleanText.isEmpty {
-                                    let start = segmentStart + (Double(index) * wordDur)
-                                    words.append(WordTimestamp(
-                                        text: cleanText,
-                                        start: start,
-                                        end: start + wordDur
-                                    ))
-                                }
-                            }
-                        }
-                    }
+                var normalizedWords = vadWords
+                if quality.usesSecondTimingPass {
+                    try Task.checkCancellation()
+                    // VAD şarkı vokallerini bazen konuşma dışı sayıp kelime başlarını
+                    // kesebilir. İkinci geçiş aynı modeli sabit 30 sn pencerelerle
+                    // çalıştırır; yalnız iki geçişin aynı sırada bulduğu zamanlar
+                    // birleştirilir.
+                    let continuousWords = try await self.transcribeTimingPass(
+                        model: loadedModel,
+                        audioURL: audioURL,
+                        chunkingStrategy: .none,
+                        recognitionID: recognitionID
+                    )
+                    normalizedWords = self.mergeTimingPasses(
+                        primary: vadWords,
+                        secondary: continuousWords
+                    )
                 }
 
                 try Task.checkCancellation()
-                let normalizedWords = self.normalizeRecognizedWords(words)
                 await loadedModel.unloadModels()
                 whisperKit = nil
                 try Task.checkCancellation()
 
+                // Bellek güvenliği: Qwen ancak Whisper tamamen boşaltıldıktan sonra
+                // yüklenir. Böylece iPhone 14'te iki modelin tepe belleği üst üste binmez.
+                if let qwenModelID = quality.qwenModelID(), !normalizedWords.isEmpty {
+                    do {
+                        let loadedQwenModel = try await Qwen3ASRModel.fromPretrained(
+                            modelId: qwenModelID,
+                            progressHandler: { fraction, _ in
+                                let safeFraction = min(max(fraction, 0), 1)
+                                downloadProgress(0.4 + (safeFraction * 0.6))
+                            }
+                        )
+                        qwenModel = loadedQwenModel
+                        try Task.checkCancellation()
+
+                        if let enhancedWords = try self.enhanceLyricsWithQwen(
+                            model: loadedQwenModel,
+                            audioURL: audioURL,
+                            timedWords: normalizedWords
+                        ), !enhancedWords.isEmpty {
+                            normalizedWords = enhancedWords
+                        }
+
+                        loadedQwenModel.unload()
+                        qwenModel = nil
+                        downloadProgress(1.0)
+                    } catch is CancellationError {
+                        qwenModel?.unload()
+                        qwenModel = nil
+                        throw CancellationError()
+                    } catch {
+                        // Yeni söz motoru indirilemez veya cihazda çalışamazsa eldeki
+                        // güvenilir zamanlı Whisper sonucu kaybolmaz.
+                        qwenModel?.unload()
+                        qwenModel = nil
+                        downloadProgress(1.0)
+                        print("Qwen3-ASR kullanılamadı; yerel zamanlama sonucu korunuyor: \(error.localizedDescription)")
+                    }
+                } else {
+                    downloadProgress(1.0)
+                }
+
+                try Task.checkCancellation()
                 guard self.finishRecognitionIfActive(recognitionID) else { return }
                 self.completeOnMain {
                     if normalizedWords.isEmpty {
@@ -856,6 +909,7 @@ class VideoProcessor: ObservableObject {
                 if let whisperKit {
                     await whisperKit.unloadModels()
                 }
+                qwenModel?.unload()
                 if self.finishRecognitionIfActive(recognitionID) {
                     self.completeOnMain {
                         completion([], "İşlem iptal edildi.")
@@ -865,6 +919,7 @@ class VideoProcessor: ObservableObject {
                 if let whisperKit {
                     await whisperKit.unloadModels()
                 }
+                qwenModel?.unload()
                 print("WhisperKit hatası: \(error.localizedDescription)")
                 let message = self.friendlyRecognitionError(error)
                 if self.finishRecognitionIfActive(recognitionID) {
@@ -882,6 +937,539 @@ class VideoProcessor: ObservableObject {
             task.cancel()
         }
         recognitionLock.unlock()
+    }
+
+    private func transcribeTimingPass(
+        model: WhisperKit,
+        audioURL: URL,
+        chunkingStrategy: ChunkingStrategy,
+        recognitionID: UUID
+    ) async throws -> [WordTimestamp] {
+        // Şarkıda düşük olasılıklı heceler konuşmaya göre daha sık görülür. Biraz
+        // daha toleranslı eşikler, kelimeyi tamamen atmak yerine zaman adayı üretir.
+        var options = DecodingOptions()
+        options.language = "tr"
+        options.wordTimestamps = true
+        options.skipSpecialTokens = true
+        options.chunkingStrategy = chunkingStrategy
+        options.concurrentWorkerCount = 1
+        options.temperature = 0
+        options.temperatureFallbackCount = 3
+        options.suppressBlank = true
+        options.logProbThreshold = -1.25
+        options.firstTokenLogProbThreshold = -2
+        options.noSpeechThreshold = 0.75
+        options.windowClipTime = 0.25
+
+        let results = try await model.transcribe(
+            audioPath: audioURL.path,
+            decodeOptions: options,
+            callback: { [weak self] _ in
+                self?.isRecognitionActive(recognitionID) ?? false
+            }
+        )
+
+        var words: [WordTimestamp] = []
+        for result in results {
+            for segment in result.segments {
+                if let segmentWords = segment.words, !segmentWords.isEmpty {
+                    for word in segmentWords {
+                        let text = cleanRecognizedText(word.word)
+                        let start = Double(word.start)
+                        let end = Double(word.end)
+                        if !text.isEmpty, start.isFinite, end.isFinite {
+                            words.append(WordTimestamp(
+                                text: text,
+                                start: max(0, start),
+                                end: max(max(0, start) + 0.05, end)
+                            ))
+                        }
+                    }
+                    continue
+                }
+
+                // Eski/eksik model paketlerinde kelime hizalaması dönmezse segment
+                // kaybolmasın. Bu yol yalnız son çare; Qwen metni daha sonra gerçek
+                // Whisper segment aralığına yeniden oturtulur.
+                let rawWords = lyricWords(from: segment.text)
+                let rawStart = Double(segment.start)
+                let rawEnd = Double(segment.end)
+                guard rawStart.isFinite, rawEnd.isFinite, !rawWords.isEmpty else { continue }
+                let segmentStart = max(0, rawStart)
+                let minimumDuration = Double(rawWords.count) * 0.05
+                let segmentEnd = max(segmentStart + minimumDuration, rawEnd)
+                let wordDuration = (segmentEnd - segmentStart) / Double(rawWords.count)
+
+                for (index, text) in rawWords.enumerated() {
+                    let start = segmentStart + (Double(index) * wordDuration)
+                    words.append(WordTimestamp(
+                        text: text,
+                        start: start,
+                        end: start + wordDuration
+                    ))
+                }
+            }
+        }
+        return normalizeRecognizedWords(words)
+    }
+
+    // VAD ve sabit pencere geçişlerini kelime sırasına göre eşleştirir. İki
+    // geçişin aynı kelime için yakın bulduğu başlangıç/bitişlerin ortalaması,
+    // tek bir geçişte görülen 200-500 ms'lik karaoke kaymalarını azaltır.
+    func mergeTimingPasses(
+        primary: [WordTimestamp],
+        secondary: [WordTimestamp]
+    ) -> [WordTimestamp] {
+        guard !primary.isEmpty else { return normalizeRecognizedWords(secondary) }
+        guard !secondary.isEmpty else { return normalizeRecognizedWords(primary) }
+
+        let mapping = sequenceMapping(
+            source: primary.map(\.text),
+            target: secondary.map(\.text)
+        )
+        var merged = primary
+
+        for index in merged.indices {
+            guard let secondaryIndex = mapping[index],
+                  secondary.indices.contains(secondaryIndex) else { continue }
+            let second = secondary[secondaryIndex]
+            let similarity = tokenSimilarity(merged[index].text, second.text)
+            guard similarity >= 0.45,
+                  abs(merged[index].start - second.start) <= 1.2,
+                  abs(merged[index].end - second.end) <= 1.4 else { continue }
+
+            // VAD başlangıçta daha güvenilir, sabit pencere ise uzatılmış hecelerin
+            // bitişini daha iyi korur; ağırlıklar buna göre seçildi.
+            merged[index].start = (merged[index].start * 0.62) + (second.start * 0.38)
+            merged[index].end = (merged[index].end * 0.48) + (second.end * 0.52)
+        }
+        return normalizeRecognizedWords(merged)
+    }
+
+    private func enhanceLyricsWithQwen(
+        model: Qwen3ASRModel,
+        audioURL: URL,
+        timedWords: [WordTimestamp]
+    ) throws -> [WordTimestamp]? {
+        let normalizedTiming = normalizeRecognizedWords(timedWords)
+        guard !normalizedTiming.isEmpty else { return nil }
+
+        let audio = try loadMonoAudioSamples(from: audioURL)
+        guard !audio.samples.isEmpty, audio.sampleRate > 0 else { return nil }
+
+        let duration = Double(audio.samples.count) / Double(audio.sampleRate)
+        let windows = lyricRecognitionWindows(
+            for: normalizedTiming,
+            maximumTime: duration
+        )
+        guard !windows.isEmpty else { return nil }
+
+        var enhanced: [WordTimestamp] = []
+        for window in windows {
+            try Task.checkCancellation()
+            let startSample = max(0, min(
+                audio.samples.count,
+                Int((window.start * Double(audio.sampleRate)).rounded(.down))
+            ))
+            let endSample = max(startSample, min(
+                audio.samples.count,
+                Int((window.end * Double(audio.sampleRate)).rounded(.up))
+            ))
+            guard endSample > startSample else {
+                enhanced.append(contentsOf: normalizedTiming[window.wordRange])
+                continue
+            }
+
+            let chunk = Array(audio.samples[startSample..<endSample])
+            let localSlice = Array(normalizedTiming[window.wordRange])
+            let tokenBudget = min(448, max(128, localSlice.count * 4))
+            let transcript = autoreleasepool {
+                model.transcribe(
+                    audio: chunk,
+                    sampleRate: audio.sampleRate,
+                    language: "tr",
+                    maxTokens: tokenBudget
+                )
+            }
+            let qwenWords = lyricWords(from: transcript)
+
+            if let aligned = alignEnhancedTranscriptWords(
+                qwenWords,
+                to: localSlice
+            ), !aligned.isEmpty {
+                enhanced.append(contentsOf: aligned)
+            } else {
+                enhanced.append(contentsOf: localSlice)
+            }
+        }
+
+        let result = normalizeRecognizedWords(enhanced)
+        guard !result.isEmpty else { return nil }
+
+        // Modelin hata mesajını veya anlamsız kısa bir çıktıyı söz diye kabul
+        // etme. Her pencere kendi yerel sonucuna düştüğü için bu son kontrol
+        // yalnız tüm şarkıda beklenmeyen aşırı kelime kaybını yakalar.
+        let minimumCount = max(1, Int(Double(normalizedTiming.count) * 0.38))
+        return result.count >= minimumCount ? result : nil
+    }
+
+    private func loadMonoAudioSamples(
+        from url: URL
+    ) throws -> (samples: [Float], sampleRate: Int) {
+        let audioFile = try AVAudioFile(forReading: url)
+        let format = audioFile.processingFormat
+        let maximumSafeFrames = AVAudioFramePosition(max(1, format.sampleRate) * 20 * 60)
+        guard audioFile.length > 0,
+              audioFile.length <= maximumSafeFrames,
+              audioFile.length <= AVAudioFramePosition(UInt32.max),
+              let buffer = AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: AVAudioFrameCount(audioFile.length)
+              ) else {
+            throw NSError(
+                domain: "VideoProcessor",
+                code: -20,
+                userInfo: [NSLocalizedDescriptionKey: "Ses örnekleri belleğe güvenli biçimde alınamadı."]
+            )
+        }
+        try audioFile.read(into: buffer)
+        guard let channelData = buffer.floatChannelData else {
+            throw NSError(
+                domain: "VideoProcessor",
+                code: -21,
+                userInfo: [NSLocalizedDescriptionKey: "Ses örnekleri okunamadı."]
+            )
+        }
+
+        let frameCount = Int(buffer.frameLength)
+        let channelCount = max(1, Int(format.channelCount))
+        var samples = [Float](repeating: 0, count: frameCount)
+        for channel in 0..<channelCount {
+            let input = channelData[channel]
+            for frame in 0..<frameCount {
+                samples[frame] += input[frame] / Float(channelCount)
+            }
+        }
+        return (samples, Int(format.sampleRate.rounded()))
+    }
+
+    // Qwen uzun şarkıyı tek seferde belleğe yığmaz. Whisper'ın bulduğu doğal
+    // kelime boşluklarında 15 saniyeden kısa vokal pencereleri oluşturur.
+    // Böylece Qwen'in uzun-girdi yolu tetiklenmez, iPhone 14'te ses kodlayıcının
+    // geçici belleği sınırlı kalır ve enstrümantal aralar modele gönderilmez.
+    func lyricRecognitionWindows(
+        for words: [WordTimestamp],
+        maximumTime: Double
+    ) -> [LyricRecognitionWindow] {
+        guard !words.isEmpty, maximumTime.isFinite, maximumTime > 0 else { return [] }
+
+        let preferredDuration = 12.0
+        let minimumBreakDuration = 7.0
+        let maximumDuration = 14.5
+        var windows: [LyricRecognitionWindow] = []
+        var firstIndex = 0
+
+        while firstIndex < words.count {
+            let paddedStart = max(0, min(maximumTime, words[firstIndex].start - 0.3))
+            // Ardışık pencerelerin aynı heceyi iki kez çözmesini engelle.
+            let windowStart = max(windows.last?.end ?? 0, paddedStart)
+            var lastIndex = firstIndex
+            while lastIndex + 1 < words.count,
+                  words[lastIndex + 1].end - windowStart <= preferredDuration {
+                lastIndex += 1
+            }
+
+            if lastIndex + 1 < words.count {
+                var candidate = lastIndex
+                var bestGap = -Double.infinity
+                let searchStart = max(firstIndex, lastIndex - 7)
+                var index = searchStart
+                while index <= lastIndex {
+                    let elapsed = words[index].end - windowStart
+                    let gap = max(0, words[index + 1].start - words[index].end)
+                    if elapsed >= minimumBreakDuration, gap > bestGap {
+                        bestGap = gap
+                        candidate = index
+                    }
+                    index += 1
+                }
+                lastIndex = candidate
+
+                // Çok uzun tek vokal dizisinde 12 saniyede uygun ara yoksa birkaç
+                // kelime daha ilerleyebilir; 14,5 saniyelik sınır aşılmaz.
+                while lastIndex + 1 < words.count,
+                      words[lastIndex + 1].end - windowStart <= maximumDuration,
+                      words[lastIndex + 1].start - words[lastIndex].end < 0.12 {
+                    lastIndex += 1
+                }
+            } else {
+                lastIndex = words.count - 1
+            }
+
+            let nextStart = lastIndex + 1 < words.count
+                ? words[lastIndex + 1].start
+                : maximumTime
+            let naturalEnd = min(
+                words[lastIndex].end + 0.4,
+                max(words[lastIndex].end, (words[lastIndex].end + nextStart) / 2)
+            )
+            let windowEnd = min(
+                maximumTime,
+                max(windowStart + 0.1, min(windowStart + maximumDuration, naturalEnd))
+            )
+            windows.append(LyricRecognitionWindow(
+                wordRange: firstIndex..<(lastIndex + 1),
+                start: windowStart,
+                end: windowEnd
+            ))
+            firstIndex = lastIndex + 1
+        }
+        return windows
+    }
+
+    func alignEnhancedTranscriptWords(
+        _ enhancedWords: [String],
+        to timedWords: [WordTimestamp]
+    ) -> [WordTimestamp]? {
+        let cleanedEnhanced = enhancedWords.compactMap { raw -> String? in
+            let value = cleanRecognizedText(raw)
+            return value.isEmpty ? nil : value
+        }
+        let local = normalizeRecognizedWords(timedWords)
+        guard !cleanedEnhanced.isEmpty, !local.isEmpty else { return nil }
+
+        let countRatio = Double(cleanedEnhanced.count) / Double(local.count)
+        guard (0.38...2.35).contains(countRatio) else { return nil }
+
+        let mapping = sequenceMapping(
+            source: cleanedEnhanced,
+            target: local.map(\.text)
+        )
+        let matchedPairs = mapping.enumerated().compactMap { sourceIndex, targetIndex
+            -> (Int, Int, Double)? in
+            guard let targetIndex, local.indices.contains(targetIndex) else { return nil }
+            return (
+                sourceIndex,
+                targetIndex,
+                tokenSimilarity(cleanedEnhanced[sourceIndex], local[targetIndex].text)
+            )
+        }
+        guard !matchedPairs.isEmpty else { return nil }
+
+        let structuralCoverage = Double(matchedPairs.count)
+            / Double(max(cleanedEnhanced.count, local.count))
+        let meanSimilarity = matchedPairs.reduce(0) { $0 + $1.2 }
+            / Double(matchedPairs.count)
+        let recognizableRatio = Double(matchedPairs.filter { $0.2 >= 0.58 }.count)
+            / Double(cleanedEnhanced.count)
+        guard structuralCoverage >= 0.42,
+              meanSimilarity >= 0.16 || recognizableRatio >= 0.14 else {
+            return nil
+        }
+
+        var onsets = [Double?](repeating: nil, count: cleanedEnhanced.count)
+        for (sourceIndex, targetIndex, _) in matchedPairs {
+            onsets[sourceIndex] = local[targetIndex].start
+        }
+
+        let localSteps = zip(local, local.dropFirst())
+            .map { pair in max(0.05, pair.1.start - pair.0.start) }
+            .filter { $0 <= 2.5 }
+            .sorted()
+        let typicalStep = localSteps.isEmpty
+            ? 0.42
+            : localSteps[localSteps.count / 2]
+        let knownIndices = onsets.indices.filter { onsets[$0] != nil }
+        guard let firstKnown = knownIndices.first, let lastKnown = knownIndices.last else {
+            return nil
+        }
+
+        if firstKnown > 0, let anchor = onsets[firstKnown] {
+            for index in stride(from: firstKnown - 1, through: 0, by: -1) {
+                onsets[index] = max(0, anchor - (Double(firstKnown - index) * typicalStep))
+            }
+        }
+
+        if knownIndices.count >= 2 {
+            for pairIndex in 0..<(knownIndices.count - 1) {
+                let left = knownIndices[pairIndex]
+                let right = knownIndices[pairIndex + 1]
+                guard right - left > 1,
+                      let leftTime = onsets[left],
+                      let rightTime = onsets[right] else { continue }
+                let step = max(0.035, (rightTime - leftTime) / Double(right - left))
+                for index in (left + 1)..<right {
+                    onsets[index] = leftTime + (Double(index - left) * step)
+                }
+            }
+        }
+
+        if lastKnown + 1 < onsets.count, let anchor = onsets[lastKnown] {
+            for index in (lastKnown + 1)..<onsets.count {
+                onsets[index] = anchor + (Double(index - lastKnown) * typicalStep)
+            }
+        }
+
+        var monotonicOnsets = [Double]()
+        monotonicOnsets.reserveCapacity(onsets.count)
+        for index in onsets.indices {
+            let proposed = onsets[index] ?? (
+                (monotonicOnsets.last ?? max(0, local.first?.start ?? 0)) + typicalStep
+            )
+            let minimum = (monotonicOnsets.last ?? (proposed - 0.035)) + 0.035
+            monotonicOnsets.append(max(0, max(proposed, minimum)))
+        }
+
+        var result: [WordTimestamp] = []
+        for index in cleanedEnhanced.indices {
+            let start = monotonicOnsets[index]
+            let nextStart = index + 1 < monotonicOnsets.count
+                ? monotonicOnsets[index + 1]
+                : nil
+            let mappedLocal = mapping[index].flatMap { local.indices.contains($0) ? local[$0] : nil }
+            let desiredEnd = mappedLocal?.end
+                ?? nextStart
+                ?? max(start + typicalStep, local.last?.end ?? start + typicalStep)
+            let end = nextStart.map { min(desiredEnd, $0) } ?? desiredEnd
+            result.append(WordTimestamp(
+                text: cleanedEnhanced[index],
+                start: start,
+                end: max(start + 0.05, end)
+            ))
+        }
+        return normalizeRecognizedWords(result)
+    }
+
+    private func lyricWords(from transcript: String) -> [String] {
+        let markerPattern = #"(?i)\[(music|müzik|instrumental|applause|alkış)[^\]]*\]|\((music|müzik|instrumental|applause|alkış)[^\)]*\)"#
+        let withoutMarkers = transcript.replacingOccurrences(
+            of: markerPattern,
+            with: " ",
+            options: .regularExpression
+        )
+        return withoutMarkers
+            .components(separatedBy: .whitespacesAndNewlines)
+            .compactMap { token -> String? in
+                let trimmed = token.trimmingCharacters(
+                    in: CharacterSet.punctuationCharacters
+                        .union(.symbols)
+                        .subtracting(CharacterSet(charactersIn: "'’"))
+                )
+                let clean = cleanRecognizedText(trimmed)
+                guard !clean.isEmpty,
+                      !clean.hasPrefix("<"),
+                      !clean.hasSuffix(">") else { return nil }
+                return clean
+            }
+    }
+
+    private func sequenceMapping(
+        source: [String],
+        target: [String]
+    ) -> [Int?] {
+        guard !source.isEmpty else { return [] }
+        guard !target.isEmpty else { return [Int?](repeating: nil, count: source.count) }
+
+        let width = target.count + 1
+        let cellCount = (source.count + 1) * width
+        let gapCost = 0.9
+        var costs = [Double](repeating: 0, count: cellCount)
+        var steps = [UInt8](repeating: SequenceStep.diagonal.rawValue, count: cellCount)
+
+        for sourceIndex in 1...source.count {
+            costs[sourceIndex * width] = Double(sourceIndex) * gapCost
+            steps[sourceIndex * width] = SequenceStep.deletion.rawValue
+        }
+        for targetIndex in 1...target.count {
+            costs[targetIndex] = Double(targetIndex) * gapCost
+            steps[targetIndex] = SequenceStep.insertion.rawValue
+        }
+
+        for sourceIndex in 1...source.count {
+            for targetIndex in 1...target.count {
+                let similarity = tokenSimilarity(
+                    source[sourceIndex - 1],
+                    target[targetIndex - 1]
+                )
+                let substitutionCost = similarity >= 0.999
+                    ? 0
+                    : 1.05 - (similarity * 0.68)
+                let diagonal = costs[((sourceIndex - 1) * width) + targetIndex - 1]
+                    + substitutionCost
+                let deletion = costs[((sourceIndex - 1) * width) + targetIndex] + gapCost
+                let insertion = costs[(sourceIndex * width) + targetIndex - 1] + gapCost
+                let cell = (sourceIndex * width) + targetIndex
+
+                if diagonal <= deletion, diagonal <= insertion {
+                    costs[cell] = diagonal
+                    steps[cell] = SequenceStep.diagonal.rawValue
+                } else if deletion <= insertion {
+                    costs[cell] = deletion
+                    steps[cell] = SequenceStep.deletion.rawValue
+                } else {
+                    costs[cell] = insertion
+                    steps[cell] = SequenceStep.insertion.rawValue
+                }
+            }
+        }
+
+        var mapping = [Int?](repeating: nil, count: source.count)
+        var sourceIndex = source.count
+        var targetIndex = target.count
+        while sourceIndex > 0 || targetIndex > 0 {
+            let step = SequenceStep(
+                rawValue: steps[(sourceIndex * width) + targetIndex]
+            ) ?? .diagonal
+            switch step {
+            case .diagonal where sourceIndex > 0 && targetIndex > 0:
+                mapping[sourceIndex - 1] = targetIndex - 1
+                sourceIndex -= 1
+                targetIndex -= 1
+            case .deletion where sourceIndex > 0:
+                sourceIndex -= 1
+            case .insertion where targetIndex > 0:
+                targetIndex -= 1
+            default:
+                if sourceIndex > 0 { sourceIndex -= 1 }
+                if targetIndex > 0 { targetIndex -= 1 }
+            }
+        }
+        return mapping
+    }
+
+    private func tokenSimilarity(_ lhs: String, _ rhs: String) -> Double {
+        let left = comparisonKey(lhs)
+        let right = comparisonKey(rhs)
+        guard !left.isEmpty || !right.isEmpty else { return 1 }
+        guard !left.isEmpty, !right.isEmpty else { return 0 }
+        if left == right { return 1 }
+
+        let leftCharacters = Array(left)
+        let rightCharacters = Array(right)
+        var previous = Array(0...rightCharacters.count)
+        var current = [Int](repeating: 0, count: rightCharacters.count + 1)
+
+        for leftIndex in 1...leftCharacters.count {
+            current[0] = leftIndex
+            for rightIndex in 1...rightCharacters.count {
+                let substitution = previous[rightIndex - 1]
+                    + (leftCharacters[leftIndex - 1] == rightCharacters[rightIndex - 1] ? 0 : 1)
+                current[rightIndex] = min(
+                    min(previous[rightIndex] + 1, current[rightIndex - 1] + 1),
+                    substitution
+                )
+            }
+            swap(&previous, &current)
+        }
+        let distance = previous[rightCharacters.count]
+        return max(0, 1 - (Double(distance) / Double(max(leftCharacters.count, rightCharacters.count))))
+    }
+
+    private func comparisonKey(_ text: String) -> String {
+        text.lowercased(with: Locale(identifier: "tr_TR"))
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "tr_TR"))
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .joined()
     }
 
     func cancelSpeechRecognition() {

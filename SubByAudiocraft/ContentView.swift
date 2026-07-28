@@ -476,8 +476,11 @@ struct ContentView: View {
 
             self.audioURL = audioURL
             self.processingStage = .transcribing
-            let effectiveQuality = quality.usesMemorySafeFallback ? "Bellek dostu" : quality.title
-            self.statusMessage = "\(effectiveQuality) yapay zeka modeli sözleri analiz ediyor. İlk kullanımda model indirilir; Wi‑Fi önerilir."
+            if quality.usesDedicatedLyricModel {
+                self.statusMessage = "Qwen3 şarkı sözlerini çözüyor; Whisper kelime saniyelerini hizalıyor. Modeller belleği korumak için sırayla çalışır. İlk kullanımda Wi‑Fi önerilir."
+            } else {
+                self.statusMessage = "Hızlı yerel model sözleri ve kelime saniyelerini analiz ediyor. İlk kullanımda model indirilir; Wi‑Fi önerilir."
+            }
 
             VideoProcessor.shared.runSpeechRecognition(audioURL: audioURL, quality: quality, downloadProgress: { fraction in
                 DispatchQueue.main.async {

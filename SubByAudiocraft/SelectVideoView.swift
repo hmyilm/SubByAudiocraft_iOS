@@ -126,11 +126,23 @@ struct SelectVideoView: View {
                         .foregroundColor(analysisQuality == .best ? .orange : .gray)
                         .fixedSize(horizontal: false, vertical: true)
 
+                    if let qwenModelID = analysisQuality.qwenModelID() {
+                        Label(
+                            qwenModelID.contains("5bit")
+                                ? "Ücretsiz ve cihaz içinde çalışan Qwen3 şarkı modeli ilk kullanımda yaklaşık 1 GB indirilir. Analiz sırasında uygulamayı açık tut."
+                                : "Ücretsiz ve cihaz içinde çalışan Qwen3 şarkı modeli ilk kullanımda yaklaşık 680 MB indirilir. Analiz sırasında uygulamayı açık tut.",
+                            systemImage: "music.note.list"
+                        )
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+
                     if analysisQuality == .best {
                         Label(
                             analysisQuality.usesMemorySafeFallback
-                                ? "Bu cihazda uygulamanın kapanmaması için güvenli model otomatik seçilecek."
-                                : "Büyük model daha uzun sürebilir; analiz sırasında uygulamayı açık tut.",
+                                ? "Bu cihazın belleğine uygun modeller sırayla çalıştırılır; aynı anda belleğe yüklenmez."
+                                : "Büyük zamanlama modeli daha uzun sürebilir; analiz sırasında uygulamayı açık tut.",
                             systemImage: analysisQuality.usesMemorySafeFallback
                                 ? "checkmark.shield.fill"
                                 : "exclamationmark.triangle.fill"
