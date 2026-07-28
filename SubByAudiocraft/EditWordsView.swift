@@ -13,6 +13,7 @@ struct EditWordsView: View {
     @Binding var kineticStyle: KineticStyle
     @Binding var kineticAccent: KineticAccent
     @Binding var kineticIntensity: KineticIntensity
+    @Binding var kineticLetterStyle: KineticLetterStyle
     @Binding var kineticEmphasisWordIDs: Set<UUID>
 
     @State private var expandedWordID: UUID? = nil
@@ -56,6 +57,7 @@ struct EditWordsView: View {
                         kineticStyle: kineticStyle,
                         kineticAccent: kineticAccent,
                         kineticIntensity: kineticIntensity,
+                        kineticLetterStyle: kineticLetterStyle,
                         kineticLineIndex: previewLineIndex,
                         kineticRepeatCount: previewPlan?.repeatCount ?? 1,
                         kineticScenePlan: previewPlan
@@ -72,7 +74,8 @@ struct EditWordsView: View {
                         selection: $karaokeMode,
                         kineticStyle: $kineticStyle,
                         kineticAccent: $kineticAccent,
-                        kineticIntensity: $kineticIntensity
+                        kineticIntensity: $kineticIntensity,
+                        kineticLetterStyle: $kineticLetterStyle
                     )
 
                     // Font burada da değiştirilebilir: Geçmiş'ten açılan projelerde

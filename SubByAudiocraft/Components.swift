@@ -204,6 +204,7 @@ struct KaraokeModePicker: View {
     @Binding var kineticStyle: KineticStyle
     @Binding var kineticAccent: KineticAccent
     @Binding var kineticIntensity: KineticIntensity
+    @Binding var kineticLetterStyle: KineticLetterStyle
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -283,6 +284,44 @@ struct KaraokeModePicker: View {
                         .pickerStyle(.segmented)
 
                         Text(kineticIntensity.detail)
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text("Harf Tasarımı")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(KineticLetterStyle.allCases) { letterStyle in
+                                    let isSelected = letterStyle == kineticLetterStyle
+                                    Button {
+                                        Theme.haptic()
+                                        kineticLetterStyle = letterStyle
+                                    } label: {
+                                        Label(letterStyle.title, systemImage: letterStyle.icon)
+                                            .font(.caption2.weight(.semibold))
+                                            .foregroundColor(isSelected ? .black : .white)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 7)
+                                            .background(
+                                                Capsule()
+                                                    .fill(
+                                                        isSelected
+                                                            ? Theme.yellow
+                                                            : Color.white.opacity(0.08)
+                                                    )
+                                            )
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                        }
+
+                        Text(kineticLetterStyle.detail)
                             .font(.caption2)
                             .foregroundColor(.gray)
                             .fixedSize(horizontal: false, vertical: true)
@@ -386,6 +425,7 @@ struct SubtitlePreviewPlayer: View {
     let kineticStyle: KineticStyle
     let kineticAccent: KineticAccent
     let kineticIntensity: KineticIntensity
+    let kineticLetterStyle: KineticLetterStyle
     let kineticLineIndex: Int
     let kineticRepeatCount: Int
     let kineticScenePlan: KineticTypographyPlan?
@@ -404,6 +444,7 @@ struct SubtitlePreviewPlayer: View {
         kineticStyle: KineticStyle = .automatic,
         kineticAccent: KineticAccent = .gold,
         kineticIntensity: KineticIntensity = .balanced,
+        kineticLetterStyle: KineticLetterStyle = .clean,
         kineticLineIndex: Int = 0,
         kineticRepeatCount: Int = 1,
         kineticScenePlan: KineticTypographyPlan? = nil
@@ -421,6 +462,7 @@ struct SubtitlePreviewPlayer: View {
         self.kineticStyle = kineticStyle
         self.kineticAccent = kineticAccent
         self.kineticIntensity = kineticIntensity
+        self.kineticLetterStyle = kineticLetterStyle
         self.kineticLineIndex = kineticLineIndex
         self.kineticRepeatCount = kineticRepeatCount
         self.kineticScenePlan = kineticScenePlan
@@ -462,7 +504,8 @@ struct SubtitlePreviewPlayer: View {
                                     : playbackTime,
                                 previewHeight: geo.size.height,
                                 accent: kineticAccent,
-                                intensity: kineticIntensity
+                                intensity: kineticIntensity,
+                                letterStyle: kineticLetterStyle
                             )
                         } else if karaokeWords.isEmpty {
                             Text(sampleText)
@@ -544,6 +587,7 @@ private struct KineticPreviewLockup: View {
     let previewHeight: CGFloat
     let accent: KineticAccent
     let intensity: KineticIntensity
+    let letterStyle: KineticLetterStyle
 
     private var activeIndex: Int? {
         words.firstIndex { playbackTime >= $0.start && playbackTime < $0.end }
@@ -577,15 +621,22 @@ private struct KineticPreviewLockup: View {
                             let word = words[index]
                             let isActive = playbackTime >= word.start && playbackTime < word.end
                             let isPast = playbackTime >= word.end
-                            Text(word.text)
-                                .font(.custom(
-                                    fontName,
-                                    size: scaledFontSize(
-                                        wordIndex: index,
-                                        rowIndex: rowItem.offset,
-                                        row: rowItem.element
-                                    )
-                                ))
+                            let glyphDesign = VideoProcessor.shared.kineticGlyphDesign(
+                                text: word.text,
+                                wordIndex: index,
+                                plan: plan,
+                                letterStyle: letterStyle
+                            )
+                            KineticGlyphRun(
+                                design: glyphDesign,
+                                fontName: fontName,
+                                baseFontSize: scaledFontSize(
+                                    wordIndex: index,
+                                    rowIndex: rowItem.offset,
+                                    row: rowItem.element,
+                                    treatment: glyphDesign.treatment
+                                )
+                            )
                                 .foregroundColor(
                                     isActive
                                         ? (plan.highlight == .pill ? .black : accent.previewColor)
@@ -658,7 +709,8 @@ private struct KineticPreviewLockup: View {
     private func scaledFontSize(
         wordIndex: Int,
         rowIndex: Int,
-        row: [Int]
+        row: [Int],
+        treatment: KineticGlyphTreatment
     ) -> CGFloat {
         let scale: Double
         switch plan.scene {
@@ -678,7 +730,9 @@ private struct KineticPreviewLockup: View {
                 : 1.08
         }
         let emphasisScale: Double
-        if wordIndex == plan.emphasisIndex {
+        if wordIndex == plan.emphasisIndex
+            && treatment != .poster
+            && treatment != .rhythm {
             switch plan.scene {
             case .phraseBuild: emphasisScale = 1.10
             case .captionWindow: emphasisScale = 1.08
@@ -689,6 +743,29 @@ private struct KineticPreviewLockup: View {
             emphasisScale = 1
         }
         return CGFloat(fontSize * scale * emphasisScale) * (previewHeight / 1080.0)
+    }
+}
+
+private struct KineticGlyphRun: View {
+    let design: KineticGlyphDesign
+    let fontName: String
+    let baseFontSize: CGFloat
+
+    var body: some View {
+        HStack(
+            alignment: .firstTextBaseline,
+            spacing: max(0, baseFontSize * CGFloat(design.trackingFactor))
+        ) {
+            ForEach(Array(design.characters.enumerated()), id: \.offset) { item in
+                let scale = design.scaleFactors.indices.contains(item.offset)
+                    ? design.scaleFactors[item.offset]
+                    : 1
+                Text(String(item.element))
+                    .font(.custom(fontName, size: baseFontSize * CGFloat(scale)))
+                    .lineLimit(1)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: true)
     }
 }
 

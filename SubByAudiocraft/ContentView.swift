@@ -41,6 +41,7 @@ struct ContentView: View {
     @AppStorage("subtitle.kineticStyle") private var kineticStyleRaw: String = KineticStyle.automatic.rawValue
     @AppStorage("subtitle.kineticAccent") private var kineticAccentRaw: String = KineticAccent.gold.rawValue
     @AppStorage("subtitle.kineticIntensity") private var kineticIntensityRaw: String = KineticIntensity.balanced.rawValue
+    @AppStorage("subtitle.kineticLetterStyle") private var kineticLetterStyleRaw: String = KineticLetterStyle.automatic.rawValue
     @AppStorage("analysis.quality") private var analysisQualityRaw: String = AnalysisQuality.balanced.rawValue
 
     // Geçmiş (kaydedilmiş projeler): analizden sonra proje otomatik kaydedilir,
@@ -75,6 +76,7 @@ struct ContentView: View {
                                 kineticStyle: kineticStyleBinding,
                                 kineticAccent: kineticAccentBinding,
                                 kineticIntensity: kineticIntensityBinding,
+                                kineticLetterStyle: kineticLetterStyleBinding,
                                 analysisQuality: analysisQualityBinding,
                                 isLoadingVideo: isLoadingVideo,
                                 fonts: FontCatalog.hepsi
@@ -93,6 +95,7 @@ struct ContentView: View {
                                 kineticStyle: kineticStyleBinding,
                                 kineticAccent: kineticAccentBinding,
                                 kineticIntensity: kineticIntensityBinding,
+                                kineticLetterStyle: kineticLetterStyleBinding,
                                 kineticEmphasisWordIDs: $kineticEmphasisWordIDs
                             )
                         case .processing:
@@ -132,6 +135,8 @@ struct ContentView: View {
             kineticStyleRaw = KineticStyle.resolved(kineticStyleRaw).rawValue
             kineticAccentRaw = KineticAccent.resolved(kineticAccentRaw).rawValue
             kineticIntensityRaw = KineticIntensity.resolved(kineticIntensityRaw).rawValue
+            kineticLetterStyleRaw = KineticLetterStyle(rawValue: kineticLetterStyleRaw)?.rawValue
+                ?? KineticLetterStyle.automatic.rawValue
             VideoProcessor.shared.cleanupStaleTemporaryFiles()
         }
         .sheet(isPresented: $showHistory) {
@@ -164,6 +169,7 @@ struct ContentView: View {
         .onChange(of: kineticStyleRaw) { _ in editorContentDidChange() }
         .onChange(of: kineticAccentRaw) { _ in editorContentDidChange() }
         .onChange(of: kineticIntensityRaw) { _ in editorContentDidChange() }
+        .onChange(of: kineticLetterStyleRaw) { _ in editorContentDidChange() }
         .onChange(of: scenePhase) { phase in
             if phase != .active {
                 autosaveWorkItem?.cancel()
@@ -342,6 +348,15 @@ struct ContentView: View {
         )
     }
 
+    private var kineticLetterStyleBinding: Binding<KineticLetterStyle> {
+        Binding(
+            get: {
+                KineticLetterStyle(rawValue: kineticLetterStyleRaw) ?? .automatic
+            },
+            set: { kineticLetterStyleRaw = $0.rawValue }
+        )
+    }
+
     // MARK: - İş Mantığı
 
     // Galeriden seçilen videoyu kopyalayıp player'a yerleştirir
@@ -482,7 +497,10 @@ struct ContentView: View {
                         kinetikStil: KineticStyle.resolved(self.kineticStyleRaw),
                         kinetikVurgu: KineticAccent.resolved(self.kineticAccentRaw),
                         kinetikYogunluk: KineticIntensity.resolved(self.kineticIntensityRaw),
-                        kinetikVurgular: self.kineticEmphasisWordIDs
+                        kinetikVurgular: self.kineticEmphasisWordIDs,
+                        kinetikHarfStili: KineticLetterStyle(
+                            rawValue: self.kineticLetterStyleRaw
+                        ) ?? .automatic
                    ) {
                     self.currentProjectID = proje.id
                     let yeniURL = self.store.videoURL(proje)
@@ -543,6 +561,9 @@ struct ContentView: View {
                 kineticStyle: KineticStyle.resolved(kineticStyleRaw),
                 kineticAccent: KineticAccent.resolved(kineticAccentRaw),
                 kineticIntensity: KineticIntensity.resolved(kineticIntensityRaw),
+                kineticLetterStyle: KineticLetterStyle(
+                    rawValue: kineticLetterStyleRaw
+                ) ?? .automatic,
                 kineticEmphasisWordIDs: kineticEmphasisWordIDs,
                 videoURL: url
             )
@@ -696,6 +717,9 @@ struct ContentView: View {
             kinetikVurgu: KineticAccent.resolved(kineticAccentRaw),
             kinetikYogunluk: KineticIntensity.resolved(kineticIntensityRaw),
             kinetikVurgular: kineticEmphasisWordIDs,
+            kinetikHarfStili: KineticLetterStyle(
+                rawValue: kineticLetterStyleRaw
+            ) ?? .automatic,
             disaAktarildi: exported
         )
     }
@@ -732,6 +756,7 @@ struct ContentView: View {
         kineticStyleRaw = proje.kineticStyle.rawValue
         kineticAccentRaw = proje.kineticAccent.rawValue
         kineticIntensityRaw = proje.kineticIntensity.rawValue
+        kineticLetterStyleRaw = proje.kineticLetterStyle.rawValue
         currentProjectID = proje.id
         selectedItem = nil
 

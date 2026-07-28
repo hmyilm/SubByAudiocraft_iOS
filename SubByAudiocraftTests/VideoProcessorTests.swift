@@ -323,6 +323,87 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(selected.rows, [[0], [1], [2, 3]])
     }
 
+    func testPosterLetterDesignUsesTurkishUppercaseAndOneAnchorGlyph() {
+        let words = makeWords(["bu", "içimde", "yanar"])
+        let plan = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            emphasisWordID: words[1].id
+        )
+
+        let design = VideoProcessor.shared.kineticGlyphDesign(
+            text: words[1].text,
+            wordIndex: 1,
+            plan: plan,
+            letterStyle: .poster
+        )
+
+        XCTAssertEqual(String(design.characters), "İÇİMDE")
+        XCTAssertEqual(design.treatment, .poster)
+        XCTAssertEqual(design.scaleFactors.filter { $0 == 1.32 }.count, 1)
+        XCTAssertEqual(design.maximumScale, 1.32)
+        XCTAssertTrue(design.scaleFactors.contains(0.90))
+    }
+
+    func testRhythmLetterDesignFollowsVowelsButLeavesOtherWordsClean() {
+        let words = makeWords(["kara", "sevda", "içimde"])
+        let plan = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            emphasisWordID: words[1].id
+        )
+
+        let emphasized = VideoProcessor.shared.kineticGlyphDesign(
+            text: words[1].text,
+            wordIndex: 1,
+            plan: plan,
+            letterStyle: .rhythm
+        )
+        let supporting = VideoProcessor.shared.kineticGlyphDesign(
+            text: words[0].text,
+            wordIndex: 0,
+            plan: plan,
+            letterStyle: .rhythm
+        )
+
+        XCTAssertEqual(String(emphasized.characters), "SEVDA")
+        XCTAssertEqual(emphasized.treatment, .rhythm)
+        XCTAssertEqual(emphasized.scaleFactors.filter { $0 > 1 }.count, 3)
+        XCTAssertEqual(supporting.treatment, .standard)
+        XCTAssertTrue(supporting.scaleFactors.allSatisfy { $0 == 1 })
+    }
+
+    func testAutomaticLetterDesignTracksSceneFamilyInsteadOfLineNumber() {
+        let words = makeWords(["sessizce", "sana", "dönerim"])
+        let cinematic = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            style: .cinematic
+        )
+        let editorial = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 99,
+            style: .editorial
+        )
+
+        let cinematicDesign = VideoProcessor.shared.kineticGlyphDesign(
+            text: words[cinematic.emphasisIndex].text,
+            wordIndex: cinematic.emphasisIndex,
+            plan: cinematic,
+            letterStyle: .automatic
+        )
+        let editorialDesign = VideoProcessor.shared.kineticGlyphDesign(
+            text: words[editorial.emphasisIndex].text,
+            wordIndex: editorial.emphasisIndex,
+            plan: editorial,
+            letterStyle: .automatic
+        )
+
+        XCTAssertEqual(cinematicDesign.treatment, .wide)
+        XCTAssertEqual(editorialDesign.treatment, .poster)
+        XCTAssertGreaterThan(cinematicDesign.trackingFactor, 0)
+    }
+
     func testSceneDirectorAppliesAtMostOnePersistedEmphasisPerLine() {
         let first = makeWords(["gece", "yine", "seni", "aradım"])
         let second = shiftedWords(makeWords(["dön", "artık", "bana"]), by: 1.7)
@@ -501,6 +582,36 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertFalse(ass.contains("\\frz"))
     }
 
+    func testPosterLetterASSReservesGlyphSizesAndTracking() {
+        let words = makeWords(["kara", "sevda", "içimde"])
+        let plan = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            style: .editorial,
+            emphasisWordID: words[1].id
+        )
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.4,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            style: .editorial,
+            letterStyle: .poster,
+            scenePlan: plan
+        )
+
+        XCTAssertTrue(ass.contains("\\fsp2"))
+        XCTAssertTrue(ass.contains("\\fs119"))
+        XCTAssertTrue(ass.contains("}S"))
+        XCTAssertTrue(ass.contains("}E"))
+        XCTAssertFalse(ass.contains("\\frz"))
+    }
+
     func testUnknownAndLegacyKaraokeModesResolveToClassic() {
         XCTAssertEqual(KaraokeMode.resolved(nil), .classic)
         XCTAssertEqual(KaraokeMode.resolved("bilinmeyen"), .classic)
@@ -514,6 +625,9 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(KineticIntensity.resolved(nil), .balanced)
         XCTAssertEqual(KineticIntensity.resolved("bilinmeyen"), .balanced)
         XCTAssertEqual(KineticIntensity.resolved("energetic"), .energetic)
+        XCTAssertEqual(KineticLetterStyle.resolved(nil), .clean)
+        XCTAssertEqual(KineticLetterStyle.resolved("bilinmeyen"), .clean)
+        XCTAssertEqual(KineticLetterStyle.resolved("poster"), .poster)
     }
 
     func testLegacyProjectWithoutKaraokeModeDecodesAsClassic() throws {
@@ -540,11 +654,13 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertNil(project.kinetikVurgu)
         XCTAssertNil(project.kinetikYogunluk)
         XCTAssertNil(project.kinetikVurgular)
+        XCTAssertNil(project.kinetikHarfStili)
         XCTAssertEqual(project.karaokeMode, .classic)
         XCTAssertEqual(project.kineticStyle, .automatic)
         XCTAssertEqual(project.kineticAccent, .gold)
         XCTAssertEqual(project.kineticIntensity, .balanced)
         XCTAssertTrue(project.kineticEmphasisWordIDs.isEmpty)
+        XCTAssertEqual(project.kineticLetterStyle, .clean)
     }
 
     private func makeWords(_ texts: [String]) -> [VideoProcessor.WordTimestamp] {

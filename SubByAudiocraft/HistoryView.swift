@@ -99,7 +99,7 @@ struct HistoryView: View {
                     Text("•")
                     Label(
                         proje.karaokeMode == .kinetic
-                            ? "\(proje.karaokeMode.title) · \(proje.kineticStyle.title) · \(proje.kineticIntensity.title)"
+                            ? "\(proje.karaokeMode.title) · \(proje.kineticStyle.title) · \(proje.kineticIntensity.title) · \(proje.kineticLetterStyle.title)"
                             : proje.karaokeMode.title,
                         systemImage: proje.karaokeMode == .kinetic ? "sparkles" : "captions.bubble"
                     )

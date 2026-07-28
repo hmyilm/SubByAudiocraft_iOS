@@ -26,6 +26,8 @@ struct SavedProject: Identifiable, Codable {
     var kinetikYogunluk: String?
     // Optional tutulur: seçilmemiş veya eski projelerde vurgu tamamen otomatik çözülür.
     var kinetikVurgular: [UUID]?
+    // Optional tutulur: eski projeler harf ölçülerini değiştirmeyen Temiz görünümle açılır.
+    var kinetikHarfStili: String?
     var videoDosyasi: String
     var disaAktarimSayisi: Int
 
@@ -47,6 +49,10 @@ struct SavedProject: Identifiable, Codable {
 
     var kineticEmphasisWordIDs: Set<UUID> {
         Set(kinetikVurgular ?? [])
+    }
+
+    var kineticLetterStyle: KineticLetterStyle {
+        KineticLetterStyle.resolved(kinetikHarfStili)
     }
 }
 
@@ -133,7 +139,8 @@ final class ProjectStore: ObservableObject {
                  kinetikStil: KineticStyle,
                  kinetikVurgu: KineticAccent,
                  kinetikYogunluk: KineticIntensity,
-                 kinetikVurgular: Set<UUID>) -> SavedProject? {
+                 kinetikVurgular: Set<UUID>,
+                 kinetikHarfStili: KineticLetterStyle) -> SavedProject? {
         let id = UUID()
         let fm = FileManager.default
         let hedefKlasor = klasor(id)
@@ -176,6 +183,7 @@ final class ProjectStore: ObservableObject {
             kinetikVurgular: kinetikVurgular.sorted {
                 $0.uuidString < $1.uuidString
             },
+            kinetikHarfStili: kinetikHarfStili.rawValue,
             videoDosyasi: dosyaAdi,
             disaAktarimSayisi: 0
         )
@@ -211,6 +219,7 @@ final class ProjectStore: ObservableObject {
                   kinetikVurgu: KineticAccent,
                   kinetikYogunluk: KineticIntensity,
                   kinetikVurgular: Set<UUID>,
+                  kinetikHarfStili: KineticLetterStyle,
                   disaAktarildi: Bool) {
         guard let idx = projeler.firstIndex(where: { $0.id == id }) else { return }
         var proje = projeler[idx]
@@ -226,6 +235,7 @@ final class ProjectStore: ObservableObject {
         proje.kinetikVurgular = kinetikVurgular.sorted {
             $0.uuidString < $1.uuidString
         }
+        proje.kinetikHarfStili = kinetikHarfStili.rawValue
         proje.baslik = Self.baslikUret(kelimeler)
         proje.guncelleme = Date()
         if disaAktarildi { proje.disaAktarimSayisi += 1 }

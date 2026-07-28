@@ -13,6 +13,7 @@ struct SelectVideoView: View {
     @Binding var kineticStyle: KineticStyle
     @Binding var kineticAccent: KineticAccent
     @Binding var kineticIntensity: KineticIntensity
+    @Binding var kineticLetterStyle: KineticLetterStyle
     @Binding var analysisQuality: AnalysisQuality
     let isLoadingVideo: Bool
     let fonts: [FontOption]
@@ -92,7 +93,8 @@ struct SelectVideoView: View {
                         karaokeMode: karaokeMode,
                         kineticStyle: kineticStyle,
                         kineticAccent: kineticAccent,
-                        kineticIntensity: kineticIntensity
+                        kineticIntensity: kineticIntensity,
+                        kineticLetterStyle: kineticLetterStyle
                     )
 
                     PhotosPicker(selection: $selectedItem, matching: .videos, photoLibrary: .shared()) {
@@ -140,7 +142,8 @@ struct SelectVideoView: View {
                         selection: $karaokeMode,
                         kineticStyle: $kineticStyle,
                         kineticAccent: $kineticAccent,
-                        kineticIntensity: $kineticIntensity
+                        kineticIntensity: $kineticIntensity,
+                        kineticLetterStyle: $kineticLetterStyle
                     )
                     Divider()
                         .overlay(Theme.cardStroke)

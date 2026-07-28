@@ -238,6 +238,69 @@ enum KineticIntensity: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum KineticLetterStyle: String, CaseIterable, Identifiable, Codable {
+    case automatic
+    case clean
+    case poster
+    case rhythm
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .automatic: return "Otomatik"
+        case .clean: return "Temiz"
+        case .poster: return "Afiş"
+        case .rhythm: return "Ritim"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .automatic: return "wand.and.rays"
+        case .clean: return "textformat"
+        case .poster: return "character.textbox"
+        case .rhythm: return "waveform.path"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .automatic:
+            return "Sahneye göre temiz, geniş, afiş veya ritmik harf düzenini kontrollü seçer."
+        case .clean:
+            return "Bütün harfleri aynı ölçüde tutar; mevcut sade ve güvenli görünüm."
+        case .poster:
+            return "Yalnız odak kelimesinin anlam merkezindeki bir harfi büyütür."
+        case .rhythm:
+            return "Odak kelimesinde sesli harfleri hece akışına göre ölçülü dalgalandırır."
+        }
+    }
+
+    static func resolved(_ rawValue: String?) -> KineticLetterStyle {
+        guard let rawValue else { return .clean }
+        return KineticLetterStyle(rawValue: rawValue) ?? .clean
+    }
+}
+
+enum KineticGlyphTreatment: String, Equatable {
+    case standard
+    case wide
+    case poster
+    case rhythm
+}
+
+struct KineticGlyphDesign {
+    let characters: [Character]
+    let scaleFactors: [Double]
+    let trackingFactor: Double
+    let treatment: KineticGlyphTreatment
+
+    var maximumScale: Double {
+        scaleFactors.max() ?? 1
+    }
+}
+
 enum KineticScene: String, Equatable {
     case phraseBuild
     case captionWindow
@@ -1135,6 +1198,116 @@ class VideoProcessor: ObservableObject {
         return bestIndex
     }
 
+    func kineticGlyphDesign(
+        text: String,
+        wordIndex: Int,
+        plan: KineticTypographyPlan,
+        letterStyle: KineticLetterStyle
+    ) -> KineticGlyphDesign {
+        let treatment: KineticGlyphTreatment
+        switch letterStyle {
+        case .clean:
+            treatment = .standard
+        case .poster:
+            treatment = wordIndex == plan.emphasisIndex ? .poster : .standard
+        case .rhythm:
+            treatment = wordIndex == plan.emphasisIndex ? .rhythm : .standard
+        case .automatic:
+            guard wordIndex == plan.emphasisIndex else {
+                return KineticGlyphDesign(
+                    characters: Array(text),
+                    scaleFactors: Array(repeating: 1, count: text.count),
+                    trackingFactor: 0,
+                    treatment: .standard
+                )
+            }
+            switch plan.scene {
+            case .phraseBuild:
+                treatment = .wide
+            case .captionWindow, .chorusLockup:
+                treatment = .rhythm
+            case .focusCut, .editorialStack, .impactSequence:
+                treatment = .poster
+            }
+        }
+
+        let locale = Locale(identifier: "tr_TR")
+        let displayedText = treatment == .standard
+            ? text
+            : text.uppercased(with: locale)
+        let characters = Array(displayedText)
+        guard !characters.isEmpty else {
+            return KineticGlyphDesign(
+                characters: [],
+                scaleFactors: [],
+                trackingFactor: 0,
+                treatment: treatment
+            )
+        }
+
+        switch treatment {
+        case .standard:
+            return KineticGlyphDesign(
+                characters: characters,
+                scaleFactors: Array(repeating: 1, count: characters.count),
+                trackingFactor: 0,
+                treatment: treatment
+            )
+        case .wide:
+            return KineticGlyphDesign(
+                characters: characters,
+                scaleFactors: Array(repeating: 1, count: characters.count),
+                trackingFactor: 0.075,
+                treatment: treatment
+            )
+        case .poster:
+            let anchor = kineticAnchorGlyphIndex(in: characters)
+            let scales = characters.indices.map { index -> Double in
+                if characters.count <= 2 { return index == anchor ? 1.18 : 0.96 }
+                if index == anchor { return 1.32 }
+                if abs(index - anchor) == 1 { return 1.02 }
+                return 0.90
+            }
+            return KineticGlyphDesign(
+                characters: characters,
+                scaleFactors: scales,
+                trackingFactor: 0.025,
+                treatment: treatment
+            )
+        case .rhythm:
+            let anchor = kineticAnchorGlyphIndex(in: characters)
+            let scales = characters.indices.map { index -> Double in
+                if index == anchor { return 1.18 }
+                if kineticIsTurkishVowel(characters[index]) { return 1.10 }
+                return index.isMultiple(of: 2) ? 0.94 : 1.02
+            }
+            return KineticGlyphDesign(
+                characters: characters,
+                scaleFactors: scales,
+                trackingFactor: 0.018,
+                treatment: treatment
+            )
+        }
+    }
+
+    private func kineticAnchorGlyphIndex(in characters: [Character]) -> Int {
+        guard !characters.isEmpty else { return 0 }
+        let midpoint = Double(characters.count - 1) / 2
+        let vowelIndices = characters.indices.filter {
+            kineticIsTurkishVowel(characters[$0])
+        }
+        return (vowelIndices.isEmpty ? Array(characters.indices) : vowelIndices)
+            .min {
+                abs(Double($0) - midpoint) < abs(Double($1) - midpoint)
+            } ?? characters.count / 2
+    }
+
+    private func kineticIsTurkishVowel(_ character: Character) -> Bool {
+        let locale = Locale(identifier: "tr_TR")
+        let normalized = String(character).lowercased(with: locale)
+        return ["a", "e", "ı", "i", "o", "ö", "u", "ü"].contains(normalized)
+    }
+
     // Satır genişliği ekrana taşarsa tüm yazıyı yatay olarak ezmek yerine fontu
     // orantılı küçültür. Normal satırlarda istenen boyut aynen korunur.
     func fittedFontSize(requested: Int, measuredWidth: Double, maximumWidth: Double) -> Int {
@@ -1169,13 +1342,43 @@ class VideoProcessor: ObservableObject {
         return max(Double(fontSize) * 0.55, Double(text.count) * Double(fontSize) * 0.55)
     }
 
+    private func kineticDesignedWordWidth(
+        design: KineticGlyphDesign,
+        fontName: String,
+        fontSize: Int
+    ) -> Double {
+        guard design.treatment != .standard else {
+            return kineticWordWidth(
+                text: String(design.characters),
+                fontName: fontName,
+                fontSize: fontSize
+            )
+        }
+        let glyphWidths = design.characters.enumerated().map { index, character -> Double in
+            let scale = design.scaleFactors.indices.contains(index)
+                ? design.scaleFactors[index]
+                : 1
+            let glyphSize = max(1, Int((Double(fontSize) * scale).rounded()))
+            return kineticWordWidth(
+                text: String(character),
+                fontName: fontName,
+                fontSize: glyphSize
+            )
+        }
+        let tracking = Double(fontSize) * design.trackingFactor
+        return glyphWidths.reduce(0, +)
+            + tracking * Double(max(0, design.characters.count - 1))
+    }
+
     private struct KineticWordPlacement {
         let index: Int
         let rowIndex: Int
         let fontSize: Int
+        let visualFontSize: Int
         let width: Double
         let x: Int
         let y: Int
+        let glyphDesign: KineticGlyphDesign
     }
 
     private func kineticRowScale(
@@ -1203,9 +1406,11 @@ class VideoProcessor: ObservableObject {
 
     private func kineticEmphasisScale(
         plan: KineticTypographyPlan,
-        wordIndex: Int
+        wordIndex: Int,
+        treatment: KineticGlyphTreatment
     ) -> Double {
         guard wordIndex == plan.emphasisIndex else { return 1 }
+        if treatment == .poster || treatment == .rhythm { return 1 }
         switch plan.scene {
         case .phraseBuild: return 1.10
         case .captionWindow: return 1.08
@@ -1222,6 +1427,7 @@ class VideoProcessor: ObservableObject {
         marginV: Int,
         virtualWidth: Int,
         virtualHeight: Int,
+        letterStyle: KineticLetterStyle,
         rowsOverride: [[Int]]? = nil
     ) -> [KineticWordPlacement] {
         let baseSize = max(24, requestedFontSize)
@@ -1234,14 +1440,20 @@ class VideoProcessor: ObservableObject {
 
         if plan.scene == .focusCut || plan.scene == .impactSequence {
             return cleaned.indices.map { index in
+                let glyphDesign = kineticGlyphDesign(
+                    text: cleaned[index].text,
+                    wordIndex: index,
+                    plan: plan,
+                    letterStyle: letterStyle
+                )
                 let proposed = max(24, Int((Double(baseSize) * kineticRowScale(
                     plan: plan,
                     rowIndex: 0,
                     row: Array(cleaned.indices),
                     rowCount: 1
                 )).rounded()))
-                let measured = kineticWordWidth(
-                    text: cleaned[index].text,
+                let measured = kineticDesignedWordWidth(
+                    design: glyphDesign,
                     fontName: fontName,
                     fontSize: proposed
                 )
@@ -1250,18 +1462,24 @@ class VideoProcessor: ObservableObject {
                     measuredWidth: measured,
                     maximumWidth: safeWidth
                 )
-                let fittedWidth = kineticWordWidth(
-                    text: cleaned[index].text,
+                let fittedWidth = kineticDesignedWordWidth(
+                    design: glyphDesign,
                     fontName: fontName,
                     fontSize: fitted
+                )
+                let visualSize = max(
+                    fitted,
+                    Int((Double(fitted) * glyphDesign.maximumScale).rounded(.up))
                 )
                 return KineticWordPlacement(
                     index: index,
                     rowIndex: 0,
                     fontSize: fitted,
+                    visualFontSize: visualSize,
                     width: fittedWidth,
                     x: virtualWidth / 2,
-                    y: Int(targetY.rounded())
+                    y: Int(targetY.rounded()),
+                    glyphDesign: glyphDesign
                 )
             }
         }
@@ -1282,14 +1500,26 @@ class VideoProcessor: ObservableObject {
             if plan.highlight == .pill {
                 spacing = max(spacing, Double(rowSize) * 0.30)
             }
-            var wordSizes = row.map {
+            let glyphDesigns = row.map {
+                kineticGlyphDesign(
+                    text: cleaned[$0].text,
+                    wordIndex: $0,
+                    plan: plan,
+                    letterStyle: letterStyle
+                )
+            }
+            var wordSizes = row.enumerated().map { offset, wordIndex in
                 max(24, Int((
-                    Double(rowSize) * kineticEmphasisScale(plan: plan, wordIndex: $0)
+                    Double(rowSize) * kineticEmphasisScale(
+                        plan: plan,
+                        wordIndex: wordIndex,
+                        treatment: glyphDesigns[offset].treatment
+                    )
                 ).rounded()))
             }
-            var widths = row.enumerated().map { offset, wordIndex in
-                kineticWordWidth(
-                    text: cleaned[wordIndex].text,
+            var widths = row.enumerated().map { offset, _ in
+                kineticDesignedWordWidth(
+                    design: glyphDesigns[offset],
                     fontName: fontName,
                     fontSize: wordSizes[offset]
                 )
@@ -1303,14 +1533,18 @@ class VideoProcessor: ObservableObject {
                     ? Double(rowSize) * 0.22
                     : 5
                 spacing = max(minimumSpacing, spacing * ratio)
-                wordSizes = row.map {
+                wordSizes = row.enumerated().map { offset, wordIndex in
                     max(24, Int((
-                        Double(rowSize) * kineticEmphasisScale(plan: plan, wordIndex: $0)
+                        Double(rowSize) * kineticEmphasisScale(
+                            plan: plan,
+                            wordIndex: wordIndex,
+                            treatment: glyphDesigns[offset].treatment
+                        )
                     ).rounded(.down)))
                 }
-                widths = row.enumerated().map { offset, wordIndex in
-                    kineticWordWidth(
-                        text: cleaned[wordIndex].text,
+                widths = row.enumerated().map { offset, _ in
+                    kineticDesignedWordWidth(
+                        design: glyphDesigns[offset],
                         fontName: fontName,
                         fontSize: wordSizes[offset]
                     )
@@ -1320,7 +1554,13 @@ class VideoProcessor: ObservableObject {
 
             var xCursor = (Double(virtualWidth) - rowWidth) / 2
             let rawY = firstY + Double(rowIndex) * rowGap
-            let tallestSize = wordSizes.max() ?? rowSize
+            let visualSizes = wordSizes.enumerated().map { offset, size in
+                max(
+                    size,
+                    Int((Double(size) * glyphDesigns[offset].maximumScale).rounded(.up))
+                )
+            }
+            let tallestSize = visualSizes.max() ?? rowSize
             let y = Int(min(
                 Double(virtualHeight) - Double(tallestSize) * 0.55 - 16,
                 max(Double(tallestSize) * 0.55 + 16, rawY)
@@ -1332,9 +1572,11 @@ class VideoProcessor: ObservableObject {
                     index: wordIndex,
                     rowIndex: rowIndex,
                     fontSize: wordSizes[offset],
+                    visualFontSize: visualSizes[offset],
                     width: width,
                     x: Int((xCursor + width / 2).rounded()),
-                    y: y
+                    y: y,
+                    glyphDesign: glyphDesigns[offset]
                 ))
                 xCursor += width + spacing
             }
@@ -1410,7 +1652,7 @@ class VideoProcessor: ObservableObject {
 
         if plan.highlight == .pill {
             width = max(26, Int(placement.width.rounded(.up)) + max(18, placement.fontSize / 3))
-            height = max(22, Int((Double(placement.fontSize) * 1.18).rounded()))
+            height = max(22, Int((Double(placement.visualFontSize) * 1.18).rounded()))
             radius = max(6, height / 4)
             left = placement.x - width / 2
             top = placement.y - height / 2
@@ -1419,10 +1661,10 @@ class VideoProcessor: ObservableObject {
                 "\\p1\\bord0\\shad0\\c&H\(accent.assColor)&\\alpha&H12&\\fad(45,70)}"
         } else {
             width = max(24, Int((placement.width * 0.94).rounded(.up)))
-            height = max(4, Int((Double(placement.fontSize) * 0.075).rounded()))
+            height = max(4, Int((Double(placement.visualFontSize) * 0.075).rounded()))
             radius = max(2, height / 2)
             left = placement.x - width / 2
-            top = placement.y + Int((Double(placement.fontSize) * 0.57).rounded())
+            top = placement.y + Int((Double(placement.visualFontSize) * 0.57).rounded())
             tags = "{\\an7\\pos(\(left),\(top))\\p1\\bord0\\shad0\\c&H\(accent.assColor)&" +
                 "\\fscx0\\fad(35,70)\\t(0,\(decorationDuration + 20),1.8,\\fscx100)}"
         }
@@ -1445,6 +1687,7 @@ class VideoProcessor: ObservableObject {
         style: KineticStyle = .automatic,
         accent: KineticAccent = .gold,
         intensity: KineticIntensity = .balanced,
+        letterStyle: KineticLetterStyle = .clean,
         repeatCount: Int = 1,
         scenePlan: KineticTypographyPlan? = nil
     ) -> String {
@@ -1471,6 +1714,7 @@ class VideoProcessor: ObservableObject {
                     marginV: marginV,
                     virtualWidth: virtualWidth,
                     virtualHeight: virtualHeight,
+                    letterStyle: letterStyle,
                     rowsOverride: [page]
                 )
             }.sorted { $0.index < $1.index }
@@ -1482,7 +1726,8 @@ class VideoProcessor: ObservableObject {
                 requestedFontSize: requestedFontSize,
                 marginV: marginV,
                 virtualWidth: virtualWidth,
-                virtualHeight: virtualHeight
+                virtualHeight: virtualHeight,
+                letterStyle: letterStyle
             )
         }
         var result = ""
@@ -1540,7 +1785,7 @@ class VideoProcessor: ObservableObject {
             )
 
             var text = ""
-            let characters = Array(item.text)
+            let characters = placement.glyphDesign.characters
             let letterDuration = max(0.01, (item.word.end - item.word.start) / Double(max(1, characters.count)))
             for (characterIndex, character) in characters.enumerated() {
                 let characterStart = item.word.start + (Double(characterIndex) * letterDuration)
@@ -1548,7 +1793,15 @@ class VideoProcessor: ObservableObject {
                 let startMs = min(eventDurationMs, max(0, Int((characterStart - eventStart) * 1000)))
                 let rawEndMs = min(eventDurationMs, max(startMs + 20, Int((characterEnd - eventStart) * 1000)))
                 let fadeEnd = min(eventDurationMs, max(startMs + 20, min(rawEndMs, startMs + 100)))
-                text += "{\\alpha&H00&\\t(\(startMs),\(fadeEnd),\\alpha&HA0&)}\(character)"
+                let glyphScale = placement.glyphDesign.scaleFactors.indices.contains(characterIndex)
+                    ? placement.glyphDesign.scaleFactors[characterIndex]
+                    : 1
+                let glyphSize = max(
+                    1,
+                    Int((Double(placement.fontSize) * glyphScale).rounded())
+                )
+                text += "{\\fs\(glyphSize)\\alpha&H00&" +
+                    "\\t(\(startMs),\(fadeEnd),\\alpha&HA0&)}\(character)"
             }
 
             let entryStart = isolatedWord ? 0 : min(90, localIndex * 22)
@@ -1596,6 +1849,12 @@ class VideoProcessor: ObservableObject {
             let fadeIn = isolatedWord ? 70 : (pagedWords ? 75 : 110)
             let fadeOut = isolatedWord ? 100 : (pagedWords ? 95 : 140)
             tags += "\\fs\(placement.fontSize)\\c&HFFFFFF&\\fad(\(fadeIn),\(fadeOut))"
+            let tracking = Int((
+                Double(placement.fontSize) * placement.glyphDesign.trackingFactor
+            ).rounded())
+            if tracking > 0 {
+                tags += "\\fsp\(tracking)"
+            }
             tags += "\\fscx\(entranceScale)\\fscy\(entranceScale)\\blur\(isolatedWord ? "1.3" : "0.9")"
             let peakScale: Int
             if isolatedWord {
@@ -1670,6 +1929,7 @@ class VideoProcessor: ObservableObject {
         kineticStyle: KineticStyle = .automatic,
         kineticAccent: KineticAccent = .gold,
         kineticIntensity: KineticIntensity = .balanced,
+        kineticLetterStyle: KineticLetterStyle = .clean,
         kineticEmphasisWordIDs: Set<UUID> = [],
         videoURL: URL
     ) async -> URL? {
@@ -1826,6 +2086,7 @@ class VideoProcessor: ObservableObject {
                     style: kineticStyle,
                     accent: kineticAccent,
                     intensity: kineticIntensity,
+                    letterStyle: kineticLetterStyle,
                     repeatCount: kineticPlans[index].repeatCount,
                     scenePlan: kineticPlans[index]
                 )
