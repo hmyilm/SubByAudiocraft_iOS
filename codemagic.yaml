@@ -18,15 +18,77 @@ workflows:
           pod install
       - name: Run Unit Tests
         script: |
-          SIMULATOR_ID=$(xcrun simctl list devices available | sed -nE 's/.*\(([0-9A-F-]{36})\) \((Shutdown|Booted)\)$/\1/p' | head -1)
+          set -euo pipefail
+
+          echo "Selected Xcode:"
+          xcodebuild -version
+          echo "Installed iOS runtimes:"
+          xcrun simctl list runtimes available
+
+          # simctl'in metin çıktısı Xcode sürümleri arasında değişebiliyor. JSON çıktısından
+          # önce mevcut ve kullanılabilir bir iPhone seç; Pro cihazı varsa onu tercih et.
+          SIMULATOR_ID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)
+          devices = [device for runtime_devices in data.get("devices", {}).values() for device in runtime_devices if device.get("isAvailable", True) and device.get("name", "").startswith("iPhone")]
+          devices.sort(key=lambda device: ("Pro" not in device.get("name", ""), device.get("state") != "Booted", device.get("name", "")))
+          print(devices[0].get("udid", "") if devices else "")
+          ')
+
+          CREATED_SIMULATOR=false
           if [ -z "$SIMULATOR_ID" ]; then
-            echo "No available iOS Simulator found"
-            exit 1
+            echo "No pre-created iPhone found; creating one from the installed runtime."
+
+            RUNTIME_ID=$(xcrun simctl list runtimes available -j | python3 -c '
+          import json, sys
+          runtimes = [runtime for runtime in json.load(sys.stdin).get("runtimes", []) if runtime.get("isAvailable", True) and runtime.get("identifier", "").startswith("com.apple.CoreSimulator.SimRuntime.iOS-")]
+          print(runtimes[-1].get("identifier", "") if runtimes else "")
+          ')
+
+            DEVICE_TYPE_ID=$(xcrun simctl list devicetypes -j | python3 -c '
+          import json, sys
+          devices = [device for device in json.load(sys.stdin).get("devicetypes", []) if device.get("name", "").startswith("iPhone")]
+          preferred = [device for device in devices if "Pro" in device.get("name", "")]
+          selected = preferred[-1] if preferred else (devices[-1] if devices else {})
+          print(selected.get("identifier", ""))
+          ')
+
+            if [ -z "$RUNTIME_ID" ] || [ -z "$DEVICE_TYPE_ID" ]; then
+              echo "No usable iOS Simulator runtime or iPhone device type is installed."
+              xcrun simctl list
+              exit 1
+            fi
+
+            SIMULATOR_ID=$(xcrun simctl create \
+              "SubByAudiocraft Tests" \
+              "$DEVICE_TYPE_ID" \
+              "$RUNTIME_ID")
+            CREATED_SIMULATOR=true
           fi
+
+          cleanup_simulator() {
+            if [ "$CREATED_SIMULATOR" = true ]; then
+              xcrun simctl shutdown "$SIMULATOR_ID" 2>/dev/null || true
+              xcrun simctl delete "$SIMULATOR_ID" 2>/dev/null || true
+            fi
+          }
+          trap cleanup_simulator EXIT
+
+          echo "Testing on simulator: $SIMULATOR_ID"
+          xcrun simctl boot "$SIMULATOR_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+
+          mkdir -p build/ios/test
           xcodebuild test \
             -workspace SubByAudiocraft.xcworkspace \
             -scheme SubByAudiocraft \
+            -sdk iphonesimulator \
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -destination-timeout 120 \
+            -resultBundlePath build/ios/test/SubByAudiocraftTests.xcresult \
+            -configuration Debug \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
       - name: Set up keychain
         script: |
@@ -45,6 +107,8 @@ workflows:
           xcode-project build-ipa --workspace SubByAudiocraft.xcworkspace --scheme SubByAudiocraft
     artifacts:
       - build/ios/ipa/*.ipa
+      - build/ios/test/*.xcresult
+      - /tmp/xcodebuild_logs/*.log
     publishing:
       app_store_connect:
         auth: integration
