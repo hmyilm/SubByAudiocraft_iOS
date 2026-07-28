@@ -10,6 +10,12 @@ enum AnalysisQuality: String, CaseIterable, Identifiable {
     case balanced
     case best
 
+    // large-v3 Turbo modeli 626 MB olsa da Core ML özelleştirme ve çözümleme
+    // sırasında bunun birkaç katı geçici bellek kullanabilir. 8 GB altındaki
+    // cihazlarda iOS uygulamayı hata vermeden (jetsam) kapatabildiği için bu
+    // cihazlarda "En İyi" seçiminde small modele güvenli biçimde düşülür.
+    static let largeModelMinimumPhysicalMemory = UInt64(8) * 1_024 * 1_024 * 1_024
+
     var id: String { rawValue }
 
     var title: String {
@@ -27,17 +33,27 @@ enum AnalysisQuality: String, CaseIterable, Identifiable {
         case .balanced:
             return "Önerilen • iyi Türkçe doğruluğu ve düşük çökme riski"
         case .best:
+            if usesMemorySafeFallback {
+                return "Bu cihazda çökme riskini azaltmak için bellek dostu model kullanılır"
+            }
             return "Şarkı sözlerinde daha isabetli • daha fazla bellek kullanır"
         }
     }
 
-    fileprivate var modelCandidates: [String] {
+    var usesMemorySafeFallback: Bool {
+        self == .best && ProcessInfo.processInfo.physicalMemory < Self.largeModelMinimumPhysicalMemory
+    }
+
+    func modelCandidates(physicalMemory: UInt64 = ProcessInfo.processInfo.physicalMemory) -> [String] {
         switch self {
         case .fast:
             return ["openai_whisper-base"]
         case .balanced:
             return ["openai_whisper-small", "openai_whisper-base"]
         case .best:
+            guard physicalMemory >= Self.largeModelMinimumPhysicalMemory else {
+                return ["openai_whisper-small", "openai_whisper-base"]
+            }
             return [
                 "openai_whisper-large-v3-v20240930_626MB",
                 "openai_whisper-small",
@@ -112,7 +128,7 @@ class VideoProcessor: ObservableObject {
         downloadProgress: @escaping (Double) -> Void
     ) async throws -> WhisperKit {
         var lastError: Error?
-        for candidate in quality.modelCandidates {
+        for candidate in quality.modelCandidates() {
             try Task.checkCancellation()
             do {
                 let modelFolder = try await WhisperKit.download(
@@ -175,6 +191,7 @@ class VideoProcessor: ObservableObject {
                 var options = DecodingOptions()
                 options.language = "tr"
                 options.wordTimestamps = true
+                options.skipSpecialTokens = true
                 options.chunkingStrategy = .vad
                 options.concurrentWorkerCount = 1
 
@@ -205,18 +222,22 @@ class VideoProcessor: ObservableObject {
                         } else {
                             let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
                             let rawWords = text.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
-                            let duration = Double(segment.end) - Double(segment.start)
-                            let wordDur = duration / Double(max(1, rawWords.count))
+                            let rawStart = Double(segment.start)
+                            let rawEnd = Double(segment.end)
+                            guard rawStart.isFinite, rawEnd.isFinite, !rawWords.isEmpty else { continue }
+                            let segmentStart = max(0, rawStart)
+                            let minimumDuration = Double(rawWords.count) * 0.05
+                            let segmentEnd = max(segmentStart + minimumDuration, rawEnd)
+                            let wordDur = (segmentEnd - segmentStart) / Double(rawWords.count)
 
                             for (index, wordText) in rawWords.enumerated() {
                                 let cleanText = self.cleanRecognizedText(wordText)
-                                let segmentStart = Double(segment.start)
-                                if !cleanText.isEmpty, segmentStart.isFinite, duration.isFinite {
-                                    let start = Double(segment.start) + (Double(index) * wordDur)
+                                if !cleanText.isEmpty {
+                                    let start = segmentStart + (Double(index) * wordDur)
                                     words.append(WordTimestamp(
                                         text: cleanText,
-                                        start: max(0, start),
-                                        end: max(max(0, start) + 0.05, start + wordDur)
+                                        start: start,
+                                        end: start + wordDur
                                     ))
                                 }
                             }
@@ -228,10 +249,12 @@ class VideoProcessor: ObservableObject {
                 let normalizedWords = self.normalizeRecognizedWords(words)
                 await loadedModel.unloadModels()
                 whisperKit = nil
+                try Task.checkCancellation()
 
+                guard self.finishRecognitionIfActive(recognitionID) else { return }
                 self.completeOnMain {
                     if normalizedWords.isEmpty {
-                        completion([], "Videoda deşifre edilebilecek net bir konuşma bulunamadı.")
+                        completion([], "Videoda deşifre edilebilecek net bir vokal veya konuşma bulunamadı.")
                     } else {
                         completion(normalizedWords, nil)
                     }
@@ -240,8 +263,10 @@ class VideoProcessor: ObservableObject {
                 if let whisperKit {
                     await whisperKit.unloadModels()
                 }
-                self.completeOnMain {
-                    completion([], "İşlem iptal edildi.")
+                if self.finishRecognitionIfActive(recognitionID) {
+                    self.completeOnMain {
+                        completion([], "İşlem iptal edildi.")
+                    }
                 }
             } catch {
                 if let whisperKit {
@@ -249,17 +274,12 @@ class VideoProcessor: ObservableObject {
                 }
                 print("WhisperKit hatası: \(error.localizedDescription)")
                 let message = self.friendlyRecognitionError(error)
-                self.completeOnMain {
-                    completion([], message)
+                if self.finishRecognitionIfActive(recognitionID) {
+                    self.completeOnMain {
+                        completion([], message)
+                    }
                 }
             }
-
-            self.recognitionLock.lock()
-            if self.recognitionID == recognitionID {
-                self.recognitionTask = nil
-                self.recognitionID = nil
-            }
-            self.recognitionLock.unlock()
         }
 
         recognitionLock.lock()
@@ -284,6 +304,17 @@ class VideoProcessor: ObservableObject {
         recognitionLock.lock()
         defer { recognitionLock.unlock() }
         return recognitionID == id
+    }
+
+    // Yalnız hâlâ güncel olan analizin sonucu arayüze ulaşır. Kullanıcı yeni bir
+    // video seçtiğinde eski model görevinin gecikmiş callback'i yeni akışı bozamaz.
+    private func finishRecognitionIfActive(_ id: UUID) -> Bool {
+        recognitionLock.lock()
+        defer { recognitionLock.unlock() }
+        guard recognitionID == id else { return false }
+        recognitionTask = nil
+        recognitionID = nil
+        return true
     }
 
     func cancelAllProcessing() {
@@ -339,31 +370,72 @@ class VideoProcessor: ObservableObject {
         }
     }
 
-    private func cleanRecognizedText(_ text: String) -> String {
-        text.trimmingCharacters(in: .whitespacesAndNewlines)
+    func cleanRecognizedText(_ text: String) -> String {
+        text.replacingOccurrences(of: "\u{00A0}", with: " ")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "[.,!?;:]+$", with: "", options: .regularExpression)
     }
 
-    // VAD sınırlarında oluşabilen yinelenen kelimeleri temizler ve bozuk zamanları ayıklar.
-    private func normalizeRecognizedWords(_ words: [WordTimestamp]) -> [WordTimestamp] {
-        let sorted = words.sorted {
+    // VAD sınırlarında oluşabilen yinelenen kelimeleri temizler, bozuk/çakışan
+    // zamanları onarır ve Whisper'ın sessizlikte üretebildiği müzik işaretlerini atar.
+    // İç erişim testlerin gerçek üretim algoritmasını doğrulayabilmesi içindir.
+    func normalizeRecognizedWords(_ words: [WordTimestamp]) -> [WordTimestamp] {
+        let ignoredMarkers = Set([
+            "[müzik]", "(müzik)", "[music]", "(music)",
+            "[alkış]", "(alkış)", "[applause]", "(applause)",
+            "♪", "♫"
+        ])
+        let sorted = words.compactMap { word -> WordTimestamp? in
+            let text = cleanRecognizedText(word.text)
+            guard word.start.isFinite, word.end.isFinite, !text.isEmpty else { return nil }
+            guard !ignoredMarkers.contains(text.lowercased(with: Locale(identifier: "tr_TR"))) else {
+                return nil
+            }
+            let start = max(0, word.start)
+            return WordTimestamp(
+                id: word.id,
+                text: text,
+                start: start,
+                end: max(start + 0.05, word.end)
+            )
+        }.sorted {
             if $0.start == $1.start { return $0.end < $1.end }
             return $0.start < $1.start
         }
+
         var normalized: [WordTimestamp] = []
-        for word in sorted {
-            guard word.start.isFinite, word.end.isFinite, !word.text.isEmpty else { continue }
+        for var word in sorted {
             if let previous = normalized.last,
                previous.text.compare(word.text, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame,
-               abs(previous.start - word.start) < 0.35 {
+               duplicateOverlapRatio(previous, word) >= 0.6 {
                 if word.end > previous.end {
                     normalized[normalized.count - 1].end = word.end
                 }
                 continue
             }
+
+            // Tek vokal hattındaki sözcükler çakıştığında iki kelime arasındaki
+            // sınırı ortalar. Bu, ASS animasyonunun geri sıçramasını engeller.
+            if var previous = normalized.last, previous.end > word.start {
+                let midpoint = (previous.end + word.start) / 2
+                let lowerBound = previous.start + 0.05
+                let upperBound = max(lowerBound, word.end - 0.05)
+                let boundary = min(max(midpoint, lowerBound), upperBound)
+                previous.end = boundary
+                normalized[normalized.count - 1] = previous
+                word.start = boundary
+                word.end = max(word.start + 0.05, word.end)
+            }
             normalized.append(word)
         }
         return normalized
+    }
+
+    private func duplicateOverlapRatio(_ lhs: WordTimestamp, _ rhs: WordTimestamp) -> Double {
+        let overlap = max(0, min(lhs.end, rhs.end) - max(lhs.start, rhs.start))
+        let shorterDuration = max(0.05, min(lhs.end - lhs.start, rhs.end - rhs.start))
+        return overlap / shorterDuration
     }
 
     private func friendlyRecognitionError(_ error: Error) -> String {
@@ -459,6 +531,62 @@ class VideoProcessor: ObservableObject {
         return (genislik, sinirlar)
     }
 
+    // Kullanıcı eski bir projede bozuk/çakışan zamanlar kaydetmiş olsa bile ASS
+    // üretimi geçerli ve ileri doğru akan zamanlarla devam eder. Kimlikler korunur;
+    // böylece onaylanmış satır sonları bozulmaz.
+    func prepareWordsForRendering(_ words: [WordTimestamp], maximumTime: Double? = nil) -> [WordTimestamp] {
+        let safeMaximum = maximumTime.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+        var prepared: [WordTimestamp] = []
+
+        for original in words {
+            var word = original
+            word.text = word.text
+                .replacingOccurrences(of: "\u{00A0}", with: " ")
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            let fallbackStart = prepared.last?.end ?? 0
+            word.start = word.start.isFinite ? max(0, word.start) : fallbackStart
+            word.end = word.end.isFinite ? max(word.start + 0.05, word.end) : word.start + 0.05
+
+            if let safeMaximum {
+                guard word.start < safeMaximum else { continue }
+                word.end = min(word.end, safeMaximum)
+                guard word.end > word.start else { continue }
+            }
+
+            if var previous = prepared.last, previous.end > word.start {
+                let midpoint = (previous.end + word.start) / 2
+                let lowerBound = previous.start + 0.05
+                let upperBound = max(lowerBound, word.end - 0.05)
+                let boundary = min(max(midpoint, lowerBound), upperBound)
+                previous.end = boundary
+                prepared[prepared.count - 1] = previous
+                word.start = boundary
+                word.end = max(word.start + 0.05, word.end)
+                if let safeMaximum {
+                    word.end = min(word.end, safeMaximum)
+                    guard word.start < safeMaximum, word.end > word.start else { continue }
+                }
+            }
+
+            prepared.append(word)
+        }
+        return prepared
+    }
+
+    // Satır genişliği ekrana taşarsa tüm yazıyı yatay olarak ezmek yerine fontu
+    // orantılı küçültür. Normal satırlarda istenen boyut aynen korunur.
+    func fittedFontSize(requested: Int, measuredWidth: Double, maximumWidth: Double) -> Int {
+        let safeRequested = max(1, requested)
+        guard measuredWidth.isFinite, maximumWidth.isFinite,
+              measuredWidth > maximumWidth, maximumWidth > 0 else {
+            return safeRequested
+        }
+        let scaled = Int(floor(Double(safeRequested) * maximumWidth / measuredWidth))
+        return max(24, min(safeRequested, scaled))
+    }
+
     // 3. ASS Altyazı Dosyası Oluşturma (iOS 16+ uyumlu asenkron yapı)
     // lineBreaks: kullanıcının onayladığı satır sonları (boşsa otomatik öneri kullanılır)
     func generateASS(words: [WordTimestamp], lineBreaks: Set<UUID>, fontName: String, fontSize: Int, marginV: Int, videoURL: URL) async -> URL? {
@@ -479,6 +607,11 @@ class VideoProcessor: ObservableObject {
         let width = Double(abs(rotatedRect.width))
         let height = Double(abs(rotatedRect.height))
         guard width > 0, height > 0 else { return nil }
+
+        let duration = try? await asset.load(.duration)
+        let durationSeconds = duration.map { CMTimeGetSeconds($0) }
+        let renderWords = prepareWordsForRendering(words, maximumTime: durationSeconds)
+        guard !renderWords.isEmpty else { return nil }
 
         let aspectRatio = width / height
         let virtualHeight = 1080
@@ -516,10 +649,10 @@ class VideoProcessor: ObservableObject {
         // satır sonu bilgisi yoksa otomatik öneri kullanılır.
         var groups: [[WordTimestamp]] = []
         if lineBreaks.isEmpty {
-            groups = autoLineGroups(for: words)
+            groups = autoLineGroups(for: renderWords)
         } else {
             var currentGroup: [WordTimestamp] = []
-            for word in words {
+            for word in renderWords {
                 currentGroup.append(word)
                 if lineBreaks.contains(word.id) {
                     groups.append(currentGroup)
@@ -566,7 +699,29 @@ class VideoProcessor: ObservableObject {
             if segEnd < segStart + 0.2 { segEnd = segStart + 0.2 }
             cursor = segEnd
 
-            var effectText = ""   // normal fontlar: tek katman; bitişik fontlarda yedek üst katman
+            let lineText = seg.group.map {
+                $0.text
+                    .replacingOccurrences(of: "\\", with: "")
+                    .replacingOccurrences(of: "{", with: "")
+                    .replacingOccurrences(of: "}", with: "")
+                    .replacingOccurrences(of: "\n", with: " ")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }.filter { !$0.isEmpty }.joined(separator: " ")
+            guard !lineText.isEmpty else { continue }
+
+            let maximumLineWidth = max(1, Double(virtualWidth - 40))
+            let measuredWidth = harfSinirlariniOlc(
+                metin: lineText,
+                fontName: fontName,
+                assFontSize: fontSize
+            )?.genislik ?? 0
+            let lineFontSize = fittedFontSize(
+                requested: fontSize,
+                measuredWidth: measuredWidth,
+                maximumWidth: maximumLineWidth
+            )
+
+            var effectText = "{\\fs\(lineFontSize)}"   // normal fontlar: tek katman; bitişik fontlarda yedek üst katman
             var plainText = ""    // bitişik fontlar: etiketsiz tam satır metni
             var harfZamanlar: [(sonUTF16: Int, s: Int, e: Int)] = []  // süpürme sınırı için harf zamanları
             var utf16Pos = 0
@@ -605,7 +760,7 @@ class VideoProcessor: ObservableObject {
                 utf16Pos += 1
             }
 
-            if effectText.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            if plainText.trimmingCharacters(in: .whitespaces).isEmpty { continue }
 
             let t0 = formatASSTime(segStart)
             let t1 = formatASSTime(segEnd)
@@ -617,7 +772,7 @@ class VideoProcessor: ObservableObject {
                 // harf bağları ve yerleşim hiçbir karede DEĞİŞEMEZ. Alt katman satırın soluk
                 // bitişik kopyası; üstteki opak kopyayı \clip penceresi soldan sağa eritir.
                 // Sınır her harfi tam kendi zaman aralığında geçer (CoreText ölçümü).
-                if let olcum = harfSinirlariniOlc(metin: metin, fontName: fontName, assFontSize: fontSize),
+                if let olcum = harfSinirlariniOlc(metin: metin, fontName: fontName, assFontSize: lineFontSize),
                    olcum.genislik <= Double(virtualWidth - 40) {
                     let x0 = (Double(virtualWidth) - olcum.genislik) / 2
                     var tags = "{\\clip(0,0,\(virtualWidth),\(virtualHeight))"
@@ -630,12 +785,12 @@ class VideoProcessor: ObservableObject {
                         tags += "\\t(\(s),\(e),\\clip(\(x),0,\(virtualWidth),\(virtualHeight)))"
                     }
                     tags += "}"
-                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\alpha&HA0&}\(metin)\n"
-                    assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,\(tags)\(metin)\n"
+                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\\alpha&HA0&}\(metin)\n"
+                    assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)}\(tags)\(metin)\n"
                 } else {
                     // Ölçüm yapılamadı veya satır ekrana sığmayıp sarılacak: yedek yöntem
                     // (altta bitişik soluk kopya + üstte harf harf eriyen opak kopya)
-                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\alpha&HA0&}\(metin)\n"
+                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\\alpha&HA0&}\(metin)\n"
                     assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,\(effectText)\n"
                 }
             } else {
@@ -735,7 +890,7 @@ class VideoProcessor: ObservableObject {
 
         FFmpegKit.execute(withArgumentsAsync: args) { session in
             // Kodlama bitti; geçici font kopyası artık gerekmez
-            if let fontsDir = fontsDir {
+            if let fontsDir {
                 try? FileManager.default.removeItem(at: fontsDir)
             }
 

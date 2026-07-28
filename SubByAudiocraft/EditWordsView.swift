@@ -12,6 +12,8 @@ struct EditWordsView: View {
 
     @State private var expandedWordID: UUID? = nil
     @State private var previewLine: String = ""
+    @State private var previewWords: [VideoProcessor.WordTimestamp] = []
+    @State private var playbackTime: Double = 0
 
     private var lines: [[VideoProcessor.WordTimestamp]] {
         var groups: [[VideoProcessor.WordTimestamp]] = []
@@ -40,8 +42,18 @@ struct EditWordsView: View {
                         fontSize: fontSize,
                         marginV: marginV,
                         sampleText: previewLine,
-                        height: 200
+                        height: 200,
+                        karaokeWords: previewWords,
+                        playbackTime: playbackTime,
+                        isMuted: false
                     )
+
+                    Label(
+                        "Sarı kelime o anda söylenen bölümü gösterir; sesi dinleyerek zamanlamayı kontrol edebilirsin.",
+                        systemImage: "waveform"
+                    )
+                    .font(.caption2)
+                    .foregroundColor(.gray)
 
                     // Font burada da değiştirilebilir: Geçmiş'ten açılan projelerde
                     // 1. adıma (video seçme) dönüş yoktur, stilin tamamı bu ekrandan yönetilir.
@@ -123,7 +135,7 @@ struct EditWordsView: View {
             .card()
         }
         // Oynatma konumuna göre aktif satırı bulup ön izlemeye yansıt
-        .onReceive(Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()) { _ in
+        .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
             updatePreviewLine()
         }
     }
@@ -131,20 +143,27 @@ struct EditWordsView: View {
     private func updatePreviewLine() {
         guard let player = player else {
             previewLine = ""
+            previewWords = []
+            playbackTime = 0
             return
         }
         let t = player.currentTime().seconds
         guard t.isFinite else {
             previewLine = ""
+            previewWords = []
+            playbackTime = 0
             return
         }
+        playbackTime = t
         if let line = lines.first(where: { group in
             guard let first = group.first, let last = group.last else { return false }
             return t >= first.start - 0.2 && t <= last.end + 0.2
         }) {
             previewLine = line.map { $0.text }.joined(separator: " ")
+            previewWords = line
         } else {
             previewLine = ""
+            previewWords = []
         }
     }
 

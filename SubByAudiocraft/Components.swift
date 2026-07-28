@@ -233,6 +233,31 @@ struct SubtitlePreviewPlayer: View {
     let marginV: Double
     let sampleText: String
     let height: CGFloat
+    let karaokeWords: [VideoProcessor.WordTimestamp]
+    let playbackTime: Double
+    let isMuted: Bool
+
+    init(
+        player: AVPlayer?,
+        fontName: String,
+        fontSize: Double,
+        marginV: Double,
+        sampleText: String,
+        height: CGFloat,
+        karaokeWords: [VideoProcessor.WordTimestamp] = [],
+        playbackTime: Double = 0,
+        isMuted: Bool = true
+    ) {
+        self.player = player
+        self.fontName = fontName
+        self.fontSize = fontSize
+        self.marginV = marginV
+        self.sampleText = sampleText
+        self.height = height
+        self.karaokeWords = karaokeWords
+        self.playbackTime = playbackTime
+        self.isMuted = isMuted
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -240,7 +265,7 @@ struct SubtitlePreviewPlayer: View {
                 if let player = player {
                     VideoPlayer(player: player)
                         .onAppear {
-                            player.isMuted = true
+                            player.isMuted = isMuted
                             player.play()
                         }
                         .onDisappear {
@@ -249,14 +274,39 @@ struct SubtitlePreviewPlayer: View {
                 }
 
                 // 1080p referans yüksekliğine göre ölçeklenmiş canlı altyazı bindirmesi
-                if !sampleText.isEmpty {
-                    Text(sampleText)
+                if !karaokeWords.isEmpty || !sampleText.isEmpty {
+                    Group {
+                        if karaokeWords.isEmpty {
+                            Text(sampleText)
+                                .foregroundColor(.white)
+                        } else {
+                            HStack(spacing: max(2, geo.size.height / 100)) {
+                                ForEach(karaokeWords) { word in
+                                    let isActive = playbackTime >= word.start && playbackTime < word.end
+                                    let isPast = playbackTime >= word.end
+                                    Text(word.text)
+                                        .foregroundColor(
+                                            isActive
+                                                ? Theme.yellow
+                                                : (isPast ? .white.opacity(0.35) : .white)
+                                        )
+                                        .scaleEffect(isActive ? 1.08 : 1)
+                                        .shadow(
+                                            color: isActive ? Theme.yellow.opacity(0.45) : .clear,
+                                            radius: isActive ? 4 : 0
+                                        )
+                                }
+                            }
+                        }
+                    }
                         .font(.custom(fontName, size: CGFloat(fontSize) * (geo.size.height / 1080.0)))
-                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.45)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(Color.black.opacity(0.6))
+                        .background(karaokeWords.isEmpty ? Color.black.opacity(0.6) : Color.clear)
+                        .shadow(color: karaokeWords.isEmpty ? .clear : .black.opacity(0.9), radius: 2)
                         .cornerRadius(6)
                         .padding(.bottom, CGFloat(marginV) * (geo.size.height / 1080.0))
                 }

@@ -376,7 +376,8 @@ struct ContentView: View {
 
             self.audioURL = audioURL
             self.processingStage = .transcribing
-            self.statusMessage = "\(quality.title) yapay zeka modeli sözleri analiz ediyor. İlk kullanımda model indirilir; Wi‑Fi önerilir."
+            let effectiveQuality = quality.usesMemorySafeFallback ? "Bellek dostu" : quality.title
+            self.statusMessage = "\(effectiveQuality) yapay zeka modeli sözleri analiz ediyor. İlk kullanımda model indirilir; Wi‑Fi önerilir."
 
             VideoProcessor.shared.runSpeechRecognition(audioURL: audioURL, quality: quality, downloadProgress: { fraction in
                 DispatchQueue.main.async {
@@ -404,7 +405,7 @@ struct ContentView: View {
 
                 guard !words.isEmpty else {
                     self.modelDownloadProgress = nil
-                    self.statusMessage = "Hata: Videoda net bir konuşma bulunamadı."
+                    self.statusMessage = "Hata: Videoda net bir vokal veya konuşma bulunamadı."
                     self.isProcessing = false
                     self.currentStep = .selectVideo
                     return

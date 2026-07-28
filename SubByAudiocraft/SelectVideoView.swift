@@ -111,9 +111,16 @@ struct SelectVideoView: View {
                         .fixedSize(horizontal: false, vertical: true)
 
                     if analysisQuality == .best {
-                        Label("Eski veya belleği düşük cihazlarda “Dengeli” daha kararlıdır.", systemImage: "exclamationmark.triangle.fill")
+                        Label(
+                            analysisQuality.usesMemorySafeFallback
+                                ? "Bu cihazda uygulamanın kapanmaması için güvenli model otomatik seçilecek."
+                                : "Büyük model daha uzun sürebilir; analiz sırasında uygulamayı açık tut.",
+                            systemImage: analysisQuality.usesMemorySafeFallback
+                                ? "checkmark.shield.fill"
+                                : "exclamationmark.triangle.fill"
+                        )
                             .font(.caption2)
-                            .foregroundColor(.orange)
+                            .foregroundColor(analysisQuality.usesMemorySafeFallback ? .green : .orange)
                     }
                 }
                 .card()
