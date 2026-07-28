@@ -18,6 +18,8 @@ struct SavedProject: Identifiable, Codable {
     // Optional tutulur: 1.6.0 öncesi proje.json dosyalarında bu alan yoktur.
     // Eksik değer her zaman Klasik olarak çözülerek eski projelerin görünümü korunur.
     var karaokeModu: String?
+    // Optional tutulur: eski projelerde mevcut karaoke takibi varsayılan olarak açık kalır.
+    var sozTakibi: String?
     // Optional tutulur: eski Kinetik projeler yeni yönetmende güvenli Otomatik stile geçer.
     var kinetikStil: String?
     // Optional tutulur: eski projeler uygulamanın özgün altın vurgu rengiyle açılır.
@@ -37,6 +39,10 @@ struct SavedProject: Identifiable, Codable {
 
     var karaokeMode: KaraokeMode {
         KaraokeMode.resolved(karaokeModu)
+    }
+
+    var lyricTrackingMode: LyricTrackingMode {
+        LyricTrackingMode.resolved(sozTakibi)
     }
 
     var kineticStyle: KineticStyle {
@@ -149,6 +155,7 @@ final class ProjectStore: ObservableObject {
                  fontBoyu: Double,
                  dikeyKonum: Double,
                  karaokeModu: KaraokeMode,
+                 sozTakibi: LyricTrackingMode,
                  kinetikStil: KineticStyle,
                  kinetikVurgu: KineticAccent,
                  kinetikOzelRenk: String,
@@ -192,6 +199,7 @@ final class ProjectStore: ObservableObject {
             fontBoyu: fontBoyu,
             dikeyKonum: dikeyKonum,
             karaokeModu: karaokeModu.rawValue,
+            sozTakibi: sozTakibi.rawValue,
             kinetikStil: kinetikStil.rawValue,
             kinetikVurgu: kinetikVurgu.rawValue,
             kinetikOzelRenk: KineticResolvedColor.normalizedHex(kinetikOzelRenk)
@@ -233,6 +241,7 @@ final class ProjectStore: ObservableObject {
                   fontBoyu: Double,
                   dikeyKonum: Double,
                   karaokeModu: KaraokeMode,
+                  sozTakibi: LyricTrackingMode,
                   kinetikStil: KineticStyle,
                   kinetikVurgu: KineticAccent,
                   kinetikOzelRenk: String,
@@ -249,6 +258,7 @@ final class ProjectStore: ObservableObject {
         proje.fontBoyu = fontBoyu
         proje.dikeyKonum = dikeyKonum
         proje.karaokeModu = karaokeModu.rawValue
+        proje.sozTakibi = sozTakibi.rawValue
         proje.kinetikStil = kinetikStil.rawValue
         proje.kinetikVurgu = kinetikVurgu.rawValue
         proje.kinetikOzelRenk = KineticResolvedColor.normalizedHex(kinetikOzelRenk)

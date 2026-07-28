@@ -10,6 +10,7 @@ struct SelectVideoView: View {
     @Binding var fontSize: Double
     @Binding var marginV: Double
     @Binding var karaokeMode: KaraokeMode
+    @Binding var lyricTrackingMode: LyricTrackingMode
     @Binding var kineticStyle: KineticStyle
     @Binding var kineticAccent: KineticAccent
     @Binding var kineticCustomColorHex: String
@@ -93,6 +94,7 @@ struct SelectVideoView: View {
                         sampleText: karaokeMode == .kinetic ? "Söz Ritme Dönüşür" : "Altyazı Ön İzleme",
                         height: 260,
                         karaokeMode: karaokeMode,
+                        lyricTrackingMode: lyricTrackingMode,
                         kineticStyle: kineticStyle,
                         kineticAccent: kineticAccent,
                         kineticCustomColorHex: kineticCustomColorHex,
@@ -144,6 +146,7 @@ struct SelectVideoView: View {
                     SectionHeader(icon: "paintbrush.fill", title: "Altyazı Tasarımı")
                     KaraokeModePicker(
                         selection: $karaokeMode,
+                        lyricTrackingMode: $lyricTrackingMode,
                         kineticStyle: $kineticStyle,
                         kineticAccent: $kineticAccent,
                         kineticCustomColorHex: $kineticCustomColorHex,

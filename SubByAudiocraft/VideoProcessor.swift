@@ -91,6 +91,46 @@ enum KaraokeMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum LyricTrackingMode: String, CaseIterable, Identifiable, Codable {
+    case off
+    case karaoke
+    case centeredReveal
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .off: return "Kapalı"
+        case .karaoke: return "Karaoke"
+        case .centeredReveal: return "Merkez Yazım"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .off: return "pause.circle"
+        case .karaoke: return "waveform"
+        case .centeredReveal: return "character.cursor.ibeam"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .off:
+            return "Satır zamanında görünür; söylenen kelime veya harf ayrıca işaretlenmez."
+        case .karaoke:
+            return "Söylenen kelime ve harfler renk, ölçek ve hareketle takip edilir."
+        case .centeredReveal:
+            return "Harfler vokalle birlikte eklenir; metin büyürken önceki harfler sola kayar ve cümle daima ortada kalır."
+        }
+    }
+
+    static func resolved(_ rawValue: String?) -> LyricTrackingMode {
+        guard let rawValue else { return .karaoke }
+        return LyricTrackingMode(rawValue: rawValue) ?? .karaoke
+    }
+}
+
 enum KineticStyle: String, CaseIterable, Identifiable, Codable {
     case automatic
     case cinematic
@@ -2895,6 +2935,7 @@ class VideoProcessor: ObservableObject {
         intensity: KineticIntensity = .balanced,
         letterStyle: KineticLetterStyle = .clean,
         overlayStyle: KineticOverlayStyle = .none,
+        lyricTrackingMode: LyricTrackingMode = .karaoke,
         repeatCount: Int = 1,
         scenePlan: KineticTypographyPlan? = nil
     ) -> String {
@@ -2938,11 +2979,17 @@ class VideoProcessor: ObservableObject {
             )
         }
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
+        let karaokeTrackingEnabled = lyricTrackingMode == .karaoke
+        var effectiveOverlayStyle = overlayStyle
+        if !karaokeTrackingEnabled,
+           overlayStyle.resolved(for: plan) == .spotlight {
+            effectiveOverlayStyle = .none
+        }
         var result = kineticOverlayDialogues(
             placements: placements,
             cleaned: cleaned,
             plan: plan,
-            overlayStyle: overlayStyle,
+            overlayStyle: effectiveOverlayStyle,
             accent: resolvedAccent,
             intensity: intensity,
             virtualWidth: virtualWidth,
@@ -3019,8 +3066,12 @@ class VideoProcessor: ObservableObject {
                     1,
                     Int((Double(placement.fontSize) * glyphScale).rounded())
                 )
-                text += "{\\fs\(glyphSize)\\alpha&H00&" +
-                    "\\t(\(startMs),\(fadeEnd),\\alpha&HA0&)}\(character)"
+                if karaokeTrackingEnabled {
+                    text += "{\\fs\(glyphSize)\\alpha&H00&" +
+                        "\\t(\(startMs),\(fadeEnd),\\alpha&HA0&)}\(character)"
+                } else {
+                    text += "{\\fs\(glyphSize)}\(character)"
+                }
             }
 
             let entryStart = isolatedWord ? 0 : min(90, localIndex * 22)
@@ -3121,31 +3172,33 @@ class VideoProcessor: ObservableObject {
             if (isolatedWord || plan.motion == .pagePop), entryEnd > entryPeak {
                 tags += "\\t(\(entryPeak),\(entryEnd),1.4,\\fscx100\\fscy100)"
             }
-            let colorInEnd = min(eventDurationMs, wordStartMs + 70)
-            let colorOutEnd = min(eventDurationMs, wordEndMs + 100)
-            let activeColor = plan.highlight == .pill
-                ? resolvedAccent.foregroundASSColor
-                : resolvedAccent.assColor
-            let shouldPulse = !isolatedWord && wordStartMs >= entryPeak
-            let highlightScale = plan.highlight == .glow
-                ? min(
-                    114,
-                    100 + Int((Double(intensity.activeScale - 98) * plan.motionGain).rounded())
-                )
-                : min(
-                    112,
-                    100 + Int((Double(intensity.activeScale - 100) * plan.motionGain).rounded())
-                )
-            let activeScaleTags = shouldPulse
-                ? "\\fscx\(highlightScale)\\fscy\(highlightScale)"
-                : ""
-            let restingScaleTags = shouldPulse ? "\\fscx100\\fscy100" : ""
-            if plan.highlight == .pill {
-                tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&\\3a&HFF&\\4a&HFF&\(activeScaleTags))"
-                tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&\\3a&H00&\\4a&H00&\(restingScaleTags))"
-            } else {
-                tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&\(activeScaleTags))"
-                tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&\(restingScaleTags))"
+            if karaokeTrackingEnabled {
+                let colorInEnd = min(eventDurationMs, wordStartMs + 70)
+                let colorOutEnd = min(eventDurationMs, wordEndMs + 100)
+                let activeColor = plan.highlight == .pill
+                    ? resolvedAccent.foregroundASSColor
+                    : resolvedAccent.assColor
+                let shouldPulse = !isolatedWord && wordStartMs >= entryPeak
+                let highlightScale = plan.highlight == .glow
+                    ? min(
+                        114,
+                        100 + Int((Double(intensity.activeScale - 98) * plan.motionGain).rounded())
+                    )
+                    : min(
+                        112,
+                        100 + Int((Double(intensity.activeScale - 100) * plan.motionGain).rounded())
+                    )
+                let activeScaleTags = shouldPulse
+                    ? "\\fscx\(highlightScale)\\fscy\(highlightScale)"
+                    : ""
+                let restingScaleTags = shouldPulse ? "\\fscx100\\fscy100" : ""
+                if plan.highlight == .pill {
+                    tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&\\3a&HFF&\\4a&HFF&\(activeScaleTags))"
+                    tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&\\3a&H00&\\4a&H00&\(restingScaleTags))"
+                } else {
+                    tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&\(activeScaleTags))"
+                    tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&\(restingScaleTags))"
+                }
             }
             if plan.highlight == .glow {
                 tags += "\\4c&H\(resolvedAccent.assColor)&\\4a&H55&\\shad2.4"
@@ -3155,18 +3208,115 @@ class VideoProcessor: ObservableObject {
             }
             tags += "}"
 
-            result += kineticDecorationDialogue(
-                placement: placement,
-                word: item.word,
-                plan: plan,
-                accent: resolvedAccent,
-                intensity: intensity,
-                segmentStart: eventStart,
-                segmentEnd: safeEventEnd
-            )
+            if karaokeTrackingEnabled {
+                result += kineticDecorationDialogue(
+                    placement: placement,
+                    word: item.word,
+                    plan: plan,
+                    accent: resolvedAccent,
+                    intensity: intensity,
+                    segmentStart: eventStart,
+                    segmentEnd: safeEventEnd
+                )
+            }
             let layer = emphasis ? 3 : 2
             result += "Dialogue: \(layer),\(formatASSTime(eventStart)),\(formatASSTime(safeEventEnd)),Default,,0,0,0,,\(tags)\(text)\n"
         }
+        return result
+    }
+
+    // Merkez Yazım: her yeni harfte daha uzun bir metin olayı üretir. Her olay aynı
+    // merkez noktasına hizalandığı için metin büyürken önceki harfler doğal olarak sola
+    // kayar; görünmeyen harfler yer kaplamaz ve cümlenin görsel merkezi hiç sapmaz.
+    func makeCenteredRevealDialogues(
+        group: [WordTimestamp],
+        segStart: Double,
+        segEnd: Double,
+        fontSize: Int,
+        marginV: Int,
+        virtualWidth: Int,
+        virtualHeight: Int,
+        accent: KineticAccent = .gold,
+        customColorHex: String = KineticAccent.defaultCustomHex
+    ) -> String {
+        struct RevealEvent {
+            let start: Double
+            let leading: String
+            let latest: Character
+        }
+
+        guard segEnd > segStart else { return "" }
+
+        var events: [RevealEvent] = []
+        var cumulative = ""
+        for word in group {
+            let clean = cleanASSWord(word.text)
+            guard !clean.isEmpty else { continue }
+            let characters = Array(clean)
+            guard !characters.isEmpty else { continue }
+
+            if !cumulative.isEmpty {
+                cumulative += " "
+            }
+
+            let wordStart = max(segStart, word.start)
+            let wordEnd = min(segEnd, max(wordStart + 0.05, word.end))
+            let letterDuration = max(
+                0.01,
+                (wordEnd - wordStart) / Double(characters.count)
+            )
+
+            for (index, character) in characters.enumerated() {
+                let revealTime = min(
+                    segEnd,
+                    max(
+                        segStart,
+                        wordStart + (Double(index) * letterDuration)
+                    )
+                )
+                events.append(
+                    RevealEvent(
+                        start: revealTime,
+                        leading: cumulative,
+                        latest: character
+                    )
+                )
+                cumulative.append(character)
+            }
+        }
+
+        guard !events.isEmpty else { return "" }
+
+        let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
+        let centerX = virtualWidth / 2
+        let halfHeight = max(12, fontSize / 2)
+        let centerY = min(
+            virtualHeight - halfHeight - 16,
+            max(halfHeight + 16, virtualHeight - marginV - halfHeight)
+        )
+        var result = ""
+
+        for (index, event) in events.enumerated() {
+            let eventStart = max(segStart, event.start)
+            let eventEnd = index + 1 < events.count
+                ? min(segEnd, events[index + 1].start)
+                : segEnd
+            guard eventEnd > eventStart + 0.008 else { continue }
+
+            let durationMs = max(10, Int((eventEnd - eventStart) * 1000))
+            let settleMs = min(90, durationMs)
+            let baseTags = "{\\an5\\pos(\(centerX),\(centerY))" +
+                "\\fs\(fontSize)\\c&HFFFFFF&\\bord3\\shad1.5}"
+            let latestTags = "{\\c&H\(resolvedAccent.assColor)&\\alpha&H38&" +
+                "\\fscx108\\fscy108\\blur0.8" +
+                "\\t(0,\(settleMs),1.6,\\c&HFFFFFF&\\alpha&H00&" +
+                "\\fscx100\\fscy100\\blur0.2)}"
+            let text = event.leading + latestTags + String(event.latest)
+            result += "Dialogue: 2,\(formatASSTime(eventStart))," +
+                "\(formatASSTime(eventEnd)),Default,,0,0,0,," +
+                "\(baseTags)\(text)\n"
+        }
+
         return result
     }
 
@@ -3179,6 +3329,7 @@ class VideoProcessor: ObservableObject {
         fontSize: Int,
         marginV: Int,
         karaokeMode: KaraokeMode = .classic,
+        lyricTrackingMode: LyricTrackingMode = .karaoke,
         kineticStyle: KineticStyle = .automatic,
         kineticAccent: KineticAccent = .gold,
         kineticCustomColorHex: String = KineticAccent.defaultCustomHex,
@@ -3324,6 +3475,21 @@ class VideoProcessor: ObservableObject {
                 maximumWidth: maximumLineWidth
             )
 
+            if lyricTrackingMode == .centeredReveal {
+                assContent += makeCenteredRevealDialogues(
+                    group: seg.group,
+                    segStart: segStart,
+                    segEnd: segEnd,
+                    fontSize: lineFontSize,
+                    marginV: marginV,
+                    virtualWidth: virtualWidth,
+                    virtualHeight: virtualHeight,
+                    accent: kineticAccent,
+                    customColorHex: kineticCustomColorHex
+                )
+                continue
+            }
+
             // Normal fontlarda Kinetik mod her kelimeyi bağımsız bir tipografi katmanı
             // olarak yerleştirir. Böylece yalnız font boyutu değil, satır hiyerarşisi,
             // vurgu, mikro hareket ve ritim de kelime zamanına bağlanır.
@@ -3344,6 +3510,7 @@ class VideoProcessor: ObservableObject {
                     intensity: kineticIntensity,
                     letterStyle: kineticLetterStyle,
                     overlayStyle: kineticOverlayStyle,
+                    lyricTrackingMode: lyricTrackingMode,
                     repeatCount: kineticPlans[index].repeatCount,
                     scenePlan: kineticPlans[index]
                 )
@@ -3384,6 +3551,14 @@ class VideoProcessor: ObservableObject {
                 )
             } else {
                 lineMotionTags = ""
+            }
+
+            if lyricTrackingMode == .off {
+                let t0 = formatASSTime(segStart)
+                let t1 = formatASSTime(segEnd)
+                assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,," +
+                    "{\\fs\(lineFontSize)\(lineMotionTags)}\(lineText)\n"
+                continue
             }
 
             var effectText = "{\\fs\(lineFontSize)\(lineMotionTags)}"   // normal fontlar: tek katman; bitişik fontlarda yedek üst katman

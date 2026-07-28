@@ -99,8 +99,8 @@ struct HistoryView: View {
                     Text("•")
                     Label(
                         proje.karaokeMode == .kinetic
-                            ? "\(proje.karaokeMode.title) · \(proje.kineticStyle.title) · \(proje.kineticIntensity.title) · \(proje.kineticLetterStyle.title) · \(proje.kineticOverlayStyle.title)"
-                            : proje.karaokeMode.title,
+                            ? "\(proje.karaokeMode.title) · \(proje.lyricTrackingMode.title) · \(proje.kineticStyle.title) · \(proje.kineticIntensity.title) · \(proje.kineticLetterStyle.title) · \(proje.kineticOverlayStyle.title)"
+                            : "\(proje.karaokeMode.title) · \(proje.lyricTrackingMode.title)",
                         systemImage: proje.karaokeMode == .kinetic ? "sparkles" : "captions.bubble"
                     )
                     if proje.disaAktarimSayisi > 0 {

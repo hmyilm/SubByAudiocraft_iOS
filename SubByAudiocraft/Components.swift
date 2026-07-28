@@ -381,6 +381,7 @@ struct FontChipPicker: View {
 // MARK: - Karaoke / Kinetik Tipografi Modu
 struct KaraokeModePicker: View {
     @Binding var selection: KaraokeMode
+    @Binding var lyricTrackingMode: LyricTrackingMode
     @Binding var kineticStyle: KineticStyle
     @Binding var kineticAccent: KineticAccent
     @Binding var kineticCustomColorHex: String
@@ -411,6 +412,64 @@ struct KaraokeModePicker: View {
                 .font(.caption)
                 .foregroundColor(.gray)
                 .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Söz Takibi")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.white)
+
+                HStack(spacing: 7) {
+                    ForEach(LyricTrackingMode.allCases) { mode in
+                        let isSelected = mode == lyricTrackingMode
+                        Button {
+                            Theme.haptic()
+                            lyricTrackingMode = mode
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: mode.icon)
+                                    .font(.caption.weight(.semibold))
+                                Text(mode.title)
+                                    .font(.caption2.weight(.semibold))
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                            }
+                            .foregroundColor(isSelected ? .black : .white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 8)
+                            .background(
+                                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                    .fill(
+                                        isSelected
+                                            ? Theme.yellow
+                                            : Color.white.opacity(0.08)
+                                    )
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Text(lyricTrackingMode.detail)
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if lyricTrackingMode == .centeredReveal {
+                    Label(
+                        "Merkez Yazım seçiliyken karaoke vurgusu otomatik kapanır; seçilen font ve vurgu rengi korunur.",
+                        systemImage: "arrow.left.and.right.text.vertical"
+                    )
+                    .font(.caption2)
+                    .foregroundColor(Theme.yellow)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.035))
+            )
 
             if selection == .kinetic {
                 VStack(alignment: .leading, spacing: 8) {
@@ -702,6 +761,7 @@ struct SubtitlePreviewPlayer: View {
     let playbackTime: Double
     let isMuted: Bool
     let karaokeMode: KaraokeMode
+    let lyricTrackingMode: LyricTrackingMode
     let kineticStyle: KineticStyle
     let kineticAccent: KineticAccent
     let kineticCustomColorHex: String
@@ -723,6 +783,7 @@ struct SubtitlePreviewPlayer: View {
         playbackTime: Double = 0,
         isMuted: Bool = true,
         karaokeMode: KaraokeMode = .classic,
+        lyricTrackingMode: LyricTrackingMode = .karaoke,
         kineticStyle: KineticStyle = .automatic,
         kineticAccent: KineticAccent = .gold,
         kineticCustomColorHex: String = KineticAccent.defaultCustomHex,
@@ -743,6 +804,7 @@ struct SubtitlePreviewPlayer: View {
         self.playbackTime = playbackTime
         self.isMuted = isMuted
         self.karaokeMode = karaokeMode
+        self.lyricTrackingMode = lyricTrackingMode
         self.kineticStyle = kineticStyle
         self.kineticAccent = kineticAccent
         self.kineticCustomColorHex = kineticCustomColorHex
@@ -771,7 +833,26 @@ struct SubtitlePreviewPlayer: View {
                 // 1080p referans yüksekliğine göre ölçeklenmiş canlı altyazı bindirmesi
                 if !karaokeWords.isEmpty || !sampleText.isEmpty {
                     Group {
-                        if karaokeMode == .kinetic {
+                        if lyricTrackingMode == .centeredReveal {
+                            let previewWords = karaokeWords.isEmpty ? sampleTimingWords : karaokeWords
+                            CenteredRevealPreview(
+                                words: previewWords,
+                                playbackTime: karaokeWords.isEmpty
+                                    ? samplePlaybackTime(
+                                        words: previewWords,
+                                        plan: VideoProcessor.shared.kineticTypographyPlan(
+                                            for: previewWords,
+                                            lineIndex: kineticLineIndex,
+                                            style: kineticStyle,
+                                            repeatCount: kineticRepeatCount
+                                        )
+                                    )
+                                    : playbackTime,
+                                accent: kineticAccent.resolvedColor(
+                                    customHex: kineticCustomColorHex
+                                ).previewColor
+                            )
+                        } else if karaokeMode == .kinetic {
                             let previewWords = karaokeWords.isEmpty ? sampleTimingWords : karaokeWords
                             let plan = kineticScenePlan
                                 ?? VideoProcessor.shared.kineticTypographyPlan(
@@ -793,7 +874,8 @@ struct SubtitlePreviewPlayer: View {
                                 customColorHex: kineticCustomColorHex,
                                 intensity: kineticIntensity,
                                 letterStyle: kineticLetterStyle,
-                                overlayStyle: kineticOverlayStyle
+                                overlayStyle: kineticOverlayStyle,
+                                trackingMode: lyricTrackingMode
                             )
                         } else if karaokeWords.isEmpty {
                             Text(sampleText)
@@ -802,8 +884,11 @@ struct SubtitlePreviewPlayer: View {
                             HStack(spacing: max(2, geo.size.height / 100)) {
                                 ForEach(Array(karaokeWords.enumerated()), id: \.element.id) { item in
                                     let word = item.element
-                                    let isActive = playbackTime >= word.start && playbackTime < word.end
-                                    let isPast = playbackTime >= word.end
+                                    let isActive = lyricTrackingMode == .karaoke
+                                        && playbackTime >= word.start
+                                        && playbackTime < word.end
+                                    let isPast = lyricTrackingMode == .karaoke
+                                        && playbackTime >= word.end
                                     Text(word.text)
                                         .foregroundColor(
                                             isActive
@@ -866,6 +951,67 @@ struct SubtitlePreviewPlayer: View {
     }
 }
 
+private struct CenteredRevealPreview: View {
+    let words: [VideoProcessor.WordTimestamp]
+    let playbackTime: Double
+    let accent: Color
+
+    var body: some View {
+        (
+            Text(reveal.leading)
+                .foregroundColor(.white)
+            +
+            Text(reveal.latest)
+                .foregroundColor(accent)
+        )
+            .lineLimit(1)
+            .minimumScaleFactor(0.45)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .animation(.easeOut(duration: 0.09), value: reveal.full)
+    }
+
+    private var reveal: (leading: String, latest: String, full: String) {
+        var text = ""
+
+        for word in words {
+            let clean = word.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !clean.isEmpty else { continue }
+            guard playbackTime >= word.start else { break }
+
+            if !text.isEmpty {
+                text += " "
+            }
+
+            let characters = Array(clean)
+            let count: Int
+            if playbackTime >= word.end {
+                count = characters.count
+            } else {
+                let duration = max(0.05, word.end - word.start)
+                let progress = min(1, max(0, (playbackTime - word.start) / duration))
+                count = min(
+                    characters.count,
+                    max(1, Int(progress * Double(characters.count)) + 1)
+                )
+            }
+            text += String(characters.prefix(count))
+
+            if count < characters.count {
+                break
+            }
+        }
+
+        guard let latest = text.last else {
+            return ("", "", "")
+        }
+        return (
+            String(text.dropLast()),
+            String(latest),
+            text
+        )
+    }
+}
+
 private struct KineticPreviewLockup: View {
     let words: [VideoProcessor.WordTimestamp]
     let plan: KineticTypographyPlan
@@ -878,13 +1024,14 @@ private struct KineticPreviewLockup: View {
     let intensity: KineticIntensity
     let letterStyle: KineticLetterStyle
     let overlayStyle: KineticOverlayStyle
+    let trackingMode: LyricTrackingMode
 
-    private var activeIndex: Int? {
+    private var playbackIndex: Int? {
         words.firstIndex { playbackTime >= $0.start && playbackTime < $0.end }
     }
 
     private var focusedIndex: Int {
-        if let activeIndex { return activeIndex }
+        if let playbackIndex { return playbackIndex }
         if let past = words.lastIndex(where: { $0.start <= playbackTime }) { return past }
         return words.indices.contains(plan.emphasisIndex) ? plan.emphasisIndex : 0
     }
@@ -909,8 +1056,11 @@ private struct KineticPreviewLockup: View {
                     ForEach(rowItem.element, id: \.self) { index in
                         if words.indices.contains(index) {
                             let word = words[index]
-                            let isActive = playbackTime >= word.start && playbackTime < word.end
-                            let isPast = playbackTime >= word.end
+                            let isActive = trackingMode == .karaoke
+                                && playbackTime >= word.start
+                                && playbackTime < word.end
+                            let isPast = trackingMode == .karaoke
+                                && playbackTime >= word.end
                             let glyphDesign = VideoProcessor.shared.kineticGlyphDesign(
                                 text: word.text,
                                 wordIndex: index,
@@ -993,7 +1143,7 @@ private struct KineticPreviewLockup: View {
         )
         .background { groupOverlayBackground }
         .frame(maxWidth: .infinity, alignment: previewGroupAlignment)
-        .animation(.easeOut(duration: previewAnimationDuration), value: activeIndex)
+        .animation(.easeOut(duration: previewAnimationDuration), value: focusedIndex)
     }
 
     private var resolvedAccent: KineticResolvedColor {
@@ -1001,7 +1151,11 @@ private struct KineticPreviewLockup: View {
     }
 
     private var resolvedOverlay: KineticOverlayStyle {
-        overlayStyle.resolved(for: plan)
+        let resolved = overlayStyle.resolved(for: plan)
+        if trackingMode != .karaoke, resolved == .spotlight {
+            return .none
+        }
+        return resolved
     }
 
     private var groupOverlayHorizontalPadding: CGFloat {

@@ -667,6 +667,59 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(ass.filter { $0 == "{" }.count, ass.filter { $0 == "}" }.count)
     }
 
+    func testKineticTrackingCanBeDisabledWithoutDisablingTypographyMotion() {
+        let words = makeWords(["kara", "sevda", "içimde"])
+
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.4,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            style: .editorial,
+            lyricTrackingMode: .off
+        )
+
+        let regularWords = ass.components(separatedBy: "Dialogue: 2,").count - 1
+        let emphasizedWords = ass.components(separatedBy: "Dialogue: 3,").count - 1
+        XCTAssertEqual(regularWords + emphasizedWords, words.count)
+        XCTAssertFalse(ass.contains("\\alpha&HA0&"))
+        XCTAssertFalse(ass.contains("\\c&H2FCCFE&"))
+        XCTAssertTrue(ass.contains("\\move("))
+    }
+
+    func testCenteredRevealGrowsPrefixAndKeepsEveryEventAtSameCenter() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "AB", start: 0, end: 0.8),
+            VideoProcessor.WordTimestamp(text: "C", start: 1.0, end: 1.4)
+        ]
+
+        let ass = VideoProcessor.shared.makeCenteredRevealDialogues(
+            group: words,
+            segStart: 0,
+            segEnd: 1.6,
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080
+        )
+        let dialogues = ass
+            .split(separator: "\n")
+            .map(String.init)
+
+        XCTAssertEqual(dialogues.count, 3)
+        XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\an5\\pos(304,925)") })
+        XCTAssertTrue(dialogues[0].hasSuffix("}A"))
+        XCTAssertTrue(dialogues[1].contains("A{\\c&H"))
+        XCTAssertTrue(dialogues[1].hasSuffix("}B"))
+        XCTAssertTrue(dialogues[2].contains("AB {\\c&H"))
+        XCTAssertTrue(dialogues[2].hasSuffix("}C"))
+    }
+
     func testEditorialASSUsesAnimatedUnderlineInsteadOfRandomScaling() {
         let words = makeWords(["gecenin", "içinde", "seni", "aradım"])
 
@@ -951,6 +1004,7 @@ final class VideoProcessorTests: XCTestCase {
         let project = try JSONDecoder().decode(SavedProject.self, from: Data(json.utf8))
 
         XCTAssertNil(project.karaokeModu)
+        XCTAssertNil(project.sozTakibi)
         XCTAssertNil(project.kinetikStil)
         XCTAssertNil(project.kinetikVurgu)
         XCTAssertNil(project.kinetikOzelRenk)
@@ -959,6 +1013,7 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertNil(project.kinetikHarfStili)
         XCTAssertNil(project.kinetikOverlay)
         XCTAssertEqual(project.karaokeMode, .classic)
+        XCTAssertEqual(project.lyricTrackingMode, .karaoke)
         XCTAssertEqual(project.kineticStyle, .automatic)
         XCTAssertEqual(project.kineticAccent, .gold)
         XCTAssertEqual(project.kineticCustomColorHex, KineticAccent.defaultCustomHex)

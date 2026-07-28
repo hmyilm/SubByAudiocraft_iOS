@@ -10,6 +10,7 @@ struct EditWordsView: View {
     @Binding var fontSize: Double
     @Binding var marginV: Double
     @Binding var karaokeMode: KaraokeMode
+    @Binding var lyricTrackingMode: LyricTrackingMode
     @Binding var kineticStyle: KineticStyle
     @Binding var kineticAccent: KineticAccent
     @Binding var kineticCustomColorHex: String
@@ -56,6 +57,7 @@ struct EditWordsView: View {
                         playbackTime: playbackTime,
                         isMuted: false,
                         karaokeMode: karaokeMode,
+                        lyricTrackingMode: lyricTrackingMode,
                         kineticStyle: kineticStyle,
                         kineticAccent: kineticAccent,
                         kineticCustomColorHex: kineticCustomColorHex,
@@ -68,6 +70,7 @@ struct EditWordsView: View {
                     )
 
                     if karaokeMode == .kinetic,
+                       lyricTrackingMode != .centeredReveal,
                        let plan = previewPlan {
                         VStack(alignment: .leading, spacing: 3) {
                             Label(
@@ -87,15 +90,13 @@ struct EditWordsView: View {
                         }
                     }
 
-                    Label(
-                        "Vurgulanan kelime o anda söylenen bölümü gösterir; sesi dinleyerek zamanlamayı kontrol edebilirsin.",
-                        systemImage: "waveform"
-                    )
+                    Label(previewTrackingHint, systemImage: lyricTrackingMode.icon)
                     .font(.caption2)
                     .foregroundColor(.gray)
 
                     KaraokeModePicker(
                         selection: $karaokeMode,
+                        lyricTrackingMode: $lyricTrackingMode,
                         kineticStyle: $kineticStyle,
                         kineticAccent: $kineticAccent,
                         kineticCustomColorHex: $kineticCustomColorHex,
@@ -141,7 +142,8 @@ struct EditWordsView: View {
                         .foregroundColor(.gray)
                 }
 
-                if karaokeMode == .kinetic {
+                if karaokeMode == .kinetic,
+                   lyricTrackingMode != .centeredReveal {
                     VStack(alignment: .leading, spacing: 7) {
                         HStack {
                             Label("Vurgu Yönetmeni", systemImage: "star.circle.fill")
@@ -203,7 +205,8 @@ struct EditWordsView: View {
                             WordRow(
                                 word: $word,
                                 isExpanded: expandedWordID == word.id,
-                                showsEmphasis: karaokeMode == .kinetic,
+                                showsEmphasis: karaokeMode == .kinetic
+                                    && lyricTrackingMode != .centeredReveal,
                                 isEmphasis: kineticEmphasisWordIDs.contains(word.id),
                                 onToggleEmphasis: {
                                     toggleEmphasis(word.id)
@@ -249,6 +252,17 @@ struct EditWordsView: View {
             emphasisWordIDs: kineticEmphasisWordIDs
         )
         return plans[previewLineIndex]
+    }
+
+    private var previewTrackingHint: String {
+        switch lyricTrackingMode {
+        case .off:
+            return "Söz takibi kapalı; satır zamanlamasını sesi dinleyerek kontrol edebilirsin."
+        case .karaoke:
+            return "Vurgulanan kelime o anda söylenen bölümü gösterir."
+        case .centeredReveal:
+            return "Yeni harf vokalle gelir; büyüyen cümle merkezde kalırken önceki harfler sola kayar."
+        }
     }
 
     private func updatePreviewLine() {
