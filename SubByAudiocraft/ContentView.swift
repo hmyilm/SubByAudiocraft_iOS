@@ -24,6 +24,7 @@ struct ContentView: View {
     @State private var modelDownloadProgress: Double? = nil
     @State private var words: [VideoProcessor.WordTimestamp] = []
     @State private var lineBreaks: Set<UUID> = []
+    @State private var kineticEmphasisWordIDs: Set<UUID> = []
     @State private var videoURL: URL? = nil
     @State private var audioURL: URL? = nil
     @State private var pendingOutputURL: URL? = nil
@@ -91,7 +92,8 @@ struct ContentView: View {
                                 karaokeMode: karaokeModeBinding,
                                 kineticStyle: kineticStyleBinding,
                                 kineticAccent: kineticAccentBinding,
-                                kineticIntensity: kineticIntensityBinding
+                                kineticIntensity: kineticIntensityBinding,
+                                kineticEmphasisWordIDs: $kineticEmphasisWordIDs
                             )
                         case .processing:
                             ProcessingView(
@@ -154,6 +156,7 @@ struct ContentView: View {
         }
         .onChange(of: words) { _ in editorContentDidChange() }
         .onChange(of: lineBreaks) { _ in editorContentDidChange() }
+        .onChange(of: kineticEmphasisWordIDs) { _ in editorContentDidChange() }
         .onChange(of: fontName) { _ in editorContentDidChange() }
         .onChange(of: fontSize) { _ in editorContentDidChange() }
         .onChange(of: marginV) { _ in editorContentDidChange() }
@@ -462,6 +465,7 @@ struct ContentView: View {
                 self.modelDownloadProgress = nil
                 self.words = words
                 self.lineBreaks = VideoProcessor.shared.autoLineBreaks(for: words)
+                self.kineticEmphasisWordIDs = []
 
                 // Projeyi Geçmiş'e kaydet: video kalıcı proje klasörüne taşınır,
                 // player yeni adresle tazelenir.
@@ -477,7 +481,8 @@ struct ContentView: View {
                         karaokeModu: KaraokeMode.resolved(self.karaokeModeRaw),
                         kinetikStil: KineticStyle.resolved(self.kineticStyleRaw),
                         kinetikVurgu: KineticAccent.resolved(self.kineticAccentRaw),
-                        kinetikYogunluk: KineticIntensity.resolved(self.kineticIntensityRaw)
+                        kinetikYogunluk: KineticIntensity.resolved(self.kineticIntensityRaw),
+                        kinetikVurgular: self.kineticEmphasisWordIDs
                    ) {
                     self.currentProjectID = proje.id
                     let yeniURL = self.store.videoURL(proje)
@@ -538,6 +543,7 @@ struct ContentView: View {
                 kineticStyle: KineticStyle.resolved(kineticStyleRaw),
                 kineticAccent: KineticAccent.resolved(kineticAccentRaw),
                 kineticIntensity: KineticIntensity.resolved(kineticIntensityRaw),
+                kineticEmphasisWordIDs: kineticEmphasisWordIDs,
                 videoURL: url
             )
 
@@ -635,6 +641,7 @@ struct ContentView: View {
         self.selectedItem = nil
         self.words = []
         self.lineBreaks = []
+        self.kineticEmphasisWordIDs = []
         self.currentProjectID = nil
         self.currentStep = .selectVideo
         self.statusMessage = "Video Seçin"
@@ -688,6 +695,7 @@ struct ContentView: View {
             kinetikStil: KineticStyle.resolved(kineticStyleRaw),
             kinetikVurgu: KineticAccent.resolved(kineticAccentRaw),
             kinetikYogunluk: KineticIntensity.resolved(kineticIntensityRaw),
+            kinetikVurgular: kineticEmphasisWordIDs,
             disaAktarildi: exported
         )
     }
@@ -716,6 +724,7 @@ struct ContentView: View {
         player?.isMuted = true
         words = proje.kelimeler
         lineBreaks = Set(proje.satirSonlari)
+        kineticEmphasisWordIDs = proje.kineticEmphasisWordIDs
         if FontCatalog.secenek(proje.fontAdi) != nil { fontName = proje.fontAdi }
         fontSize = proje.fontBoyu
         marginV = proje.dikeyKonum

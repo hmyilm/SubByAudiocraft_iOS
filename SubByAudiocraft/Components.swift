@@ -581,6 +581,7 @@ private struct KineticPreviewLockup: View {
                                 .font(.custom(
                                     fontName,
                                     size: scaledFontSize(
+                                        wordIndex: index,
                                         rowIndex: rowItem.offset,
                                         row: rowItem.element
                                     )
@@ -654,7 +655,11 @@ private struct KineticPreviewLockup: View {
         }
     }
 
-    private func scaledFontSize(rowIndex: Int, row: [Int]) -> CGFloat {
+    private func scaledFontSize(
+        wordIndex: Int,
+        rowIndex: Int,
+        row: [Int]
+    ) -> CGFloat {
         let scale: Double
         switch plan.scene {
         case .phraseBuild:
@@ -672,7 +677,18 @@ private struct KineticPreviewLockup: View {
                 ? (rowIndex == plan.rows.count - 1 ? 1.04 : 0.82)
                 : 1.08
         }
-        return CGFloat(fontSize * scale) * (previewHeight / 1080.0)
+        let emphasisScale: Double
+        if wordIndex == plan.emphasisIndex {
+            switch plan.scene {
+            case .phraseBuild: emphasisScale = 1.10
+            case .captionWindow: emphasisScale = 1.08
+            case .chorusLockup: emphasisScale = 1.12
+            case .focusCut, .editorialStack, .impactSequence: emphasisScale = 1
+            }
+        } else {
+            emphasisScale = 1
+        }
+        return CGFloat(fontSize * scale * emphasisScale) * (previewHeight / 1080.0)
     }
 }
 

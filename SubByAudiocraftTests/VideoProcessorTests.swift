@@ -302,6 +302,41 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(impact.highlight, .glow)
     }
 
+    func testManualEmphasisOverridesSemanticChoiceWithoutChangingScene() {
+        let words = makeWords(["gecenin", "içinde", "seni", "aradım"])
+        let automatic = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            style: .editorial
+        )
+        let selected = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            style: .editorial,
+            emphasisWordID: words[1].id
+        )
+
+        XCTAssertEqual(selected.scene, automatic.scene)
+        XCTAssertEqual(selected.motion, automatic.motion)
+        XCTAssertEqual(selected.highlight, automatic.highlight)
+        XCTAssertEqual(selected.emphasisIndex, 1)
+        XCTAssertEqual(selected.rows, [[0], [1], [2, 3]])
+    }
+
+    func testSceneDirectorAppliesAtMostOnePersistedEmphasisPerLine() {
+        let first = makeWords(["gece", "yine", "seni", "aradım"])
+        let second = shiftedWords(makeWords(["dön", "artık", "bana"]), by: 1.7)
+        let selections: Set<UUID> = [first[1].id, first[3].id, second[2].id]
+
+        let plans = VideoProcessor.shared.kineticScenePlans(
+            for: [first, second],
+            emphasisWordIDs: selections
+        )
+
+        XCTAssertEqual(plans[0].emphasisIndex, 1)
+        XCTAssertEqual(plans[1].emphasisIndex, 2)
+    }
+
     func testKineticASSCreatesTimedLayerForEveryWord() {
         let words = [
             VideoProcessor.WordTimestamp(text: "kara", start: 0.2, end: 0.55),
@@ -438,6 +473,34 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertFalse(energetic.contains("\\frz"))
     }
 
+    func testManualEmphasisUsesReservedTypographyScaleWithoutDroppingWords() {
+        let words = makeWords(["bu", "gece", "seni", "aradım"])
+        let plan = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            emphasisWordID: words[1].id
+        )
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.7,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            scenePlan: plan
+        )
+
+        let regularWords = ass.components(separatedBy: "Dialogue: 2,").count - 1
+        let emphasizedWords = ass.components(separatedBy: "Dialogue: 3,").count - 1
+        XCTAssertEqual(regularWords + emphasizedWords, words.count)
+        XCTAssertEqual(emphasizedWords, 1)
+        XCTAssertTrue(ass.contains("\\fs79"))
+        XCTAssertFalse(ass.contains("\\frz"))
+    }
+
     func testUnknownAndLegacyKaraokeModesResolveToClassic() {
         XCTAssertEqual(KaraokeMode.resolved(nil), .classic)
         XCTAssertEqual(KaraokeMode.resolved("bilinmeyen"), .classic)
@@ -476,10 +539,12 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertNil(project.kinetikStil)
         XCTAssertNil(project.kinetikVurgu)
         XCTAssertNil(project.kinetikYogunluk)
+        XCTAssertNil(project.kinetikVurgular)
         XCTAssertEqual(project.karaokeMode, .classic)
         XCTAssertEqual(project.kineticStyle, .automatic)
         XCTAssertEqual(project.kineticAccent, .gold)
         XCTAssertEqual(project.kineticIntensity, .balanced)
+        XCTAssertTrue(project.kineticEmphasisWordIDs.isEmpty)
     }
 
     private func makeWords(_ texts: [String]) -> [VideoProcessor.WordTimestamp] {

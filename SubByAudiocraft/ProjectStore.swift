@@ -24,6 +24,8 @@ struct SavedProject: Identifiable, Codable {
     var kinetikVurgu: String?
     // Optional tutulur: eski projelerde 1.8.0 görünümü Dengeli olarak korunur.
     var kinetikYogunluk: String?
+    // Optional tutulur: seçilmemiş veya eski projelerde vurgu tamamen otomatik çözülür.
+    var kinetikVurgular: [UUID]?
     var videoDosyasi: String
     var disaAktarimSayisi: Int
 
@@ -41,6 +43,10 @@ struct SavedProject: Identifiable, Codable {
 
     var kineticIntensity: KineticIntensity {
         KineticIntensity.resolved(kinetikYogunluk)
+    }
+
+    var kineticEmphasisWordIDs: Set<UUID> {
+        Set(kinetikVurgular ?? [])
     }
 }
 
@@ -126,7 +132,8 @@ final class ProjectStore: ObservableObject {
                  karaokeModu: KaraokeMode,
                  kinetikStil: KineticStyle,
                  kinetikVurgu: KineticAccent,
-                 kinetikYogunluk: KineticIntensity) -> SavedProject? {
+                 kinetikYogunluk: KineticIntensity,
+                 kinetikVurgular: Set<UUID>) -> SavedProject? {
         let id = UUID()
         let fm = FileManager.default
         let hedefKlasor = klasor(id)
@@ -166,6 +173,9 @@ final class ProjectStore: ObservableObject {
             kinetikStil: kinetikStil.rawValue,
             kinetikVurgu: kinetikVurgu.rawValue,
             kinetikYogunluk: kinetikYogunluk.rawValue,
+            kinetikVurgular: kinetikVurgular.sorted {
+                $0.uuidString < $1.uuidString
+            },
             videoDosyasi: dosyaAdi,
             disaAktarimSayisi: 0
         )
@@ -200,6 +210,7 @@ final class ProjectStore: ObservableObject {
                   kinetikStil: KineticStyle,
                   kinetikVurgu: KineticAccent,
                   kinetikYogunluk: KineticIntensity,
+                  kinetikVurgular: Set<UUID>,
                   disaAktarildi: Bool) {
         guard let idx = projeler.firstIndex(where: { $0.id == id }) else { return }
         var proje = projeler[idx]
@@ -212,6 +223,9 @@ final class ProjectStore: ObservableObject {
         proje.kinetikStil = kinetikStil.rawValue
         proje.kinetikVurgu = kinetikVurgu.rawValue
         proje.kinetikYogunluk = kinetikYogunluk.rawValue
+        proje.kinetikVurgular = kinetikVurgular.sorted {
+            $0.uuidString < $1.uuidString
+        }
         proje.baslik = Self.baslikUret(kelimeler)
         proje.guncelleme = Date()
         if disaAktarildi { proje.disaAktarimSayisi += 1 }

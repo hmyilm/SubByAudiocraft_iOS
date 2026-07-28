@@ -799,7 +799,8 @@ class VideoProcessor: ObservableObject {
         for words: [WordTimestamp],
         lineIndex: Int,
         style: KineticStyle = .automatic,
-        repeatCount: Int = 1
+        repeatCount: Int = 1,
+        emphasisWordID: UUID? = nil
     ) -> KineticTypographyPlan {
         guard !words.isEmpty else {
             return KineticTypographyPlan(
@@ -820,7 +821,10 @@ class VideoProcessor: ObservableObject {
         let lineDuration = max(0.05, lineEnd - lineStart)
         let cadence = Double(words.count) / lineDuration
         let longestDuration = durations.max() ?? 0
-        let emphasisIndex = semanticEmphasisIndex(words: words, durations: durations)
+        let automaticEmphasisIndex = semanticEmphasisIndex(words: words, durations: durations)
+        let emphasisIndex = emphasisWordID
+            .flatMap { selectedID in words.firstIndex(where: { $0.id == selectedID }) }
+            ?? automaticEmphasisIndex
         let energy: KineticEnergy
         if cadence >= 3.4 {
             energy = .driving
@@ -943,7 +947,8 @@ class VideoProcessor: ObservableObject {
 
     func kineticScenePlans(
         for groups: [[WordTimestamp]],
-        style: KineticStyle = .automatic
+        style: KineticStyle = .automatic,
+        emphasisWordIDs: Set<UUID> = []
     ) -> [KineticTypographyPlan] {
         let keys = groups.map { kineticLineKey($0) }
         let frequencies = Dictionary(
@@ -957,11 +962,13 @@ class VideoProcessor: ObservableObject {
 
         for (index, group) in groups.enumerated() {
             let repeatCount = frequencies[keys[index], default: 1]
+            let emphasisWordID = group.first(where: { emphasisWordIDs.contains($0.id) })?.id
             let basePlan = kineticTypographyPlan(
                 for: group,
                 lineIndex: index,
                 style: style,
-                repeatCount: repeatCount
+                repeatCount: repeatCount,
+                emphasisWordID: emphasisWordID
             )
             var plan = basePlan
             let previousEnd = index > 0 ? groups[index - 1].last?.end : nil
@@ -1194,6 +1201,19 @@ class VideoProcessor: ObservableObject {
         }
     }
 
+    private func kineticEmphasisScale(
+        plan: KineticTypographyPlan,
+        wordIndex: Int
+    ) -> Double {
+        guard wordIndex == plan.emphasisIndex else { return 1 }
+        switch plan.scene {
+        case .phraseBuild: return 1.10
+        case .captionWindow: return 1.08
+        case .chorusLockup: return 1.12
+        case .focusCut, .editorialStack, .impactSequence: return 1
+        }
+    }
+
     private func kineticPlacements(
         cleaned: [(word: WordTimestamp, text: String)],
         plan: KineticTypographyPlan,
@@ -1262,8 +1282,17 @@ class VideoProcessor: ObservableObject {
             if plan.highlight == .pill {
                 spacing = max(spacing, Double(rowSize) * 0.30)
             }
-            var widths = row.map {
-                kineticWordWidth(text: cleaned[$0].text, fontName: fontName, fontSize: rowSize)
+            var wordSizes = row.map {
+                max(24, Int((
+                    Double(rowSize) * kineticEmphasisScale(plan: plan, wordIndex: $0)
+                ).rounded()))
+            }
+            var widths = row.enumerated().map { offset, wordIndex in
+                kineticWordWidth(
+                    text: cleaned[wordIndex].text,
+                    fontName: fontName,
+                    fontSize: wordSizes[offset]
+                )
             }
             var rowWidth = widths.reduce(0, +) + spacing * Double(max(0, row.count - 1))
 
@@ -1274,17 +1303,27 @@ class VideoProcessor: ObservableObject {
                     ? Double(rowSize) * 0.22
                     : 5
                 spacing = max(minimumSpacing, spacing * ratio)
-                widths = row.map {
-                    kineticWordWidth(text: cleaned[$0].text, fontName: fontName, fontSize: rowSize)
+                wordSizes = row.map {
+                    max(24, Int((
+                        Double(rowSize) * kineticEmphasisScale(plan: plan, wordIndex: $0)
+                    ).rounded(.down)))
+                }
+                widths = row.enumerated().map { offset, wordIndex in
+                    kineticWordWidth(
+                        text: cleaned[wordIndex].text,
+                        fontName: fontName,
+                        fontSize: wordSizes[offset]
+                    )
                 }
                 rowWidth = widths.reduce(0, +) + spacing * Double(max(0, row.count - 1))
             }
 
             var xCursor = (Double(virtualWidth) - rowWidth) / 2
             let rawY = firstY + Double(rowIndex) * rowGap
+            let tallestSize = wordSizes.max() ?? rowSize
             let y = Int(min(
-                Double(virtualHeight) - Double(rowSize) * 0.55 - 16,
-                max(Double(rowSize) * 0.55 + 16, rawY)
+                Double(virtualHeight) - Double(tallestSize) * 0.55 - 16,
+                max(Double(tallestSize) * 0.55 + 16, rawY)
             ).rounded())
 
             for (offset, wordIndex) in row.enumerated() {
@@ -1292,7 +1331,7 @@ class VideoProcessor: ObservableObject {
                 placements.append(KineticWordPlacement(
                     index: wordIndex,
                     rowIndex: rowIndex,
-                    fontSize: rowSize,
+                    fontSize: wordSizes[offset],
                     width: width,
                     x: Int((xCursor + width / 2).rounded()),
                     y: y
@@ -1631,6 +1670,7 @@ class VideoProcessor: ObservableObject {
         kineticStyle: KineticStyle = .automatic,
         kineticAccent: KineticAccent = .gold,
         kineticIntensity: KineticIntensity = .balanced,
+        kineticEmphasisWordIDs: Set<UUID> = [],
         videoURL: URL
     ) async -> URL? {
         let asset = AVAsset(url: videoURL)
@@ -1724,7 +1764,8 @@ class VideoProcessor: ObservableObject {
         }
         let kineticPlans = kineticScenePlans(
             for: rawSegs.map(\.group),
-            style: kineticStyle
+            style: kineticStyle,
+            emphasisWordIDs: kineticEmphasisWordIDs
         )
 
         var boundaries: [Double] = []

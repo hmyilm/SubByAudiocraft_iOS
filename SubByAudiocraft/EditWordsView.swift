@@ -13,6 +13,7 @@ struct EditWordsView: View {
     @Binding var kineticStyle: KineticStyle
     @Binding var kineticAccent: KineticAccent
     @Binding var kineticIntensity: KineticIntensity
+    @Binding var kineticEmphasisWordIDs: Set<UUID>
 
     @State private var expandedWordID: UUID? = nil
     @State private var previewLine: String = ""
@@ -106,6 +107,42 @@ struct EditWordsView: View {
                         .foregroundColor(.gray)
                 }
 
+                if karaokeMode == .kinetic {
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack {
+                            Label("Vurgu Yönetmeni", systemImage: "star.circle.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white)
+                            Spacer()
+                            if !kineticEmphasisWordIDs.isEmpty {
+                                Button {
+                                    Theme.haptic()
+                                    kineticEmphasisWordIDs.removeAll()
+                                } label: {
+                                    Text("Tümünü Otomatik Yap")
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundColor(Theme.yellow)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+
+                        Text("Bir kelimenin yıldızına dokunursan o satırın tipografik odağı olur. Seçim yapmazsan yönetmen anlam ve süreye göre otomatik karar verir.")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Theme.yellow.opacity(0.07))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Theme.yellow.opacity(0.22), lineWidth: 1)
+                    )
+                }
+
                 Button {
                     Theme.haptic()
                     let newWord = VideoProcessor.WordTimestamp(
@@ -132,6 +169,11 @@ struct EditWordsView: View {
                             WordRow(
                                 word: $word,
                                 isExpanded: expandedWordID == word.id,
+                                showsEmphasis: karaokeMode == .kinetic,
+                                isEmphasis: kineticEmphasisWordIDs.contains(word.id),
+                                onToggleEmphasis: {
+                                    toggleEmphasis(word.id)
+                                },
                                 onToggleExpand: {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         expandedWordID = (expandedWordID == word.id) ? nil : word.id
@@ -157,11 +199,21 @@ struct EditWordsView: View {
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
             updatePreviewLine()
         }
+        .onAppear {
+            normalizeEmphasisSelection()
+        }
+        .onChange(of: breaks) { _ in
+            normalizeEmphasisSelection()
+        }
     }
 
     private var previewPlan: KineticTypographyPlan? {
         guard lines.indices.contains(previewLineIndex) else { return nil }
-        let plans = VideoProcessor.shared.kineticScenePlans(for: lines, style: kineticStyle)
+        let plans = VideoProcessor.shared.kineticScenePlans(
+            for: lines,
+            style: kineticStyle,
+            emphasisWordIDs: kineticEmphasisWordIDs
+        )
         return plans[previewLineIndex]
     }
 
@@ -199,6 +251,7 @@ struct EditWordsView: View {
 
     private func deleteWord(_ id: UUID) {
         guard let index = words.firstIndex(where: { $0.id == id }) else { return }
+        kineticEmphasisWordIDs.remove(id)
         let endedLine = breaks.remove(id) != nil
         if endedLine, index > 0 {
             breaks.insert(words[index - 1].id)
@@ -206,12 +259,49 @@ struct EditWordsView: View {
         words.remove(at: index)
         if expandedWordID == id { expandedWordID = nil }
     }
+
+    private func toggleEmphasis(_ id: UUID) {
+        guard let line = lines.first(where: { group in group.contains(where: { $0.id == id }) }) else {
+            return
+        }
+        let wasSelected = kineticEmphasisWordIDs.contains(id)
+        kineticEmphasisWordIDs.subtract(Set(line.map(\.id)))
+        if !wasSelected {
+            kineticEmphasisWordIDs.insert(id)
+        }
+        Theme.haptic()
+        if let word = line.first(where: { $0.id == id }) {
+            player?.seek(
+                to: CMTime(seconds: max(0, word.start), preferredTimescale: 600),
+                toleranceBefore: .zero,
+                toleranceAfter: .zero
+            )
+        }
+    }
+
+    private func normalizeEmphasisSelection() {
+        let validIDs = Set(words.map(\.id))
+        var normalized = Set<UUID>()
+        for line in lines {
+            if let selected = line.first(where: {
+                validIDs.contains($0.id) && kineticEmphasisWordIDs.contains($0.id)
+            }) {
+                normalized.insert(selected.id)
+            }
+        }
+        if normalized != kineticEmphasisWordIDs {
+            kineticEmphasisWordIDs = normalized
+        }
+    }
 }
 
 // Tek kelime satırı: varsayılan sade görünüm; zaman çipine dokununca +/- kontrolleri açılır
 struct WordRow: View {
     @Binding var word: VideoProcessor.WordTimestamp
     let isExpanded: Bool
+    let showsEmphasis: Bool
+    let isEmphasis: Bool
+    let onToggleEmphasis: () -> Void
     let onToggleExpand: () -> Void
     let onDelete: () -> Void
 
@@ -227,6 +317,23 @@ struct WordRow: View {
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(Theme.field)
                     )
+
+                if showsEmphasis {
+                    Button(action: onToggleEmphasis) {
+                        Image(systemName: isEmphasis ? "star.fill" : "star")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(isEmphasis ? .black : Theme.yellow)
+                            .padding(7)
+                            .background(
+                                Circle()
+                                    .fill(isEmphasis ? Theme.yellow : Theme.field)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        isEmphasis ? "Manuel vurguyu kaldır" : "Bu kelimeyi vurgula"
+                    )
+                }
 
                 Button(action: onToggleExpand) {
                     HStack(spacing: 4) {
@@ -273,6 +380,10 @@ struct WordRow: View {
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(white: 0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(isEmphasis ? Theme.yellow.opacity(0.65) : Color.clear, lineWidth: 1)
         )
     }
 
