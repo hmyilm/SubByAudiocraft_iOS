@@ -156,46 +156,225 @@ struct StatusBanner: View {
     }
 }
 
-// MARK: - Yatay Kaydırmalı Font Seçici Çipleri
+private enum FontPickerFilter: String, CaseIterable, Identifiable {
+    case recommended
+    case modern
+    case poster
+    case serif
+    case handwriting
+    case all
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .recommended: return "Önerilen"
+        case .modern: return FontCategory.modern.title
+        case .poster: return FontCategory.poster.title
+        case .serif: return FontCategory.serif.title
+        case .handwriting: return FontCategory.handwriting.title
+        case .all: return "Tümü"
+        }
+    }
+}
+
+// MARK: - Küratörlü Font Seçici
 struct FontChipPicker: View {
     let fonts: [FontOption]
     @Binding var selection: String
+    let karaokeMode: KaraokeMode
+    let kineticStyle: KineticStyle
+
+    @State private var filter: FontPickerFilter = .recommended
+
+    init(
+        fonts: [FontOption],
+        selection: Binding<String>,
+        karaokeMode: KaraokeMode,
+        kineticStyle: KineticStyle
+    ) {
+        self.fonts = fonts
+        self._selection = selection
+        self.karaokeMode = karaokeMode
+        self.kineticStyle = kineticStyle
+    }
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(fonts) { font in
-                    let isSelected = font.psName == selection
-                    Button {
-                        Theme.haptic()
-                        selection = font.psName
-                    } label: {
-                        VStack(spacing: 4) {
-                            Text("Abc")
-                                .font(.custom(font.psName, size: 22))
-                                .foregroundColor(isSelected ? Theme.yellow : .white)
-                            Text(font.display)
-                                .font(.caption2)
-                                .foregroundColor(isSelected ? Theme.yellow : .gray)
-                                .lineLimit(1)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                Image(systemName: "textformat")
+                    .font(.caption)
+                    .foregroundColor(Theme.yellow)
+                Text("Font Kütüphanesi")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(.white)
+                Spacer()
+                Text("\(fonts.count) Türkçe uyumlu font")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 7) {
+                    ForEach(FontPickerFilter.allCases) { item in
+                        let isSelected = item == filter
+                        Button {
+                            Theme.haptic()
+                            filter = item
+                        } label: {
+                            Text(item.title)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(isSelected ? .black : .white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(
+                                    Capsule()
+                                        .fill(isSelected ? Theme.yellow : Color(white: 0.13))
+                                )
+                                .overlay(
+                                    Capsule()
+                                        .stroke(isSelected ? Color.clear : Theme.cardStroke, lineWidth: 1)
+                                )
                         }
-                        .frame(minWidth: 74)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 10)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color(white: isSelected ? 0.16 : 0.12))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(isSelected ? Theme.yellow : Theme.cardStroke, lineWidth: isSelected ? 1.5 : 1)
-                        )
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
             }
-            .padding(.vertical, 2)
+
+            if let best = recommendedFonts.first {
+                HStack(spacing: 9) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.caption)
+                        .foregroundColor(Theme.yellow)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(recommendationTitle)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(.white)
+                        Text(best.display)
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+                    }
+                    Spacer()
+                    Button {
+                        Theme.haptic()
+                        selection = best.psName
+                        filter = .recommended
+                    } label: {
+                        Text(selection == best.psName ? "Uygulandı" : "Uygula")
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(selection == best.psName ? .green : Theme.yellow)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.06))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selection == best.psName)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Theme.yellow.opacity(0.07))
+                )
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(visibleFonts) { font in
+                        fontButton(font)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
         }
+    }
+
+    private var recommendedFonts: [FontOption] {
+        let allowed = Set(fonts.map(\.psName))
+        return FontCatalog.onerilen(
+            karaokeMode: karaokeMode,
+            kineticStyle: kineticStyle
+        )
+        .filter { allowed.contains($0.psName) }
+    }
+
+    private var visibleFonts: [FontOption] {
+        let filtered: [FontOption]
+        switch filter {
+        case .recommended:
+            filtered = recommendedFonts
+        case .modern:
+            filtered = fonts.filter { $0.category == .modern }
+        case .poster:
+            filtered = fonts.filter { $0.category == .poster }
+        case .serif:
+            filtered = fonts.filter { $0.category == .serif }
+        case .handwriting:
+            filtered = fonts.filter { $0.category == .handwriting }
+        case .all:
+            filtered = fonts
+        }
+
+        guard
+            let selected = fonts.first(where: { $0.psName == selection }),
+            !filtered.contains(where: { $0.psName == selected.psName })
+        else {
+            return filtered
+        }
+
+        return [selected] + filtered
+    }
+
+    private var recommendationTitle: String {
+        if karaokeMode == .classic {
+            return "Klasik karaoke için güvenli başlangıç"
+        }
+        return "\(kineticStyle.title) yönetmen için ana font"
+    }
+
+    private func fontButton(_ font: FontOption) -> some View {
+        let isSelected = font.psName == selection
+        let isRecommended = recommendedFonts.contains { $0.psName == font.psName }
+
+        return Button {
+            Theme.haptic()
+            selection = font.psName
+        } label: {
+            VStack(spacing: 5) {
+                HStack(spacing: 4) {
+                    Text("AaŞ")
+                        .font(.custom(font.psName, size: 22))
+                        .foregroundColor(isSelected ? Theme.yellow : .white)
+                    if isRecommended {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(Theme.yellow)
+                    }
+                }
+                Text(font.display)
+                    .font(.caption2)
+                    .foregroundColor(isSelected ? Theme.yellow : .gray)
+                    .lineLimit(1)
+            }
+            .frame(minWidth: 84)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(white: isSelected ? 0.16 : 0.12))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(
+                        isSelected ? Theme.yellow : Theme.cardStroke,
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 }
 

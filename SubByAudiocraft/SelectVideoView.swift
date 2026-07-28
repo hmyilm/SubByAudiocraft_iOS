@@ -153,7 +153,12 @@ struct SelectVideoView: View {
                     )
                     Divider()
                         .overlay(Theme.cardStroke)
-                    FontChipPicker(fonts: fonts, selection: $fontName)
+                    FontChipPicker(
+                        fonts: fonts,
+                        selection: $fontName,
+                        karaokeMode: karaokeMode,
+                        kineticStyle: kineticStyle
+                    )
                     LabeledSlider(icon: "textformat.size", title: "Yazı Büyüklüğü", value: $fontSize, range: 30...150, step: 1)
                     LabeledSlider(icon: "arrow.up.and.down", title: "Dikey Konum", value: $marginV, range: 30...950, step: 5)
                 }

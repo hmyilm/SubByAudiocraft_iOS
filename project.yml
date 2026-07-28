@@ -10,13 +10,13 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "16.0"
-    version: 1.14.0
-    build: 38
+    version: 1.15.0
+    build: 39
     settings:
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       PRODUCT_BUNDLE_IDENTIFIER: com.hmyilm.SubByAudiocraft
-      MARKETING_VERSION: "1.14.0"
-      CURRENT_PROJECT_VERSION: "38"
+      MARKETING_VERSION: "1.15.0"
+      CURRENT_PROJECT_VERSION: "39"
     sources: [SubByAudiocraft]
     dependencies:
       - package: WhisperKit
@@ -29,10 +29,8 @@ targets:
           - BebasNeue-Regular.ttf
           - Lato-Bold.ttf
           - Pacifico-Regular.ttf
-          - PermanentMarker-Regular.ttf
           - Poppins-Bold.ttf
           - Lobster-Regular.ttf
-          - Creepster-Regular.ttf
           - AbrilFatface-Regular.ttf
           - AlfaSlabOne-Regular.ttf
           - Righteous-Regular.ttf
@@ -46,11 +44,18 @@ targets:
           - KaushanScript-Regular.ttf
           - MarckScript-Regular.ttf
           - Courgette-Regular.ttf
+          - Montserrat-ExtraBold.ttf
+          - ArchivoBlack-Regular.ttf
+          - LeagueSpartan-Bold.ttf
+          - Oswald-Bold.ttf
+          - PlayfairDisplay-Black.ttf
+          - SpaceMono-Bold.ttf
+          - Caveat-Bold.ttf
         UILaunchScreen: {}
         CFBundleIconName: AppIcon
         CFBundleDisplayName: Sub by Audiocraft
-        CFBundleShortVersionString: "1.14.0"
-        CFBundleVersion: "38"
+        CFBundleShortVersionString: "1.15.0"
+        CFBundleVersion: "39"
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

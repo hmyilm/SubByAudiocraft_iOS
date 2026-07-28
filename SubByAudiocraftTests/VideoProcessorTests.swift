@@ -998,3 +998,50 @@ final class VideoProcessorTests: XCTestCase {
         }
     }
 }
+
+final class FontCatalogTests: XCTestCase {
+    func testCatalogUsesUniquePostScriptNamesAndExcludesUnsafeLegacyFonts() {
+        let names = FontCatalog.hepsi.map(\.psName)
+
+        XCTAssertEqual(Set(names).count, names.count)
+        XCTAssertEqual(FontCatalog.gomulu.count, 27)
+        XCTAssertNil(FontCatalog.secenek("Creepster-Regular"))
+        XCTAssertNil(FontCatalog.secenek("PermanentMarker-Regular"))
+    }
+
+    func testEveryModeHasNonConnectedCuratedRecommendations() {
+        for mode in KaraokeMode.allCases {
+            for style in KineticStyle.allCases {
+                let recommendations = FontCatalog.onerilen(
+                    karaokeMode: mode,
+                    kineticStyle: style
+                )
+
+                XCTAssertFalse(recommendations.isEmpty, "\(mode.rawValue)/\(style.rawValue)")
+                XCTAssertTrue(recommendations.allSatisfy { !$0.bitisik })
+                XCTAssertTrue(
+                    recommendations.allSatisfy { FontCatalog.secenek($0.psName) != nil }
+                )
+            }
+        }
+    }
+
+    func testKineticDirectorsStartWithAFontMatchingTheirVisualIdentity() {
+        XCTAssertEqual(
+            FontCatalog.onerilen(karaokeMode: .kinetic, kineticStyle: .automatic).first?.psName,
+            "Montserrat-ExtraBold"
+        )
+        XCTAssertEqual(
+            FontCatalog.onerilen(karaokeMode: .kinetic, kineticStyle: .cinematic).first?.psName,
+            "PlayfairDisplayRoman-Black"
+        )
+        XCTAssertEqual(
+            FontCatalog.onerilen(karaokeMode: .kinetic, kineticStyle: .editorial).first?.psName,
+            "LeagueSpartan-Bold"
+        )
+        XCTAssertEqual(
+            FontCatalog.onerilen(karaokeMode: .kinetic, kineticStyle: .impact).first?.psName,
+            "ArchivoBlack-Regular"
+        )
+    }
+}

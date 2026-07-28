@@ -106,7 +106,12 @@ struct EditWordsView: View {
 
                     // Font burada da değiştirilebilir: Geçmiş'ten açılan projelerde
                     // 1. adıma (video seçme) dönüş yoktur, stilin tamamı bu ekrandan yönetilir.
-                    FontChipPicker(fonts: FontCatalog.hepsi, selection: $fontName)
+                    FontChipPicker(
+                        fonts: FontCatalog.hepsi,
+                        selection: $fontName,
+                        karaokeMode: karaokeMode,
+                        kineticStyle: kineticStyle
+                    )
 
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 12) {
