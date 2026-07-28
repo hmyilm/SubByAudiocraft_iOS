@@ -246,6 +246,35 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(plans[2].scene, .editorialStack)
     }
 
+    func testAutomaticDirectorNeverUsesPunchCutOnAdjacentLines() {
+        let first = makeRapidWords(["kal", "gitme", "yanımda", "bugece"], offset: 0)
+        let second = makeRapidWords(["ses", "ver", "duy", "beni"], offset: 0.95)
+        let third = makeRapidWords(["dön", "bana", "son", "kez"], offset: 1.90)
+
+        let plans = VideoProcessor.shared.kineticScenePlans(for: [first, second, third])
+
+        XCTAssertEqual(plans.map(\.motion), [.punchCut, .pagePop, .punchCut])
+        for pair in zip(plans, plans.dropFirst()) {
+            XCTAssertFalse(pair.0.motion == .punchCut && pair.1.motion == .punchCut)
+        }
+    }
+
+    func testAutomaticDirectorAddsBreathingSceneAfterLongFlowRun() {
+        let groups = [
+            shiftedWords(makeWords(["gece", "yine", "seni", "aradım"]), by: 0),
+            shiftedWords(makeWords(["sessiz", "sokak", "bana", "kaldı"]), by: 1.7),
+            shiftedWords(makeWords(["gözlerin", "uzakta", "yanar", "hâlâ"]), by: 3.4),
+            shiftedWords(makeWords(["kalbim", "adını", "söyler", "durur"]), by: 5.1)
+        ]
+
+        let plans = VideoProcessor.shared.kineticScenePlans(for: groups)
+
+        XCTAssertEqual(
+            plans.map(\.scene),
+            [.editorialStack, .captionWindow, .captionWindow, .phraseBuild]
+        )
+    }
+
     func testManualKineticStylesProduceCoherentSceneFamilies() {
         let words = makeWords(["gecenin", "içinde", "seni", "aradım"])
 
@@ -375,6 +404,40 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(plan.highlight, .underline)
     }
 
+    func testKineticIntensityChangesMotionStrengthAndActivePulse() {
+        let words = makeWords(["bu", "gece", "seni", "aradım"])
+        let subtle = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.7,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            intensity: .subtle
+        )
+        let energetic = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.7,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            intensity: .energetic
+        )
+
+        XCTAssertNotEqual(subtle, energetic)
+        XCTAssertTrue(subtle.contains("\\fscx102\\fscy102"))
+        XCTAssertTrue(energetic.contains("\\fscx109\\fscy109"))
+        XCTAssertFalse(subtle.contains("\\frz"))
+        XCTAssertFalse(energetic.contains("\\frz"))
+    }
+
     func testUnknownAndLegacyKaraokeModesResolveToClassic() {
         XCTAssertEqual(KaraokeMode.resolved(nil), .classic)
         XCTAssertEqual(KaraokeMode.resolved("bilinmeyen"), .classic)
@@ -385,6 +448,9 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(KineticAccent.resolved(nil), .gold)
         XCTAssertEqual(KineticAccent.resolved("bilinmeyen"), .gold)
         XCTAssertEqual(KineticAccent.resolved("mint"), .mint)
+        XCTAssertEqual(KineticIntensity.resolved(nil), .balanced)
+        XCTAssertEqual(KineticIntensity.resolved("bilinmeyen"), .balanced)
+        XCTAssertEqual(KineticIntensity.resolved("energetic"), .energetic)
     }
 
     func testLegacyProjectWithoutKaraokeModeDecodesAsClassic() throws {
@@ -409,9 +475,11 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertNil(project.karaokeModu)
         XCTAssertNil(project.kinetikStil)
         XCTAssertNil(project.kinetikVurgu)
+        XCTAssertNil(project.kinetikYogunluk)
         XCTAssertEqual(project.karaokeMode, .classic)
         XCTAssertEqual(project.kineticStyle, .automatic)
         XCTAssertEqual(project.kineticAccent, .gold)
+        XCTAssertEqual(project.kineticIntensity, .balanced)
     }
 
     private func makeWords(_ texts: [String]) -> [VideoProcessor.WordTimestamp] {
@@ -431,6 +499,16 @@ final class VideoProcessorTests: XCTestCase {
                 start: $0.start + offset,
                 end: $0.end + offset
             )
+        }
+    }
+
+    private func makeRapidWords(
+        _ texts: [String],
+        offset: Double
+    ) -> [VideoProcessor.WordTimestamp] {
+        texts.enumerated().map { index, text in
+            let start = offset + (Double(index) * 0.2)
+            return VideoProcessor.WordTimestamp(text: text, start: start, end: start + 0.16)
         }
     }
 }

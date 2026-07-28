@@ -12,6 +12,7 @@ struct EditWordsView: View {
     @Binding var karaokeMode: KaraokeMode
     @Binding var kineticStyle: KineticStyle
     @Binding var kineticAccent: KineticAccent
+    @Binding var kineticIntensity: KineticIntensity
 
     @State private var expandedWordID: UUID? = nil
     @State private var previewLine: String = ""
@@ -53,6 +54,7 @@ struct EditWordsView: View {
                         karaokeMode: karaokeMode,
                         kineticStyle: kineticStyle,
                         kineticAccent: kineticAccent,
+                        kineticIntensity: kineticIntensity,
                         kineticLineIndex: previewLineIndex,
                         kineticRepeatCount: previewPlan?.repeatCount ?? 1,
                         kineticScenePlan: previewPlan
@@ -68,7 +70,8 @@ struct EditWordsView: View {
                     KaraokeModePicker(
                         selection: $karaokeMode,
                         kineticStyle: $kineticStyle,
-                        kineticAccent: $kineticAccent
+                        kineticAccent: $kineticAccent,
+                        kineticIntensity: $kineticIntensity
                     )
 
                     // Font burada da değiştirilebilir: Geçmiş'ten açılan projelerde

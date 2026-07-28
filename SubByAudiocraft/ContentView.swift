@@ -39,6 +39,7 @@ struct ContentView: View {
     @AppStorage("subtitle.karaokeMode") private var karaokeModeRaw: String = KaraokeMode.classic.rawValue
     @AppStorage("subtitle.kineticStyle") private var kineticStyleRaw: String = KineticStyle.automatic.rawValue
     @AppStorage("subtitle.kineticAccent") private var kineticAccentRaw: String = KineticAccent.gold.rawValue
+    @AppStorage("subtitle.kineticIntensity") private var kineticIntensityRaw: String = KineticIntensity.balanced.rawValue
     @AppStorage("analysis.quality") private var analysisQualityRaw: String = AnalysisQuality.balanced.rawValue
 
     // Geçmiş (kaydedilmiş projeler): analizden sonra proje otomatik kaydedilir,
@@ -72,6 +73,7 @@ struct ContentView: View {
                                 karaokeMode: karaokeModeBinding,
                                 kineticStyle: kineticStyleBinding,
                                 kineticAccent: kineticAccentBinding,
+                                kineticIntensity: kineticIntensityBinding,
                                 analysisQuality: analysisQualityBinding,
                                 isLoadingVideo: isLoadingVideo,
                                 fonts: FontCatalog.hepsi
@@ -88,7 +90,8 @@ struct ContentView: View {
                                 marginV: $marginV,
                                 karaokeMode: karaokeModeBinding,
                                 kineticStyle: kineticStyleBinding,
-                                kineticAccent: kineticAccentBinding
+                                kineticAccent: kineticAccentBinding,
+                                kineticIntensity: kineticIntensityBinding
                             )
                         case .processing:
                             ProcessingView(
@@ -126,6 +129,7 @@ struct ContentView: View {
             karaokeModeRaw = KaraokeMode.resolved(karaokeModeRaw).rawValue
             kineticStyleRaw = KineticStyle.resolved(kineticStyleRaw).rawValue
             kineticAccentRaw = KineticAccent.resolved(kineticAccentRaw).rawValue
+            kineticIntensityRaw = KineticIntensity.resolved(kineticIntensityRaw).rawValue
             VideoProcessor.shared.cleanupStaleTemporaryFiles()
         }
         .sheet(isPresented: $showHistory) {
@@ -156,6 +160,7 @@ struct ContentView: View {
         .onChange(of: karaokeModeRaw) { _ in editorContentDidChange() }
         .onChange(of: kineticStyleRaw) { _ in editorContentDidChange() }
         .onChange(of: kineticAccentRaw) { _ in editorContentDidChange() }
+        .onChange(of: kineticIntensityRaw) { _ in editorContentDidChange() }
         .onChange(of: scenePhase) { phase in
             if phase != .active {
                 autosaveWorkItem?.cancel()
@@ -327,6 +332,13 @@ struct ContentView: View {
         )
     }
 
+    private var kineticIntensityBinding: Binding<KineticIntensity> {
+        Binding(
+            get: { KineticIntensity.resolved(kineticIntensityRaw) },
+            set: { kineticIntensityRaw = $0.rawValue }
+        )
+    }
+
     // MARK: - İş Mantığı
 
     // Galeriden seçilen videoyu kopyalayıp player'a yerleştirir
@@ -464,7 +476,8 @@ struct ContentView: View {
                         dikeyKonum: self.marginV,
                         karaokeModu: KaraokeMode.resolved(self.karaokeModeRaw),
                         kinetikStil: KineticStyle.resolved(self.kineticStyleRaw),
-                        kinetikVurgu: KineticAccent.resolved(self.kineticAccentRaw)
+                        kinetikVurgu: KineticAccent.resolved(self.kineticAccentRaw),
+                        kinetikYogunluk: KineticIntensity.resolved(self.kineticIntensityRaw)
                    ) {
                     self.currentProjectID = proje.id
                     let yeniURL = self.store.videoURL(proje)
@@ -524,6 +537,7 @@ struct ContentView: View {
                 karaokeMode: KaraokeMode.resolved(karaokeModeRaw),
                 kineticStyle: KineticStyle.resolved(kineticStyleRaw),
                 kineticAccent: KineticAccent.resolved(kineticAccentRaw),
+                kineticIntensity: KineticIntensity.resolved(kineticIntensityRaw),
                 videoURL: url
             )
 
@@ -673,6 +687,7 @@ struct ContentView: View {
             karaokeModu: KaraokeMode.resolved(karaokeModeRaw),
             kinetikStil: KineticStyle.resolved(kineticStyleRaw),
             kinetikVurgu: KineticAccent.resolved(kineticAccentRaw),
+            kinetikYogunluk: KineticIntensity.resolved(kineticIntensityRaw),
             disaAktarildi: exported
         )
     }
@@ -707,6 +722,7 @@ struct ContentView: View {
         karaokeModeRaw = proje.karaokeMode.rawValue
         kineticStyleRaw = proje.kineticStyle.rawValue
         kineticAccentRaw = proje.kineticAccent.rawValue
+        kineticIntensityRaw = proje.kineticIntensity.rawValue
         currentProjectID = proje.id
         selectedItem = nil
 

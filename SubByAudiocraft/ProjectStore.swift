@@ -22,6 +22,8 @@ struct SavedProject: Identifiable, Codable {
     var kinetikStil: String?
     // Optional tutulur: eski projeler uygulamanın özgün altın vurgu rengiyle açılır.
     var kinetikVurgu: String?
+    // Optional tutulur: eski projelerde 1.8.0 görünümü Dengeli olarak korunur.
+    var kinetikYogunluk: String?
     var videoDosyasi: String
     var disaAktarimSayisi: Int
 
@@ -35,6 +37,10 @@ struct SavedProject: Identifiable, Codable {
 
     var kineticAccent: KineticAccent {
         KineticAccent.resolved(kinetikVurgu)
+    }
+
+    var kineticIntensity: KineticIntensity {
+        KineticIntensity.resolved(kinetikYogunluk)
     }
 }
 
@@ -119,7 +125,8 @@ final class ProjectStore: ObservableObject {
                  dikeyKonum: Double,
                  karaokeModu: KaraokeMode,
                  kinetikStil: KineticStyle,
-                 kinetikVurgu: KineticAccent) -> SavedProject? {
+                 kinetikVurgu: KineticAccent,
+                 kinetikYogunluk: KineticIntensity) -> SavedProject? {
         let id = UUID()
         let fm = FileManager.default
         let hedefKlasor = klasor(id)
@@ -158,6 +165,7 @@ final class ProjectStore: ObservableObject {
             karaokeModu: karaokeModu.rawValue,
             kinetikStil: kinetikStil.rawValue,
             kinetikVurgu: kinetikVurgu.rawValue,
+            kinetikYogunluk: kinetikYogunluk.rawValue,
             videoDosyasi: dosyaAdi,
             disaAktarimSayisi: 0
         )
@@ -191,6 +199,7 @@ final class ProjectStore: ObservableObject {
                   karaokeModu: KaraokeMode,
                   kinetikStil: KineticStyle,
                   kinetikVurgu: KineticAccent,
+                  kinetikYogunluk: KineticIntensity,
                   disaAktarildi: Bool) {
         guard let idx = projeler.firstIndex(where: { $0.id == id }) else { return }
         var proje = projeler[idx]
@@ -202,6 +211,7 @@ final class ProjectStore: ObservableObject {
         proje.karaokeModu = karaokeModu.rawValue
         proje.kinetikStil = kinetikStil.rawValue
         proje.kinetikVurgu = kinetikVurgu.rawValue
+        proje.kinetikYogunluk = kinetikYogunluk.rawValue
         proje.baslik = Self.baslikUret(kelimeler)
         proje.guncelleme = Date()
         if disaAktarildi { proje.disaAktarimSayisi += 1 }
