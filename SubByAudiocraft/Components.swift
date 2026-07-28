@@ -198,6 +198,47 @@ struct FontChipPicker: View {
     }
 }
 
+// MARK: - Karaoke / Kinetik Tipografi Modu
+struct KaraokeModePicker: View {
+    @Binding var selection: KaraokeMode
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 7) {
+                Image(systemName: "textformat.alt")
+                    .font(.caption)
+                    .foregroundColor(Theme.yellow)
+                Text("Yazı Hareketi")
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+            }
+
+            Picker("Yazı Hareketi", selection: $selection) {
+                ForEach(KaraokeMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text(selection.detail)
+                .font(.caption)
+                .foregroundColor(.gray)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if selection == .kinetic {
+                Label(
+                    "Her satırın temposu ve güçlü kelimesi analiz edilir; sonuç rastgele değil, parçaya bağlıdır.",
+                    systemImage: "sparkles"
+                )
+                .font(.caption2)
+                .foregroundColor(Theme.yellow.opacity(0.9))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
 // MARK: - İkonlu Slider Satırı
 struct LabeledSlider: View {
     let icon: String
@@ -236,6 +277,8 @@ struct SubtitlePreviewPlayer: View {
     let karaokeWords: [VideoProcessor.WordTimestamp]
     let playbackTime: Double
     let isMuted: Bool
+    let karaokeMode: KaraokeMode
+    let kineticLineIndex: Int
 
     init(
         player: AVPlayer?,
@@ -246,7 +289,9 @@ struct SubtitlePreviewPlayer: View {
         height: CGFloat,
         karaokeWords: [VideoProcessor.WordTimestamp] = [],
         playbackTime: Double = 0,
-        isMuted: Bool = true
+        isMuted: Bool = true,
+        karaokeMode: KaraokeMode = .classic,
+        kineticLineIndex: Int = 0
     ) {
         self.player = player
         self.fontName = fontName
@@ -257,6 +302,8 @@ struct SubtitlePreviewPlayer: View {
         self.karaokeWords = karaokeWords
         self.playbackTime = playbackTime
         self.isMuted = isMuted
+        self.karaokeMode = karaokeMode
+        self.kineticLineIndex = kineticLineIndex
     }
 
     var body: some View {
@@ -277,27 +324,114 @@ struct SubtitlePreviewPlayer: View {
                 if !karaokeWords.isEmpty || !sampleText.isEmpty {
                     Group {
                         if karaokeWords.isEmpty {
-                            Text(sampleText)
-                                .foregroundColor(.white)
+                            if karaokeMode == .kinetic {
+                                let sampleWords = sampleText
+                                    .split(whereSeparator: \.isWhitespace)
+                                    .map(String.init)
+                                let timingWords = sampleWords.enumerated().map { index, text in
+                                    VideoProcessor.WordTimestamp(
+                                        text: text,
+                                        start: Double(index) * 0.35,
+                                        end: (Double(index) * 0.35) + 0.3
+                                    )
+                                }
+                                let plan = VideoProcessor.shared.kineticTypographyPlan(
+                                    for: timingWords,
+                                    lineIndex: 0
+                                )
+
+                                HStack(spacing: max(2, geo.size.height / 100)) {
+                                    ForEach(Array(sampleWords.enumerated()), id: \.offset) { item in
+                                        Text(item.element)
+                                            .font(.custom(
+                                                fontName,
+                                                size: previewFontSize(
+                                                    scale: plan.scales.indices.contains(item.offset)
+                                                        ? plan.scales[item.offset]
+                                                        : 1,
+                                                    previewHeight: geo.size.height
+                                                )
+                                            ))
+                                            .foregroundColor(
+                                                item.offset == plan.emphasisIndex ? Theme.yellow : .white
+                                            )
+                                            .rotationEffect(.degrees(
+                                                plan.rotations.indices.contains(item.offset)
+                                                    ? plan.rotations[item.offset]
+                                                    : 0
+                                            ))
+                                            .offset(y: previewOffset(
+                                                factor: plan.verticalOffsets.indices.contains(item.offset)
+                                                    ? plan.verticalOffsets[item.offset]
+                                                    : 0,
+                                                previewHeight: geo.size.height
+                                            ))
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: previewAlignment(plan.composition))
+                            } else {
+                                Text(sampleText)
+                                    .foregroundColor(.white)
+                            }
                         } else {
+                            let plan = VideoProcessor.shared.kineticTypographyPlan(
+                                for: karaokeWords,
+                                lineIndex: kineticLineIndex
+                            )
                             HStack(spacing: max(2, geo.size.height / 100)) {
-                                ForEach(karaokeWords) { word in
+                                ForEach(Array(karaokeWords.enumerated()), id: \.element.id) { item in
+                                    let index = item.offset
+                                    let word = item.element
                                     let isActive = playbackTime >= word.start && playbackTime < word.end
                                     let isPast = playbackTime >= word.end
                                     Text(word.text)
+                                        .font(.custom(
+                                            fontName,
+                                            size: previewFontSize(
+                                                scale: karaokeMode == .kinetic && plan.scales.indices.contains(index)
+                                                    ? plan.scales[index]
+                                                    : 1,
+                                                previewHeight: geo.size.height
+                                            )
+                                        ))
                                         .foregroundColor(
                                             isActive
                                                 ? Theme.yellow
-                                                : (isPast ? .white.opacity(0.35) : .white)
+                                                : (
+                                                    isPast
+                                                        ? .white.opacity(0.35)
+                                                        : (
+                                                            karaokeMode == .kinetic && index == plan.emphasisIndex
+                                                                ? Theme.yellow.opacity(0.95)
+                                                                : .white
+                                                        )
+                                                )
                                         )
-                                        .scaleEffect(isActive ? 1.08 : 1)
+                                        .scaleEffect(isActive ? (karaokeMode == .kinetic ? 1.05 : 1.08) : 1)
+                                        .rotationEffect(.degrees(
+                                            karaokeMode == .kinetic && plan.rotations.indices.contains(index)
+                                                ? plan.rotations[index]
+                                                : 0
+                                        ))
+                                        .offset(y: previewOffset(
+                                            factor: karaokeMode == .kinetic && plan.verticalOffsets.indices.contains(index)
+                                                ? plan.verticalOffsets[index]
+                                                : 0,
+                                            previewHeight: geo.size.height
+                                        ))
                                         .shadow(
                                             color: isActive ? Theme.yellow.opacity(0.45) : .clear,
                                             radius: isActive ? 4 : 0
                                         )
+                                    }
                                 }
+                                .frame(
+                                    maxWidth: .infinity,
+                                    alignment: karaokeMode == .kinetic
+                                        ? previewAlignment(plan.composition)
+                                        : .center
+                                )
                             }
-                        }
                     }
                         .font(.custom(fontName, size: CGFloat(fontSize) * (geo.size.height / 1080.0)))
                         .lineLimit(1)
@@ -305,7 +439,11 @@ struct SubtitlePreviewPlayer: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(karaokeWords.isEmpty ? Color.black.opacity(0.6) : Color.clear)
+                        .background(
+                            karaokeWords.isEmpty && karaokeMode == .classic
+                                ? Color.black.opacity(0.6)
+                                : Color.clear
+                        )
                         .shadow(color: karaokeWords.isEmpty ? .clear : .black.opacity(0.9), radius: 2)
                         .cornerRadius(6)
                         .padding(.bottom, CGFloat(marginV) * (geo.size.height / 1080.0))
@@ -316,5 +454,21 @@ struct SubtitlePreviewPlayer: View {
         .background(Color.black)
         .cornerRadius(14)
         .clipped()
+    }
+
+    private func previewFontSize(scale: Double, previewHeight: CGFloat) -> CGFloat {
+        CGFloat(fontSize * min(max(scale, 0.78), 1.34)) * (previewHeight / 1080.0)
+    }
+
+    private func previewOffset(factor: Double, previewHeight: CGFloat) -> CGFloat {
+        CGFloat(factor * fontSize) * (previewHeight / 1080.0)
+    }
+
+    private func previewAlignment(_ composition: KineticComposition) -> Alignment {
+        switch composition {
+        case .editorialLeft: return .leading
+        case .editorialRight: return .trailing
+        default: return .center
+        }
     }
 }

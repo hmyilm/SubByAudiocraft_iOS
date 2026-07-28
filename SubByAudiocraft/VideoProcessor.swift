@@ -63,6 +63,51 @@ enum AnalysisQuality: String, CaseIterable, Identifiable {
     }
 }
 
+enum KaraokeMode: String, CaseIterable, Identifiable, Codable {
+    case classic
+    case kinetic
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .classic: return "Klasik"
+        case .kinetic: return "Kinetik"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .classic:
+            return "Okunaklı satır düzeni ve harf harf karaoke takibi."
+        case .kinetic:
+            return "Vokal temposu ve anlam vurgusuna göre boyut, kompozisyon ve hareket üretir."
+        }
+    }
+
+    static func resolved(_ rawValue: String?) -> KaraokeMode {
+        guard let rawValue else { return .classic }
+        return KaraokeMode(rawValue: rawValue) ?? .classic
+    }
+}
+
+enum KineticComposition: String, Equatable {
+    case statement
+    case editorialLeft
+    case editorialRight
+    case wave
+    case rhythmic
+    case sustain
+}
+
+struct KineticTypographyPlan: Equatable {
+    let composition: KineticComposition
+    let emphasisIndex: Int
+    let scales: [Double]
+    let verticalOffsets: [Double]
+    let rotations: [Double]
+}
+
 class VideoProcessor: ObservableObject {
     static let shared = VideoProcessor()
     
@@ -575,6 +620,126 @@ class VideoProcessor: ObservableObject {
         return prepared
     }
 
+    // Kinetik mod rastgele efekt seçmez. Satırdaki vokal hızı, uzatılan kelimeler ve
+    // Türkçe anlam taşıyan sözcükler değerlendirilerek sınırlı bir tasarım dilinden
+    // deterministik bir kompozisyon çıkarılır. Aynı söz ve zamanlama her dışa aktarımda
+    // aynı sonucu üretir; böylece proje ön izlemesi ile çıktı arasında sürpriz olmaz.
+    func kineticTypographyPlan(for words: [WordTimestamp], lineIndex: Int) -> KineticTypographyPlan {
+        guard !words.isEmpty else {
+            return KineticTypographyPlan(
+                composition: .statement,
+                emphasisIndex: 0,
+                scales: [],
+                verticalOffsets: [],
+                rotations: []
+            )
+        }
+
+        let durations = words.map { max(0.05, $0.end - $0.start) }
+        let lineStart = words.first?.start ?? 0
+        let lineEnd = words.last?.end ?? lineStart + 0.05
+        let lineDuration = max(0.05, lineEnd - lineStart)
+        let cadence = Double(words.count) / lineDuration
+        let longestDuration = durations.max() ?? 0
+        let emphasisIndex = semanticEmphasisIndex(words: words, durations: durations)
+
+        let composition: KineticComposition
+        if words.count <= 2 {
+            composition = .statement
+        } else if cadence >= 3.4 {
+            composition = .rhythmic
+        } else if longestDuration >= 0.72 {
+            composition = .sustain
+        } else {
+            switch abs(lineIndex) % 3 {
+            case 0: composition = .editorialLeft
+            case 1: composition = .wave
+            default: composition = .editorialRight
+            }
+        }
+
+        let count = words.count
+        let center = Double(count - 1) / 2
+        var scales = Array(repeating: 1.0, count: count)
+        var verticalOffsets = Array(repeating: 0.0, count: count)
+        var rotations = Array(repeating: 0.0, count: count)
+
+        for index in 0..<count {
+            let progress = count == 1 ? 0.5 : Double(index) / Double(count - 1)
+            let centerDistance = count == 1 ? 0 : abs(Double(index) - center) / max(1, center)
+
+            switch composition {
+            case .statement:
+                scales[index] = index == emphasisIndex ? 1.34 : 0.90
+                verticalOffsets[index] = index == emphasisIndex ? -0.06 : 0.08
+                rotations[index] = index == emphasisIndex ? 0 : (index.isMultiple(of: 2) ? -1.2 : 1.2)
+            case .editorialLeft:
+                scales[index] = 0.82 + (progress * 0.28)
+                verticalOffsets[index] = 0.10 - (progress * 0.17)
+                rotations[index] = -1.8 + (progress * 2.4)
+            case .editorialRight:
+                scales[index] = 1.10 - (progress * 0.28)
+                verticalOffsets[index] = -0.07 + (progress * 0.17)
+                rotations[index] = 0.7 - (progress * 2.4)
+            case .wave:
+                scales[index] = 1.12 - (centerDistance * 0.22)
+                verticalOffsets[index] = index.isMultiple(of: 2) ? -0.08 : 0.08
+                rotations[index] = index.isMultiple(of: 2) ? -1.4 : 1.4
+            case .rhythmic:
+                scales[index] = index.isMultiple(of: 2) ? 0.88 : 1.10
+                verticalOffsets[index] = index.isMultiple(of: 2) ? 0.07 : -0.07
+                rotations[index] = index.isMultiple(of: 2) ? -2.2 : 2.2
+            case .sustain:
+                scales[index] = index == emphasisIndex ? 1.30 : 0.88
+                verticalOffsets[index] = index == emphasisIndex ? -0.10 : 0.05
+                rotations[index] = index == emphasisIndex ? 0 : (progress - 0.5) * 2
+            }
+        }
+
+        // Her kompozisyonda yalnız bir ana vurgu vardır. Bu kural, her kelimenin aynı
+        // anda bağırdığı amatör görünümü engeller ve cümleye okunabilir bir hiyerarşi verir.
+        scales[emphasisIndex] = max(scales[emphasisIndex], composition == .rhythmic ? 1.22 : 1.20)
+
+        return KineticTypographyPlan(
+            composition: composition,
+            emphasisIndex: emphasisIndex,
+            scales: scales.map { min(max($0, 0.78), 1.34) },
+            verticalOffsets: verticalOffsets.map { min(max($0, -0.12), 0.12) },
+            rotations: rotations.map { min(max($0, -2.5), 2.5) }
+        )
+    }
+
+    private func semanticEmphasisIndex(words: [WordTimestamp], durations: [Double]) -> Int {
+        let stopWords = Set([
+            "acaba", "ama", "ancak", "artık", "aslında", "az", "bazı", "belki",
+            "ben", "beni", "benim", "bir", "biz", "bu", "bunu", "da", "daha",
+            "de", "diye", "en", "gibi", "hem", "hep", "her", "için", "ile",
+            "ise", "ki", "kim", "mi", "mı", "mu", "mü", "ne", "o", "sen",
+            "seni", "senin", "şey", "ve", "veya", "ya"
+        ])
+        let locale = Locale(identifier: "tr_TR")
+        var bestIndex = 0
+        var bestScore = -Double.greatestFiniteMagnitude
+
+        for (index, word) in words.enumerated() {
+            let normalized = word.text
+                .lowercased(with: locale)
+                .trimmingCharacters(in: .punctuationCharacters.union(.whitespacesAndNewlines))
+            let letterCount = normalized.unicodeScalars.filter {
+                CharacterSet.letters.contains($0)
+            }.count
+            let duration = durations.indices.contains(index) ? durations[index] : 0.05
+            let stopWordPenalty = stopWords.contains(normalized) ? 12.0 : 0
+            let score = (Double(letterCount) * 1.8) + (min(duration, 1.5) * 3.2) - stopWordPenalty
+
+            if score > bestScore {
+                bestScore = score
+                bestIndex = index
+            }
+        }
+        return bestIndex
+    }
+
     // Satır genişliği ekrana taşarsa tüm yazıyı yatay olarak ezmek yerine fontu
     // orantılı küçültür. Normal satırlarda istenen boyut aynen korunur.
     func fittedFontSize(requested: Int, measuredWidth: Double, maximumWidth: Double) -> Int {
@@ -587,9 +752,199 @@ class VideoProcessor: ObservableObject {
         return max(24, min(safeRequested, scaled))
     }
 
+    private func cleanASSWord(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "\\", with: "")
+            .replacingOccurrences(of: "{", with: "")
+            .replacingOccurrences(of: "}", with: "")
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func kineticWordWidth(text: String, fontName: String, fontSize: Int) -> Double {
+        if let measured = harfSinirlariniOlc(
+            metin: text,
+            fontName: fontName,
+            assFontSize: fontSize
+        )?.genislik, measured.isFinite, measured > 0 {
+            return measured
+        }
+        // CoreText nadiren fontu çözemediğinde de kompozisyon taşmasın. Bu yalnız
+        // yerleşim yedeğidir; dışa aktarımda libass gerçek gömülü fontu kullanır.
+        return max(Double(fontSize) * 0.55, Double(text.count) * Double(fontSize) * 0.55)
+    }
+
+    private func kineticEntranceScale(for composition: KineticComposition, wordIndex: Int, emphasis: Bool) -> Int {
+        if emphasis { return composition == .sustain ? 78 : 72 }
+        switch composition {
+        case .statement: return 88
+        case .editorialLeft: return 80 + min(10, wordIndex * 3)
+        case .editorialRight: return 112 - min(12, wordIndex * 3)
+        case .wave: return wordIndex.isMultiple(of: 2) ? 82 : 92
+        case .rhythmic: return wordIndex.isMultiple(of: 2) ? 76 : 116
+        case .sustain: return 92
+        }
+    }
+
+    private func kineticWholeLineTags(plan: KineticTypographyPlan) -> String {
+        let initialScale: Int
+        let initialRotation: Int
+        switch plan.composition {
+        case .statement:
+            initialScale = 84
+            initialRotation = 0
+        case .editorialLeft:
+            initialScale = 90
+            initialRotation = -2
+        case .editorialRight:
+            initialScale = 108
+            initialRotation = 2
+        case .wave:
+            initialScale = 88
+            initialRotation = -1
+        case .rhythmic:
+            initialScale = 78
+            initialRotation = 2
+        case .sustain:
+            initialScale = 94
+            initialRotation = 0
+        }
+        return "\\fad(100,120)\\fscx\(initialScale)\\fscy\(initialScale)\\frz\(initialRotation)\\blur1.1" +
+            "\\t(0,240,1.8,\\fscx100\\fscy100\\frz0\\blur0.25)"
+    }
+
+    // İç erişim, gerçek ASS üretiminin regresyon testlerinde doğrulanabilmesi içindir.
+    func makeKineticDialogues(
+        group: [WordTimestamp],
+        lineIndex: Int,
+        segStart: Double,
+        segEnd: Double,
+        fontName: String,
+        requestedFontSize: Int,
+        marginV: Int,
+        virtualWidth: Int,
+        virtualHeight: Int
+    ) -> String {
+        let cleaned: [(word: WordTimestamp, text: String)] = group.compactMap { word in
+            let text = cleanASSWord(word.text)
+            return text.isEmpty ? nil : (word, text)
+        }
+        guard !cleaned.isEmpty else { return "" }
+
+        let plan = kineticTypographyPlan(for: cleaned.map { $0.word }, lineIndex: lineIndex)
+        let safeWidth = Double(virtualWidth) * (
+            plan.composition == .editorialLeft || plan.composition == .editorialRight ? 0.84 : 0.92
+        )
+        let baseSize = max(24, requestedFontSize)
+        var spacing = max(8.0, Double(baseSize) * 0.13)
+
+        var sizes = plan.scales.map { max(24, Int((Double(baseSize) * $0).rounded())) }
+        var widths = zip(cleaned, sizes).map { item in
+            kineticWordWidth(text: item.0.text, fontName: fontName, fontSize: item.1)
+        }
+        var totalWidth = widths.reduce(0, +) + (spacing * Double(max(0, cleaned.count - 1)))
+
+        if totalWidth > safeWidth {
+            let ratio = safeWidth / totalWidth
+            sizes = sizes.map { max(24, Int((Double($0) * ratio).rounded(.down))) }
+            spacing = max(6, spacing * ratio)
+            widths = zip(cleaned, sizes).map { item in
+                kineticWordWidth(text: item.0.text, fontName: fontName, fontSize: item.1)
+            }
+            totalWidth = widths.reduce(0, +) + (spacing * Double(max(0, cleaned.count - 1)))
+        }
+
+        let horizontalInset = Double(virtualWidth) * 0.06
+        let startX: Double
+        switch plan.composition {
+        case .editorialLeft:
+            startX = horizontalInset
+        case .editorialRight:
+            startX = Double(virtualWidth) - horizontalInset - totalWidth
+        default:
+            startX = (Double(virtualWidth) - totalWidth) / 2
+        }
+
+        let safeBaseline = min(
+            Double(virtualHeight) - 30,
+            max(Double(baseSize) + 30, Double(virtualHeight - marginV))
+        )
+        let eventDurationMs = max(200, Int((segEnd - segStart) * 1000))
+        var xCursor = max(20, startX)
+        var result = ""
+
+        for index in cleaned.indices {
+            let item = cleaned[index]
+            let size = sizes[index]
+            let width = widths[index]
+            let x = Int((xCursor + width / 2).rounded())
+            let offset = plan.verticalOffsets.indices.contains(index) ? plan.verticalOffsets[index] : 0
+            let rawY = (
+                safeBaseline - (Double(size) * 0.40) + (offset * Double(baseSize))
+            )
+            let halfHeight = Double(size) * 0.52
+            let y = Int(min(
+                Double(virtualHeight) - halfHeight - 18,
+                max(halfHeight + 18, rawY)
+            ).rounded())
+            let rotation = plan.rotations.indices.contains(index) ? plan.rotations[index] : 0
+            let emphasis = index == plan.emphasisIndex
+            let color = emphasis ? "2FCCFE" : "FFFFFF" // ASS renk sırası: BGR
+            let entranceScale = kineticEntranceScale(
+                for: plan.composition,
+                wordIndex: index,
+                emphasis: emphasis
+            )
+            let entryStart = min(110, index * 30)
+            let entryEnd = min(eventDurationMs, entryStart + (plan.composition == .sustain ? 300 : 210))
+            let wordStartMs = min(
+                eventDurationMs,
+                max(0, Int((max(segStart, item.word.start) - segStart) * 1000))
+            )
+            let impactStart = max(entryEnd, wordStartMs - 35)
+            let impactPeak = min(eventDurationMs, max(impactStart + 50, wordStartMs + 75))
+            let impactEnd = min(eventDurationMs, max(impactPeak + 70, wordStartMs + 180))
+            let impactScale = emphasis ? 108 : 104
+
+            var text = ""
+            let characters = Array(item.text)
+            let letterDuration = max(0.01, (item.word.end - item.word.start) / Double(max(1, characters.count)))
+            for (characterIndex, character) in characters.enumerated() {
+                let characterStart = item.word.start + (Double(characterIndex) * letterDuration)
+                let characterEnd = item.word.start + (Double(characterIndex + 1) * letterDuration)
+                let startMs = min(eventDurationMs, max(0, Int((characterStart - segStart) * 1000)))
+                let rawEndMs = min(eventDurationMs, max(startMs + 20, Int((characterEnd - segStart) * 1000)))
+                let fadeEnd = min(eventDurationMs, max(startMs + 20, min(rawEndMs, startMs + 100)))
+                text += "{\\alpha&H00&\\t(\(startMs),\(fadeEnd),\\alpha&HA0&)}\(character)"
+            }
+
+            var tags = "{\\an5\\pos(\(x),\(y))\\fs\(size)\\c&H\(color)&\\fad(90,120)"
+            tags += "\\fscx\(entranceScale)\\fscy\(entranceScale)\\frz\(String(format: "%.1f", rotation))\\blur1.2"
+            tags += "\\t(\(entryStart),\(entryEnd),1.8,\\fscx100\\fscy100\\frz0\\blur0.25)"
+            if impactEnd > impactStart {
+                tags += "\\t(\(impactStart),\(impactPeak),2,\\fscx\(impactScale)\\fscy\(impactScale))"
+                tags += "\\t(\(impactPeak),\(impactEnd),1.4,\\fscx100\\fscy100)"
+            }
+            tags += "}"
+
+            let layer = emphasis ? 1 : 0
+            result += "Dialogue: \(layer),\(formatASSTime(segStart)),\(formatASSTime(segEnd)),Default,,0,0,0,,\(tags)\(text)\n"
+            xCursor += width + spacing
+        }
+        return result
+    }
+
     // 3. ASS Altyazı Dosyası Oluşturma (iOS 16+ uyumlu asenkron yapı)
     // lineBreaks: kullanıcının onayladığı satır sonları (boşsa otomatik öneri kullanılır)
-    func generateASS(words: [WordTimestamp], lineBreaks: Set<UUID>, fontName: String, fontSize: Int, marginV: Int, videoURL: URL) async -> URL? {
+    func generateASS(
+        words: [WordTimestamp],
+        lineBreaks: Set<UUID>,
+        fontName: String,
+        fontSize: Int,
+        marginV: Int,
+        karaokeMode: KaraokeMode = .classic,
+        videoURL: URL
+    ) async -> URL? {
         let asset = AVAsset(url: videoURL)
         
         // Modern async API'ler ile video izlerini yükleme
@@ -721,7 +1076,36 @@ class VideoProcessor: ObservableObject {
                 maximumWidth: maximumLineWidth
             )
 
-            var effectText = "{\\fs\(lineFontSize)}"   // normal fontlar: tek katman; bitişik fontlarda yedek üst katman
+            // Normal fontlarda Kinetik mod her kelimeyi bağımsız bir tipografi katmanı
+            // olarak yerleştirir. Böylece yalnız font boyutu değil, satır hiyerarşisi,
+            // vurgu, mikro hareket ve ritim de kelime zamanına bağlanır.
+            if karaokeMode == .kinetic && !bitisikFont {
+                assContent += makeKineticDialogues(
+                    group: seg.group,
+                    lineIndex: index,
+                    segStart: segStart,
+                    segEnd: segEnd,
+                    fontName: fontName,
+                    requestedFontSize: fontSize,
+                    marginV: marginV,
+                    virtualWidth: virtualWidth,
+                    virtualHeight: virtualHeight
+                )
+                continue
+            }
+
+            // Bitişik el yazısı fontlarında kelimeyi ayrı katmanlara bölmek harf bağlarını
+            // bozabilir. Bu fontlarda mevcut kusursuz süpürme korunur, kinetik mod yalnız
+            // bütün satıra kontrollü bir giriş hareketi uygular.
+            let lineMotionTags: String
+            if karaokeMode == .kinetic {
+                let plan = kineticTypographyPlan(for: seg.group, lineIndex: index)
+                lineMotionTags = kineticWholeLineTags(plan: plan)
+            } else {
+                lineMotionTags = ""
+            }
+
+            var effectText = "{\\fs\(lineFontSize)\(lineMotionTags)}"   // normal fontlar: tek katman; bitişik fontlarda yedek üst katman
             var plainText = ""    // bitişik fontlar: etiketsiz tam satır metni
             var harfZamanlar: [(sonUTF16: Int, s: Int, e: Int)] = []  // süpürme sınırı için harf zamanları
             var utf16Pos = 0
@@ -785,12 +1169,12 @@ class VideoProcessor: ObservableObject {
                         tags += "\\t(\(s),\(e),\\clip(\(x),0,\(virtualWidth),\(virtualHeight)))"
                     }
                     tags += "}"
-                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\\alpha&HA0&}\(metin)\n"
-                    assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)}\(tags)\(metin)\n"
+                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)\\alpha&HA0&}\(metin)\n"
+                    assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)}\(tags)\(metin)\n"
                 } else {
                     // Ölçüm yapılamadı veya satır ekrana sığmayıp sarılacak: yedek yöntem
                     // (altta bitişik soluk kopya + üstte harf harf eriyen opak kopya)
-                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\\alpha&HA0&}\(metin)\n"
+                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)\\alpha&HA0&}\(metin)\n"
                     assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,\(effectText)\n"
                 }
             } else {

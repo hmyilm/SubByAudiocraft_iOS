@@ -96,6 +96,11 @@ struct HistoryView: View {
 
                 HStack(spacing: 6) {
                     Text("\(proje.kelimeler.count) kelime")
+                    Text("•")
+                    Label(
+                        proje.karaokeMode.title,
+                        systemImage: proje.karaokeMode == .kinetic ? "sparkles" : "captions.bubble"
+                    )
                     if proje.disaAktarimSayisi > 0 {
                         Text("•")
                         Text("\(proje.disaAktarimSayisi) kez dışa aktarıldı")

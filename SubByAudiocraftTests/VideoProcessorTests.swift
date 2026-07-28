@@ -143,6 +143,120 @@ final class VideoProcessorTests: XCTestCase {
         )
     }
 
+    func testKineticPlanSelectsMeaningfulWordInsteadOfTurkishStopWord() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "ve", start: 0.0, end: 0.4),
+            VideoProcessor.WordTimestamp(text: "kara", start: 0.4, end: 0.8),
+            VideoProcessor.WordTimestamp(text: "sevdanın", start: 0.8, end: 1.3)
+        ]
+
+        let plan = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 0)
+
+        XCTAssertEqual(plan.emphasisIndex, 2)
+        XCTAssertGreaterThanOrEqual(plan.scales[2], 1.2)
+    }
+
+    func testKineticPlanUsesStatementForShortPhrase() {
+        let words = makeWords(["kara", "sevda"])
+
+        let plan = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 4)
+
+        XCTAssertEqual(plan.composition, .statement)
+        XCTAssertEqual(plan.scales.count, words.count)
+    }
+
+    func testKineticPlanRespondsToFastVocalCadence() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "bir", start: 0.00, end: 0.16),
+            VideoProcessor.WordTimestamp(text: "anda", start: 0.17, end: 0.32),
+            VideoProcessor.WordTimestamp(text: "yandım", start: 0.33, end: 0.49),
+            VideoProcessor.WordTimestamp(text: "sana", start: 0.50, end: 0.68)
+        ]
+
+        let plan = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 1)
+
+        XCTAssertEqual(plan.composition, .rhythmic)
+    }
+
+    func testKineticPlanRespondsToSustainedVocal() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "gece", start: 0.0, end: 0.3),
+            VideoProcessor.WordTimestamp(text: "bana", start: 0.4, end: 0.7),
+            VideoProcessor.WordTimestamp(text: "kal", start: 0.8, end: 1.7)
+        ]
+
+        let plan = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 2)
+
+        XCTAssertEqual(plan.composition, .sustain)
+    }
+
+    func testKineticPlanIsDeterministicAndKeepsTastefulBounds() {
+        let words = makeWords(["gecenin", "içinde", "seni", "aradım"])
+
+        let first = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 7)
+        let second = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 7)
+
+        XCTAssertEqual(first, second)
+        XCTAssertTrue(first.scales.allSatisfy { (0.78...1.34).contains($0) })
+        XCTAssertTrue(first.rotations.allSatisfy { (-2.5...2.5).contains($0) })
+        XCTAssertGreaterThan(Set(first.scales).count, 1)
+    }
+
+    func testKineticASSCreatesTimedLayerForEveryWord() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 0.2, end: 0.55),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 0.6, end: 1.0),
+            VideoProcessor.WordTimestamp(text: "yakıyor", start: 1.05, end: 1.65)
+        ]
+
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.9,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080
+        )
+
+        XCTAssertEqual(ass.components(separatedBy: "Dialogue:").count - 1, words.count)
+        XCTAssertTrue(ass.contains("\\an5\\pos("))
+        XCTAssertTrue(ass.contains("\\c&H2FCCFE&"))
+        XCTAssertTrue(ass.contains("\\t("))
+        XCTAssertEqual(ass.filter { $0 == "{" }.count, ass.filter { $0 == "}" }.count)
+    }
+
+    func testUnknownAndLegacyKaraokeModesResolveToClassic() {
+        XCTAssertEqual(KaraokeMode.resolved(nil), .classic)
+        XCTAssertEqual(KaraokeMode.resolved("bilinmeyen"), .classic)
+        XCTAssertEqual(KaraokeMode.resolved("kinetic"), .kinetic)
+    }
+
+    func testLegacyProjectWithoutKaraokeModeDecodesAsClassic() throws {
+        let json = """
+        {
+          "id": "\(UUID().uuidString)",
+          "olusturma": 0,
+          "guncelleme": 0,
+          "baslik": "Eski Proje",
+          "kelimeler": [],
+          "satirSonlari": [],
+          "fontAdi": "Anton-Regular",
+          "fontBoyu": 70,
+          "dikeyKonum": 120,
+          "videoDosyasi": "video.mp4",
+          "disaAktarimSayisi": 0
+        }
+        """
+
+        let project = try JSONDecoder().decode(SavedProject.self, from: Data(json.utf8))
+
+        XCTAssertNil(project.karaokeModu)
+        XCTAssertEqual(project.karaokeMode, .classic)
+    }
+
     private func makeWords(_ texts: [String]) -> [VideoProcessor.WordTimestamp] {
         texts.enumerated().map { index, text in
             let start = Double(index) * 0.4

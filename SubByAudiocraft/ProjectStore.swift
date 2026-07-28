@@ -15,8 +15,15 @@ struct SavedProject: Identifiable, Codable {
     var fontAdi: String
     var fontBoyu: Double
     var dikeyKonum: Double
+    // Optional tutulur: 1.6.0 öncesi proje.json dosyalarında bu alan yoktur.
+    // Eksik değer her zaman Klasik olarak çözülerek eski projelerin görünümü korunur.
+    var karaokeModu: String?
     var videoDosyasi: String
     var disaAktarimSayisi: Int
+
+    var karaokeMode: KaraokeMode {
+        KaraokeMode.resolved(karaokeModu)
+    }
 }
 
 // Projeleri Documents/Projeler/<uuid>/ klasörlerinde saklar:
@@ -97,7 +104,8 @@ final class ProjectStore: ObservableObject {
                  satirSonlari: Set<UUID>,
                  fontAdi: String,
                  fontBoyu: Double,
-                 dikeyKonum: Double) -> SavedProject? {
+                 dikeyKonum: Double,
+                 karaokeModu: KaraokeMode) -> SavedProject? {
         let id = UUID()
         let fm = FileManager.default
         let hedefKlasor = klasor(id)
@@ -133,6 +141,7 @@ final class ProjectStore: ObservableObject {
             fontAdi: fontAdi,
             fontBoyu: fontBoyu,
             dikeyKonum: dikeyKonum,
+            karaokeModu: karaokeModu.rawValue,
             videoDosyasi: dosyaAdi,
             disaAktarimSayisi: 0
         )
@@ -163,6 +172,7 @@ final class ProjectStore: ObservableObject {
                   fontAdi: String,
                   fontBoyu: Double,
                   dikeyKonum: Double,
+                  karaokeModu: KaraokeMode,
                   disaAktarildi: Bool) {
         guard let idx = projeler.firstIndex(where: { $0.id == id }) else { return }
         var proje = projeler[idx]
@@ -171,6 +181,7 @@ final class ProjectStore: ObservableObject {
         proje.fontAdi = fontAdi
         proje.fontBoyu = fontBoyu
         proje.dikeyKonum = dikeyKonum
+        proje.karaokeModu = karaokeModu.rawValue
         proje.baslik = Self.baslikUret(kelimeler)
         proje.guncelleme = Date()
         if disaAktarildi { proje.disaAktarimSayisi += 1 }

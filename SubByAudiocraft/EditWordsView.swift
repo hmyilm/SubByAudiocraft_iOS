@@ -9,10 +9,12 @@ struct EditWordsView: View {
     @Binding var fontName: String
     @Binding var fontSize: Double
     @Binding var marginV: Double
+    @Binding var karaokeMode: KaraokeMode
 
     @State private var expandedWordID: UUID? = nil
     @State private var previewLine: String = ""
     @State private var previewWords: [VideoProcessor.WordTimestamp] = []
+    @State private var previewLineIndex: Int = 0
     @State private var playbackTime: Double = 0
 
     private var lines: [[VideoProcessor.WordTimestamp]] {
@@ -45,7 +47,9 @@ struct EditWordsView: View {
                         height: 200,
                         karaokeWords: previewWords,
                         playbackTime: playbackTime,
-                        isMuted: false
+                        isMuted: false,
+                        karaokeMode: karaokeMode,
+                        kineticLineIndex: previewLineIndex
                     )
 
                     Label(
@@ -54,6 +58,8 @@ struct EditWordsView: View {
                     )
                     .font(.caption2)
                     .foregroundColor(.gray)
+
+                    KaraokeModePicker(selection: $karaokeMode)
 
                     // Font burada da değiştirilebilir: Geçmiş'ten açılan projelerde
                     // 1. adıma (video seçme) dönüş yoktur, stilin tamamı bu ekrandan yönetilir.
@@ -155,15 +161,20 @@ struct EditWordsView: View {
             return
         }
         playbackTime = t
-        if let line = lines.first(where: { group in
+        if let match = lines.enumerated().first(where: { item in
+            let group = item.element
             guard let first = group.first, let last = group.last else { return false }
             return t >= first.start - 0.2 && t <= last.end + 0.2
         }) {
+            let index = match.offset
+            let line = match.element
             previewLine = line.map { $0.text }.joined(separator: " ")
             previewWords = line
+            previewLineIndex = index
         } else {
             previewLine = ""
             previewWords = []
+            previewLineIndex = 0
         }
     }
 
