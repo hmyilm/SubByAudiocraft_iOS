@@ -69,6 +69,7 @@ enum FontCatalog {
         FontOption(psName: "Pacifico-Regular", display: "Pacifico", assFamily: "Pacifico", kalin: false, category: .handwriting, bitisik: true),
         FontOption(psName: "Lobster-Regular", display: "Lobster", assFamily: "Lobster", kalin: false, category: .handwriting, bitisik: true),
         FontOption(psName: "GreatVibes-Regular", display: "Great Vibes", assFamily: "Great Vibes", kalin: false, category: .handwriting, bitisik: true),
+        FontOption(psName: "PetitFormalScript-Regular", display: "Petit Formal Script", assFamily: "Petit Formal Script", kalin: false, category: .handwriting, bitisik: true),
         FontOption(psName: "Allura-Regular", display: "Allura", assFamily: "Allura", kalin: false, category: .handwriting, bitisik: true),
         FontOption(psName: "Sacramento-Regular", display: "Sacramento", assFamily: "Sacramento", kalin: false, category: .handwriting, bitisik: true),
         FontOption(psName: "Parisienne-Regular", display: "Parisienne", assFamily: "Parisienne", kalin: false, category: .handwriting, bitisik: true),

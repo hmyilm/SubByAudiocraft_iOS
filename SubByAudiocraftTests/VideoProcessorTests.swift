@@ -821,6 +821,154 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertTrue(dialogues[2].hasSuffix("}C"))
     }
 
+    func testCenteredWordRevealAddsWholeWordsAndRecentersEveryEvent() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "Kara", start: 0.2, end: 0.7),
+            VideoProcessor.WordTimestamp(text: "Sevda", start: 0.9, end: 1.5),
+            VideoProcessor.WordTimestamp(text: "İçimde", start: 1.7, end: 2.3)
+        ]
+
+        let ass = VideoProcessor.shared.makeCenteredWordRevealDialogues(
+            group: words,
+            segStart: 0.1,
+            segEnd: 2.6,
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080,
+            accent: .coral
+        )
+        let dialogues = ass
+            .split(separator: "\n")
+            .map(String.init)
+
+        XCTAssertEqual(dialogues.count, words.count)
+        XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\an5\\pos(304,925)") })
+        XCTAssertTrue(dialogues[0].hasSuffix("}Kara"))
+        XCTAssertTrue(dialogues[1].contains("Kara {\\c&H"))
+        XCTAssertTrue(dialogues[1].hasSuffix("}Sevda"))
+        XCTAssertTrue(dialogues[2].contains("Kara Sevda {\\c&H"))
+        XCTAssertTrue(dialogues[2].hasSuffix("}İçimde"))
+        XCTAssertFalse(dialogues.contains { $0.hasSuffix("}K") || $0.hasSuffix("}Ka") })
+    }
+
+    func testEveryTrackingModeHasAFunctionalRenderingPath() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 0.1, end: 0.55),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 0.65, end: 1.15),
+            VideoProcessor.WordTimestamp(text: "içimde", start: 1.25, end: 1.85)
+        ]
+
+        for mode in LyricTrackingMode.allCases {
+            let output: String
+            switch mode {
+            case .centeredReveal:
+                output = VideoProcessor.shared.makeCenteredRevealDialogues(
+                    group: words,
+                    segStart: 0,
+                    segEnd: 2,
+                    fontSize: 70,
+                    marginV: 120,
+                    virtualWidth: 608,
+                    virtualHeight: 1080
+                )
+            case .centeredWordReveal:
+                output = VideoProcessor.shared.makeCenteredWordRevealDialogues(
+                    group: words,
+                    segStart: 0,
+                    segEnd: 2,
+                    fontSize: 70,
+                    marginV: 120,
+                    virtualWidth: 608,
+                    virtualHeight: 1080
+                )
+            case .off, .karaoke:
+                output = VideoProcessor.shared.makeKineticDialogues(
+                    group: words,
+                    lineIndex: 0,
+                    segStart: 0,
+                    segEnd: 2,
+                    fontName: "Anton-Regular",
+                    requestedFontSize: 70,
+                    marginV: 120,
+                    virtualWidth: 608,
+                    virtualHeight: 1080,
+                    lyricTrackingMode: mode
+                )
+            }
+
+            XCTAssertFalse(output.isEmpty, "\(mode.title) çıktı üretmedi")
+            XCTAssertTrue(output.contains("Dialogue:"), "\(mode.title) ASS diyaloğu üretmedi")
+            XCTAssertFalse(output.lowercased().contains("nan"))
+        }
+    }
+
+    func testEveryKineticOptionCombinationProducesValidASS() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 0.1, end: 0.55),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 0.65, end: 1.15),
+            VideoProcessor.WordTimestamp(text: "içimde", start: 1.25, end: 1.85)
+        ]
+
+        for style in KineticStyle.allCases {
+            for intensity in KineticIntensity.allCases {
+                for letterStyle in KineticLetterStyle.allCases {
+                    for overlayStyle in KineticOverlayStyle.allCases {
+                        for trackingMode in [LyricTrackingMode.off, .karaoke] {
+                            let ass = VideoProcessor.shared.makeKineticDialogues(
+                                group: words,
+                                lineIndex: 0,
+                                segStart: 0,
+                                segEnd: 2,
+                                fontName: "Anton-Regular",
+                                requestedFontSize: 70,
+                                marginV: 120,
+                                virtualWidth: 608,
+                                virtualHeight: 1080,
+                                style: style,
+                                accent: .gold,
+                                intensity: intensity,
+                                letterStyle: letterStyle,
+                                overlayStyle: overlayStyle,
+                                lyricTrackingMode: trackingMode
+                            )
+
+                            XCTAssertFalse(
+                                ass.isEmpty,
+                                "\(style.title)/\(intensity.title)/\(letterStyle.title)/\(overlayStyle.title)/\(trackingMode.title)"
+                            )
+                            XCTAssertTrue(ass.contains("Dialogue:"))
+                            XCTAssertFalse(ass.lowercased().contains("nan"))
+                            XCTAssertFalse(ass.lowercased().contains("infinity"))
+                        }
+                    }
+                }
+            }
+        }
+
+        for accent in KineticAccent.allCases {
+            let ass = VideoProcessor.shared.makeKineticDialogues(
+                group: words,
+                lineIndex: 0,
+                segStart: 0,
+                segEnd: 2,
+                fontName: "Anton-Regular",
+                requestedFontSize: 70,
+                marginV: 120,
+                virtualWidth: 608,
+                virtualHeight: 1080,
+                style: .automatic,
+                accent: accent,
+                customColorHex: "#31A7FF",
+                intensity: .balanced,
+                letterStyle: .automatic,
+                overlayStyle: .automatic,
+                lyricTrackingMode: .karaoke
+            )
+            XCTAssertFalse(ass.isEmpty, "\(accent.title) vurgu rengi çıktı üretmedi")
+        }
+    }
+
     func testEditorialASSUsesAnimatedUnderlineInsteadOfRandomScaling() {
         let words = makeWords(["gecenin", "içinde", "seni", "aradım"])
 
@@ -1083,6 +1231,13 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(KineticLetterStyle.resolved("poster"), .poster)
         XCTAssertEqual(KineticLetterStyle.resolved("signature"), .signature)
         XCTAssertEqual(KineticOverlayStyle.resolved("glass"), .glass)
+        XCTAssertEqual(
+            LyricTrackingMode.resolved("centeredWordReveal"),
+            .centeredWordReveal
+        )
+        XCTAssertTrue(LyricTrackingMode.centeredReveal.isProgressiveReveal)
+        XCTAssertTrue(LyricTrackingMode.centeredWordReveal.isProgressiveReveal)
+        XCTAssertFalse(LyricTrackingMode.karaoke.isProgressiveReveal)
     }
 
     func testLegacyProjectWithoutKaraokeModeDecodesAsClassic() throws {
@@ -1160,7 +1315,18 @@ final class FontCatalogTests: XCTestCase {
         let names = FontCatalog.hepsi.map(\.psName)
 
         XCTAssertEqual(Set(names).count, names.count)
-        XCTAssertEqual(FontCatalog.gomulu.count, 27)
+        XCTAssertEqual(FontCatalog.gomulu.count, 28)
+        XCTAssertEqual(
+            FontCatalog.secenek("PetitFormalScript-Regular"),
+            FontOption(
+                psName: "PetitFormalScript-Regular",
+                display: "Petit Formal Script",
+                assFamily: "Petit Formal Script",
+                kalin: false,
+                category: .handwriting,
+                bitisik: true
+            )
+        )
         XCTAssertNil(FontCatalog.secenek("Creepster-Regular"))
         XCTAssertNil(FontCatalog.secenek("PermanentMarker-Regular"))
     }

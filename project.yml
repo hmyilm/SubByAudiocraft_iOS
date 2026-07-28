@@ -13,13 +13,13 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "18.0"
-    version: 1.17.0
-    build: 41
+    version: 1.18.0
+    build: 42
     settings:
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       PRODUCT_BUNDLE_IDENTIFIER: com.hmyilm.SubByAudiocraft
-      MARKETING_VERSION: "1.17.0"
-      CURRENT_PROJECT_VERSION: "41"
+      MARKETING_VERSION: "1.18.0"
+      CURRENT_PROJECT_VERSION: "42"
     sources: [SubByAudiocraft]
     dependencies:
       - package: WhisperKit
@@ -43,6 +43,7 @@ targets:
           - Shrikhand-Regular.ttf
           - BlackOpsOne-Regular.ttf
           - GreatVibes-Regular.ttf
+          - PetitFormalScript-Regular.ttf
           - Allura-Regular.ttf
           - Sacramento-Regular.ttf
           - Parisienne-Regular.ttf
@@ -59,8 +60,8 @@ targets:
         UILaunchScreen: {}
         CFBundleIconName: AppIcon
         CFBundleDisplayName: Sub by Audiocraft
-        CFBundleShortVersionString: "1.17.0"
-        CFBundleVersion: "41"
+        CFBundleShortVersionString: "1.18.0"
+        CFBundleVersion: "42"
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

@@ -119,6 +119,7 @@ enum LyricTrackingMode: String, CaseIterable, Identifiable, Codable {
     case off
     case karaoke
     case centeredReveal
+    case centeredWordReveal
 
     var id: String { rawValue }
 
@@ -126,7 +127,8 @@ enum LyricTrackingMode: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .off: return "Kapalı"
         case .karaoke: return "Karaoke"
-        case .centeredReveal: return "Merkez Yazım"
+        case .centeredReveal: return "Harf Akışı"
+        case .centeredWordReveal: return "Kelime Akışı"
         }
     }
 
@@ -135,6 +137,7 @@ enum LyricTrackingMode: String, CaseIterable, Identifiable, Codable {
         case .off: return "pause.circle"
         case .karaoke: return "waveform"
         case .centeredReveal: return "character.cursor.ibeam"
+        case .centeredWordReveal: return "text.append"
         }
     }
 
@@ -146,7 +149,13 @@ enum LyricTrackingMode: String, CaseIterable, Identifiable, Codable {
             return "Söylenen kelime ve harfler renk, ölçek ve hareketle takip edilir."
         case .centeredReveal:
             return "Harfler vokalle birlikte eklenir; metin büyürken önceki harfler sola kayar ve cümle daima ortada kalır."
+        case .centeredWordReveal:
+            return "Her kelime söylendiği anda tek parça halinde gelir; yeni kelimeyle cümle yeniden ortalanır ve önceki kelimeler sola kayar."
         }
+    }
+
+    var isProgressiveReveal: Bool {
+        self == .centeredReveal || self == .centeredWordReveal
     }
 
     static func resolved(_ rawValue: String?) -> LyricTrackingMode {
@@ -3908,6 +3917,80 @@ class VideoProcessor: ObservableObject {
         return result
     }
 
+    // Kelime Akışı: her sözcük başlangıcında tamamı tek parça halinde eklenir.
+    // Her olay aynı merkez noktasında yeniden dizildiği için genişleyen cümle ortada
+    // kalır, önceki kelimeler ise ölçülü biçimde sola kayar.
+    func makeCenteredWordRevealDialogues(
+        group: [WordTimestamp],
+        segStart: Double,
+        segEnd: Double,
+        fontSize: Int,
+        marginV: Int,
+        virtualWidth: Int,
+        virtualHeight: Int,
+        accent: KineticAccent = .gold,
+        customColorHex: String = KineticAccent.defaultCustomHex
+    ) -> String {
+        struct RevealEvent {
+            let start: Double
+            let leading: String
+            let latest: String
+        }
+
+        guard segEnd > segStart else { return "" }
+
+        var events: [RevealEvent] = []
+        var completedWords: [String] = []
+        for word in group {
+            let clean = cleanASSWord(word.text)
+            guard !clean.isEmpty else { continue }
+            let leading = completedWords.isEmpty
+                ? ""
+                : completedWords.joined(separator: " ") + " "
+            events.append(
+                RevealEvent(
+                    start: min(segEnd, max(segStart, word.start)),
+                    leading: leading,
+                    latest: clean
+                )
+            )
+            completedWords.append(clean)
+        }
+
+        guard !events.isEmpty else { return "" }
+
+        let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
+        let centerX = virtualWidth / 2
+        let halfHeight = max(12, fontSize / 2)
+        let centerY = min(
+            virtualHeight - halfHeight - 16,
+            max(halfHeight + 16, virtualHeight - marginV - halfHeight)
+        )
+        var result = ""
+
+        for (index, event) in events.enumerated() {
+            let eventStart = max(segStart, event.start)
+            let eventEnd = index + 1 < events.count
+                ? min(segEnd, events[index + 1].start)
+                : segEnd
+            guard eventEnd > eventStart + 0.008 else { continue }
+
+            let durationMs = max(10, Int((eventEnd - eventStart) * 1000))
+            let settleMs = min(130, durationMs)
+            let baseTags = "{\\an5\\pos(\(centerX),\(centerY))" +
+                "\\fs\(fontSize)\\c&HFFFFFF&\\bord3\\shad1.5}"
+            let latestTags = "{\\c&H\(resolvedAccent.assColor)&\\alpha&H18&" +
+                "\\fscx112\\fscy112\\blur0.9" +
+                "\\t(0,\(settleMs),1.5,\\c&HFFFFFF&\\alpha&H00&" +
+                "\\fscx100\\fscy100\\blur0.2)}"
+            result += "Dialogue: 2,\(formatASSTime(eventStart))," +
+                "\(formatASSTime(eventEnd)),Default,,0,0,0,," +
+                "\(baseTags)\(event.leading)\(latestTags)\(event.latest)\n"
+        }
+
+        return result
+    }
+
     // 3. ASS Altyazı Dosyası Oluşturma (iOS 16+ uyumlu asenkron yapı)
     // lineBreaks: kullanıcının onayladığı satır sonları (boşsa otomatik öneri kullanılır)
     func generateASS(
@@ -4063,18 +4146,32 @@ class VideoProcessor: ObservableObject {
                 maximumWidth: maximumLineWidth
             )
 
-            if lyricTrackingMode == .centeredReveal {
-                assContent += makeCenteredRevealDialogues(
-                    group: seg.group,
-                    segStart: segStart,
-                    segEnd: segEnd,
-                    fontSize: lineFontSize,
-                    marginV: marginV,
-                    virtualWidth: virtualWidth,
-                    virtualHeight: virtualHeight,
-                    accent: kineticAccent,
-                    customColorHex: kineticCustomColorHex
-                )
+            if lyricTrackingMode.isProgressiveReveal {
+                if lyricTrackingMode == .centeredWordReveal {
+                    assContent += makeCenteredWordRevealDialogues(
+                        group: seg.group,
+                        segStart: segStart,
+                        segEnd: segEnd,
+                        fontSize: lineFontSize,
+                        marginV: marginV,
+                        virtualWidth: virtualWidth,
+                        virtualHeight: virtualHeight,
+                        accent: kineticAccent,
+                        customColorHex: kineticCustomColorHex
+                    )
+                } else {
+                    assContent += makeCenteredRevealDialogues(
+                        group: seg.group,
+                        segStart: segStart,
+                        segEnd: segEnd,
+                        fontSize: lineFontSize,
+                        marginV: marginV,
+                        virtualWidth: virtualWidth,
+                        virtualHeight: virtualHeight,
+                        accent: kineticAccent,
+                        customColorHex: kineticCustomColorHex
+                    )
+                }
                 continue
             }
 

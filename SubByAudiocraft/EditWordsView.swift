@@ -70,7 +70,7 @@ struct EditWordsView: View {
                     )
 
                     if karaokeMode == .kinetic,
-                       lyricTrackingMode != .centeredReveal,
+                       !lyricTrackingMode.isProgressiveReveal,
                        let plan = previewPlan {
                         VStack(alignment: .leading, spacing: 3) {
                             Label(
@@ -143,7 +143,7 @@ struct EditWordsView: View {
                 }
 
                 if karaokeMode == .kinetic,
-                   lyricTrackingMode != .centeredReveal {
+                   !lyricTrackingMode.isProgressiveReveal {
                     VStack(alignment: .leading, spacing: 7) {
                         HStack {
                             Label("Vurgu Yönetmeni", systemImage: "star.circle.fill")
@@ -206,7 +206,7 @@ struct EditWordsView: View {
                                 word: $word,
                                 isExpanded: expandedWordID == word.id,
                                 showsEmphasis: karaokeMode == .kinetic
-                                    && lyricTrackingMode != .centeredReveal,
+                                    && !lyricTrackingMode.isProgressiveReveal,
                                 isEmphasis: kineticEmphasisWordIDs.contains(word.id),
                                 onToggleEmphasis: {
                                     toggleEmphasis(word.id)
@@ -245,7 +245,8 @@ struct EditWordsView: View {
     }
 
     private var previewPlan: KineticTypographyPlan? {
-        guard lines.indices.contains(previewLineIndex) else { return nil }
+        guard !lyricTrackingMode.isProgressiveReveal,
+              lines.indices.contains(previewLineIndex) else { return nil }
         let plans = VideoProcessor.shared.kineticScenePlans(
             for: lines,
             style: kineticStyle,
@@ -262,6 +263,8 @@ struct EditWordsView: View {
             return "Vurgulanan kelime o anda söylenen bölümü gösterir."
         case .centeredReveal:
             return "Yeni harf vokalle gelir; büyüyen cümle merkezde kalırken önceki harfler sola kayar."
+        case .centeredWordReveal:
+            return "Yeni kelime tek parça halinde gelir; cümle merkezde kalırken önceki kelimeler sola kayar."
         }
     }
 

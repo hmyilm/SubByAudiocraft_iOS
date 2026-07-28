@@ -418,7 +418,13 @@ struct KaraokeModePicker: View {
                     .font(.caption.weight(.semibold))
                     .foregroundColor(.white)
 
-                HStack(spacing: 7) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 7),
+                        GridItem(.flexible(), spacing: 7)
+                    ],
+                    spacing: 7
+                ) {
                     ForEach(LyricTrackingMode.allCases) { mode in
                         let isSelected = mode == lyricTrackingMode
                         Button {
@@ -455,9 +461,9 @@ struct KaraokeModePicker: View {
                     .foregroundColor(.gray)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if lyricTrackingMode == .centeredReveal {
+                if lyricTrackingMode.isProgressiveReveal {
                     Label(
-                        "Merkez Yazım seçiliyken karaoke vurgusu otomatik kapanır; seçilen font ve vurgu rengi korunur.",
+                        "\(lyricTrackingMode.title) seçiliyken karaoke vurgusu kapanır; seçilen font ve vurgu rengi korunur.",
                         systemImage: "arrow.left.and.right.text.vertical"
                     )
                     .font(.caption2)
@@ -477,83 +483,39 @@ struct KaraokeModePicker: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.white)
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(KineticStyle.allCases) { style in
-                                let isSelected = style == kineticStyle
-                                Button {
-                                    Theme.haptic()
-                                    kineticStyle = style
-                                } label: {
-                                    Label(style.title, systemImage: style.icon)
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundColor(isSelected ? .black : .white)
-                                        .padding(.horizontal, 11)
-                                        .padding(.vertical, 8)
-                                        .background(
-                                            Capsule()
-                                                .fill(isSelected ? Theme.yellow : Color.white.opacity(0.08))
-                                        )
-                                        .overlay(
-                                            Capsule()
-                                                .stroke(
-                                                    isSelected ? Theme.yellow : Theme.cardStroke,
-                                                    lineWidth: 1
-                                                )
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-
-                    Text(kineticStyle.detail)
+                    if lyricTrackingMode.isProgressiveReveal {
+                        Label(
+                            "Merkez akışında sahne, yoğunluk, harf tasarımı ve overlay yerine temiz cümle hareketi kullanılır. Font ve vurgu rengi etkin kalır.",
+                            systemImage: "checkmark.circle.fill"
+                        )
                         .font(.caption2)
-                        .foregroundColor(Theme.yellow.opacity(0.9))
+                        .foregroundColor(Theme.yellow)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text("Hareket Yoğunluğu")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.white)
-
-                        Picker("Hareket Yoğunluğu", selection: $kineticIntensity) {
-                            ForEach(KineticIntensity.allCases) { intensity in
-                                Text(intensity.title).tag(intensity)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-
-                        Text(kineticIntensity.detail)
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text("Harf Tasarımı")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.white)
-
+                    Group {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
-                                ForEach(KineticLetterStyle.allCases) { letterStyle in
-                                    let isSelected = letterStyle == kineticLetterStyle
+                                ForEach(KineticStyle.allCases) { style in
+                                    let isSelected = style == kineticStyle
                                     Button {
                                         Theme.haptic()
-                                        kineticLetterStyle = letterStyle
+                                        kineticStyle = style
                                     } label: {
-                                        Label(letterStyle.title, systemImage: letterStyle.icon)
+                                        Label(style.title, systemImage: style.icon)
                                             .font(.caption2.weight(.semibold))
                                             .foregroundColor(isSelected ? .black : .white)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 7)
+                                            .padding(.horizontal, 11)
+                                            .padding(.vertical, 8)
                                             .background(
                                                 Capsule()
-                                                    .fill(
-                                                        isSelected
-                                                            ? Theme.yellow
-                                                            : Color.white.opacity(0.08)
+                                                    .fill(isSelected ? Theme.yellow : Color.white.opacity(0.08))
+                                            )
+                                            .overlay(
+                                                Capsule()
+                                                    .stroke(
+                                                        isSelected ? Theme.yellow : Theme.cardStroke,
+                                                        lineWidth: 1
                                                     )
                                             )
                                     }
@@ -562,51 +524,149 @@ struct KaraokeModePicker: View {
                             }
                         }
 
-                        Text(kineticLetterStyle.detail)
+                        Text(kineticStyle.detail)
                             .font(.caption2)
-                            .foregroundColor(.gray)
+                            .foregroundColor(Theme.yellow.opacity(0.9))
                             .fixedSize(horizontal: false, vertical: true)
-                    }
 
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text("Arka Katman / Overlay")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(.white)
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text("Hareket Yoğunluğu")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white)
 
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(KineticOverlayStyle.allCases) { overlayStyle in
-                                    let isSelected = overlayStyle == kineticOverlayStyle
-                                    Button {
-                                        Theme.haptic()
-                                        kineticOverlayStyle = overlayStyle
-                                    } label: {
-                                        Label(overlayStyle.title, systemImage: overlayStyle.icon)
-                                            .font(.caption2.weight(.semibold))
-                                            .foregroundColor(isSelected ? .black : .white)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 7)
-                                            .background(
-                                                Capsule()
-                                                    .fill(
-                                                        isSelected
-                                                            ? Theme.yellow
-                                                            : Color.white.opacity(0.08)
-                                                    )
-                                            )
-                                    }
-                                    .buttonStyle(.plain)
+                            Picker("Hareket Yoğunluğu", selection: $kineticIntensity) {
+                                ForEach(KineticIntensity.allCases) { intensity in
+                                    Text(intensity.title).tag(intensity)
                                 }
                             }
+                            .pickerStyle(.segmented)
+
+                            Text(kineticIntensity.detail)
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
 
-                        Text(kineticOverlayStyle.detail)
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text("Harf Tasarımı")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white)
 
-                    VStack(alignment: .leading, spacing: 7) {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(KineticLetterStyle.allCases) { letterStyle in
+                                        let isSelected = letterStyle == kineticLetterStyle
+                                        Button {
+                                            Theme.haptic()
+                                            kineticLetterStyle = letterStyle
+                                        } label: {
+                                            Label(letterStyle.title, systemImage: letterStyle.icon)
+                                                .font(.caption2.weight(.semibold))
+                                                .foregroundColor(isSelected ? .black : .white)
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 7)
+                                                .background(
+                                                    Capsule()
+                                                        .fill(
+                                                            isSelected
+                                                                ? Theme.yellow
+                                                                : Color.white.opacity(0.08)
+                                                        )
+                                                )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+
+                            Text(kineticLetterStyle.detail)
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text("Arka Katman / Overlay")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white)
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(KineticOverlayStyle.allCases) { overlayStyle in
+                                        let isSelected = overlayStyle == kineticOverlayStyle
+                                        let isAvailable = overlayStyle != .spotlight
+                                            || lyricTrackingMode == .karaoke
+                                        Button {
+                                            Theme.haptic()
+                                            kineticOverlayStyle = overlayStyle
+                                        } label: {
+                                            Label(overlayStyle.title, systemImage: overlayStyle.icon)
+                                                .font(.caption2.weight(.semibold))
+                                                .foregroundColor(isSelected ? .black : .white)
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 7)
+                                                .background(
+                                                    Capsule()
+                                                        .fill(
+                                                            isSelected
+                                                                ? Theme.yellow
+                                                                : Color.white.opacity(0.08)
+                                                        )
+                                                )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .disabled(!isAvailable)
+                                        .opacity(isAvailable ? 1 : 0.38)
+                                    }
+                                }
+                            }
+
+                            Text(kineticOverlayStyle.detail)
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            if lyricTrackingMode != .karaoke {
+                                Text("Spot katmanı aktif kelimeyi izlediği için yalnız Karaoke söz takibinde kullanılabilir.")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        }
+                    }
+                    .disabled(lyricTrackingMode.isProgressiveReveal)
+                    .opacity(lyricTrackingMode.isProgressiveReveal ? 0.42 : 1)
+
+                    accentControls
+
+                    Label(
+                        lyricTrackingMode.isProgressiveReveal
+                            ? "Akış modu seçilen fontu ve rengi kullanır; uygulanmayan seçenekler yukarıda pasif gösterilir."
+                            : "Overlay, vurgu rengi, harf tasarımı ve geçişler aynı sahne planından beslenir; rastgele üst üste bindirilmez.",
+                        systemImage: lyricTrackingMode.isProgressiveReveal
+                            ? "checkmark.shield"
+                            : "scope"
+                    )
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 2)
+            } else if lyricTrackingMode.isProgressiveReveal {
+                accentControls
+                    .padding(.top, 2)
+            }
+        }
+        .onChange(of: lyricTrackingMode) { mode in
+            if mode != .karaoke, kineticOverlayStyle == .spotlight {
+                kineticOverlayStyle = .none
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var accentControls: some View {
+        VStack(alignment: .leading, spacing: 7) {
                         HStack {
                             Text("Vurgu Rengi")
                                 .font(.caption.weight(.semibold))
@@ -674,18 +734,6 @@ struct KaraokeModePicker: View {
                             .font(.caption2)
                             .foregroundColor(.gray)
                             .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Label(
-                        "Overlay, vurgu rengi, harf tasarımı ve geçişler aynı sahne planından beslenir; rastgele üst üste bindirilmez.",
-                        systemImage: "scope"
-                    )
-                    .font(.caption2)
-                    .foregroundColor(.gray)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.top, 2)
-            }
         }
     }
 
@@ -833,25 +881,35 @@ struct SubtitlePreviewPlayer: View {
                 // 1080p referans yüksekliğine göre ölçeklenmiş canlı altyazı bindirmesi
                 if !karaokeWords.isEmpty || !sampleText.isEmpty {
                     Group {
-                        if lyricTrackingMode == .centeredReveal {
+                        if lyricTrackingMode.isProgressiveReveal {
                             let previewWords = karaokeWords.isEmpty ? sampleTimingWords : karaokeWords
-                            CenteredRevealPreview(
-                                words: previewWords,
-                                playbackTime: karaokeWords.isEmpty
-                                    ? samplePlaybackTime(
-                                        words: previewWords,
-                                        plan: VideoProcessor.shared.kineticTypographyPlan(
-                                            for: previewWords,
-                                            lineIndex: kineticLineIndex,
-                                            style: kineticStyle,
-                                            repeatCount: kineticRepeatCount
-                                        )
+                            let revealPlaybackTime = karaokeWords.isEmpty
+                                ? samplePlaybackTime(
+                                    words: previewWords,
+                                    plan: VideoProcessor.shared.kineticTypographyPlan(
+                                        for: previewWords,
+                                        lineIndex: kineticLineIndex,
+                                        style: kineticStyle,
+                                        repeatCount: kineticRepeatCount
                                     )
-                                    : playbackTime,
-                                accent: kineticAccent.resolvedColor(
-                                    customHex: kineticCustomColorHex
-                                ).previewColor
-                            )
+                                )
+                                : playbackTime
+                            let revealAccent = kineticAccent.resolvedColor(
+                                customHex: kineticCustomColorHex
+                            ).previewColor
+                            if lyricTrackingMode == .centeredWordReveal {
+                                CenteredWordRevealPreview(
+                                    words: previewWords,
+                                    playbackTime: revealPlaybackTime,
+                                    accent: revealAccent
+                                )
+                            } else {
+                                CenteredRevealPreview(
+                                    words: previewWords,
+                                    playbackTime: revealPlaybackTime,
+                                    accent: revealAccent
+                                )
+                            }
                         } else if karaokeMode == .kinetic {
                             let previewWords = karaokeWords.isEmpty ? sampleTimingWords : karaokeWords
                             let plan = kineticScenePlan
@@ -1009,6 +1067,50 @@ private struct CenteredRevealPreview: View {
             String(latest),
             text
         )
+    }
+}
+
+// Kelime Akışı: sözcük harf harf yazılmaz; başlangıç zamanında bütünüyle gelir.
+// HStack her eklemede yeniden merkezlendiği için önceki sözcükler doğal biçimde
+// sola kayarken cümlenin görsel merkezi sabit kalır.
+private struct CenteredWordRevealPreview: View {
+    private struct RevealedWord: Identifiable {
+        let id: UUID
+        let text: String
+    }
+
+    let words: [VideoProcessor.WordTimestamp]
+    let playbackTime: Double
+    let accent: Color
+
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(revealedWords) { word in
+                Text(word.text)
+                    .foregroundColor(word.id == revealedWords.last?.id ? accent : .white)
+                    .transition(
+                        .asymmetric(
+                            insertion: .scale(scale: 1.12).combined(with: .opacity),
+                            removal: .opacity
+                        )
+                    )
+            }
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.45)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .animation(
+            .spring(response: 0.24, dampingFraction: 0.82),
+            value: revealedWords.count
+        )
+    }
+
+    private var revealedWords: [RevealedWord] {
+        words.compactMap { word in
+            let clean = word.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !clean.isEmpty, playbackTime >= word.start else { return nil }
+            return RevealedWord(id: word.id, text: clean)
+        }
     }
 }
 
