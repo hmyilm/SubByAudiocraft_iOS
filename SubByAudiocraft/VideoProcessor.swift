@@ -1063,10 +1063,34 @@ class VideoProcessor: ObservableObject {
         let normalizedTiming = normalizeRecognizedWords(timedWords)
         guard !normalizedTiming.isEmpty else { return nil }
 
-        let audio = try loadMonoAudioSamples(from: audioURL)
-        guard !audio.samples.isEmpty, audio.sampleRate > 0 else { return nil }
+        let audioFile = try AVAudioFile(forReading: audioURL)
+        let audioFormat = audioFile.processingFormat
+        guard audioFormat.sampleRate.isFinite,
+              audioFormat.sampleRate > 0 else {
+            throw NSError(
+                domain: "VideoProcessor",
+                code: -20,
+                userInfo: [NSLocalizedDescriptionKey: "Ses örnekleme hızı geçersiz."]
+            )
+        }
+        let sampleRate = Int(audioFormat.sampleRate.rounded())
+        let maximumSafeFrames = AVAudioFramePosition(
+            max(1, audioFormat.sampleRate) * 20 * 60
+        )
+        guard sampleRate > 0,
+              audioFile.length > 0,
+              audioFile.length <= maximumSafeFrames else {
+            throw NSError(
+                domain: "VideoProcessor",
+                code: -20,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Ses dosyası güvenli süre sınırının dışında veya okunamıyor."
+                ]
+            )
+        }
 
-        let duration = Double(audio.samples.count) / Double(audio.sampleRate)
+        let duration = Double(audioFile.length) / audioFormat.sampleRate
         let windows = lyricRecognitionWindows(
             for: normalizedTiming,
             maximumTime: duration
@@ -1076,31 +1100,34 @@ class VideoProcessor: ObservableObject {
         var enhanced: [WordTimestamp] = []
         for window in windows {
             try Task.checkCancellation()
-            let startSample = max(0, min(
-                audio.samples.count,
-                Int((window.start * Double(audio.sampleRate)).rounded(.down))
-            ))
-            let endSample = max(startSample, min(
-                audio.samples.count,
-                Int((window.end * Double(audio.sampleRate)).rounded(.up))
-            ))
-            guard endSample > startSample else {
+            guard let frameRange = audioFrameRange(
+                start: window.start,
+                end: window.end,
+                sampleRate: audioFormat.sampleRate,
+                totalFrameCount: audioFile.length
+            ) else {
                 enhanced.append(contentsOf: normalizedTiming[window.wordRange])
                 continue
             }
 
-            let chunk = Array(audio.samples[startSample..<endSample])
             let localSlice = Array(normalizedTiming[window.wordRange])
             let tokenBudget = min(448, max(128, localSlice.count * 4))
-            let transcript = autoreleasepool {
-                model.transcribe(
+            let qwenWords = try autoreleasepool {
+                // Yalnız bu 12–15 saniyelik pencereyi oku. Önceki uygulama tüm
+                // şarkıyı [Float] dizisine alıp sonra dilimliyordu; model belleği
+                // ile birleşen bu kopya iPhone 14'te jetsam riskini büyütüyordu.
+                let chunk = try loadMonoAudioWindow(
+                    from: audioFile,
+                    frameRange: frameRange
+                )
+                let transcript = model.transcribe(
                     audio: chunk,
-                    sampleRate: audio.sampleRate,
+                    sampleRate: sampleRate,
                     language: "tr",
                     maxTokens: tokenBudget
                 )
+                return lyricWords(from: transcript)
             }
-            let qwenWords = lyricWords(from: transcript)
 
             if let aligned = alignEnhancedTranscriptWords(
                 qwenWords,
@@ -1122,36 +1149,71 @@ class VideoProcessor: ObservableObject {
         return result.count >= minimumCount ? result : nil
     }
 
-    private func loadMonoAudioSamples(
-        from url: URL
-    ) throws -> (samples: [Float], sampleRate: Int) {
-        let audioFile = try AVAudioFile(forReading: url)
-        let format = audioFile.processingFormat
-        let maximumSafeFrames = AVAudioFramePosition(max(1, format.sampleRate) * 20 * 60)
-        guard audioFile.length > 0,
-              audioFile.length <= maximumSafeFrames,
-              audioFile.length <= AVAudioFramePosition(UInt32.max),
+    func audioFrameRange(
+        start: Double,
+        end: Double,
+        sampleRate: Double,
+        totalFrameCount: AVAudioFramePosition
+    ) -> Range<AVAudioFramePosition>? {
+        guard start.isFinite,
+              end.isFinite,
+              sampleRate.isFinite,
+              sampleRate > 0,
+              totalFrameCount > 0 else {
+            return nil
+        }
+
+        let duration = Double(totalFrameCount) / sampleRate
+        let clampedStart = min(max(0, start), duration)
+        let clampedEnd = min(max(clampedStart, end), duration)
+        let lowerBound = min(
+            totalFrameCount,
+            AVAudioFramePosition((clampedStart * sampleRate).rounded(.down))
+        )
+        let upperBound = min(
+            totalFrameCount,
+            AVAudioFramePosition((clampedEnd * sampleRate).rounded(.up))
+        )
+        guard upperBound > lowerBound else { return nil }
+        return lowerBound..<upperBound
+    }
+
+    private func loadMonoAudioWindow(
+        from audioFile: AVAudioFile,
+        frameRange: Range<AVAudioFramePosition>
+    ) throws -> [Float] {
+        let requestedFrames = frameRange.upperBound - frameRange.lowerBound
+        guard requestedFrames > 0,
+              requestedFrames <= AVAudioFramePosition(UInt32.max),
               let buffer = AVAudioPCMBuffer(
-                pcmFormat: format,
-                frameCapacity: AVAudioFrameCount(audioFile.length)
+                pcmFormat: audioFile.processingFormat,
+                frameCapacity: AVAudioFrameCount(requestedFrames)
               ) else {
             throw NSError(
                 domain: "VideoProcessor",
-                code: -20,
-                userInfo: [NSLocalizedDescriptionKey: "Ses örnekleri belleğe güvenli biçimde alınamadı."]
+                code: -21,
+                userInfo: [
+                    NSLocalizedDescriptionKey:
+                        "Ses penceresi belleğe güvenli biçimde alınamadı."
+                ]
             )
         }
-        try audioFile.read(into: buffer)
+
+        audioFile.framePosition = frameRange.lowerBound
+        try audioFile.read(
+            into: buffer,
+            frameCount: AVAudioFrameCount(requestedFrames)
+        )
         guard let channelData = buffer.floatChannelData else {
             throw NSError(
                 domain: "VideoProcessor",
-                code: -21,
+                code: -22,
                 userInfo: [NSLocalizedDescriptionKey: "Ses örnekleri okunamadı."]
             )
         }
 
         let frameCount = Int(buffer.frameLength)
-        let channelCount = max(1, Int(format.channelCount))
+        let channelCount = max(1, Int(buffer.format.channelCount))
         var samples = [Float](repeating: 0, count: frameCount)
         for channel in 0..<channelCount {
             let input = channelData[channel]
@@ -1159,7 +1221,7 @@ class VideoProcessor: ObservableObject {
                 samples[frame] += input[frame] / Float(channelCount)
             }
         }
-        return (samples, Int(format.sampleRate.rounded()))
+        return samples
     }
 
     // Qwen uzun şarkıyı tek seferde belleğe yığmaz. Whisper'ın bulduğu doğal

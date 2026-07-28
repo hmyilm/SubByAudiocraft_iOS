@@ -211,6 +211,52 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertTrue(windows.allSatisfy { $0.end - $0.start <= 14.5001 })
     }
 
+    func testAudioFrameRangeReadsOnlyRequestedWindow() throws {
+        let range = try XCTUnwrap(
+            VideoProcessor.shared.audioFrameRange(
+                start: 12.25,
+                end: 26.75,
+                sampleRate: 16_000,
+                totalFrameCount: 16_000 * 60
+            )
+        )
+
+        XCTAssertEqual(range.lowerBound, 196_000)
+        XCTAssertEqual(range.upperBound, 428_000)
+        XCTAssertEqual(range.count, 232_000)
+        XCTAssertLessThan(range.count, 16_000 * 15)
+    }
+
+    func testAudioFrameRangeClampsToFileAndRejectsInvalidWindows() throws {
+        let clamped = try XCTUnwrap(
+            VideoProcessor.shared.audioFrameRange(
+                start: -2,
+                end: 80,
+                sampleRate: 16_000,
+                totalFrameCount: 16_000 * 60
+            )
+        )
+
+        XCTAssertEqual(clamped.lowerBound, 0)
+        XCTAssertEqual(clamped.upperBound, 16_000 * 60)
+        XCTAssertNil(
+            VideoProcessor.shared.audioFrameRange(
+                start: 5,
+                end: 5,
+                sampleRate: 16_000,
+                totalFrameCount: 16_000 * 60
+            )
+        )
+        XCTAssertNil(
+            VideoProcessor.shared.audioFrameRange(
+                start: .nan,
+                end: 5,
+                sampleRate: 16_000,
+                totalFrameCount: 16_000 * 60
+            )
+        )
+    }
+
     func testRenderPreparationRepairsInvalidTimesAndClampsToVideo() {
         let firstID = UUID()
         let words = [
