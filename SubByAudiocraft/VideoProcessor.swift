@@ -121,6 +121,7 @@ class VideoProcessor: ObservableObject {
                         downloadProgress(min(max(progress.fractionCompleted, 0), 1))
                     }
                 )
+                try Task.checkCancellation()
                 downloadProgress(1.0)
 
                 let config = WhisperKitConfig(
