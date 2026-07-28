@@ -202,6 +202,7 @@ struct FontChipPicker: View {
 struct KaraokeModePicker: View {
     @Binding var selection: KaraokeMode
     @Binding var kineticStyle: KineticStyle
+    @Binding var kineticAccent: KineticAccent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -268,8 +269,50 @@ struct KaraokeModePicker: View {
                         .foregroundColor(Theme.yellow.opacity(0.9))
                         .fixedSize(horizontal: false, vertical: true)
 
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack {
+                            Text("Vurgu Rengi")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(.white)
+                            Spacer()
+                            Text(kineticAccent.title)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundColor(kineticAccent.previewColor)
+                        }
+
+                        HStack(spacing: 10) {
+                            ForEach(KineticAccent.allCases) { accent in
+                                let isSelected = accent == kineticAccent
+                                Button {
+                                    Theme.haptic()
+                                    kineticAccent = accent
+                                } label: {
+                                    Circle()
+                                        .fill(accent.previewColor)
+                                        .frame(width: 26, height: 26)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(
+                                                    isSelected ? Color.white : Color.white.opacity(0.2),
+                                                    lineWidth: isSelected ? 2.5 : 1
+                                                )
+                                        )
+                                        .overlay {
+                                            if isSelected {
+                                                Image(systemName: "checkmark")
+                                                    .font(.system(size: 9, weight: .black))
+                                                    .foregroundColor(.black)
+                                            }
+                                        }
+                                        .accessibilityLabel(accent.title)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+
                     Label(
-                        "Yerleşim sabittir; yalnız zamanlanmış giriş, karaoke rengi ve kontrollü vurgu hareket eder.",
+                        "Kelime sayfası, aktif kapsül/alt çizgi ve sahne geçişleri sabit yerleşim üzerinde çalışır.",
                         systemImage: "scope"
                     )
                     .font(.caption2)
@@ -322,6 +365,7 @@ struct SubtitlePreviewPlayer: View {
     let isMuted: Bool
     let karaokeMode: KaraokeMode
     let kineticStyle: KineticStyle
+    let kineticAccent: KineticAccent
     let kineticLineIndex: Int
     let kineticRepeatCount: Int
     let kineticScenePlan: KineticTypographyPlan?
@@ -338,6 +382,7 @@ struct SubtitlePreviewPlayer: View {
         isMuted: Bool = true,
         karaokeMode: KaraokeMode = .classic,
         kineticStyle: KineticStyle = .automatic,
+        kineticAccent: KineticAccent = .gold,
         kineticLineIndex: Int = 0,
         kineticRepeatCount: Int = 1,
         kineticScenePlan: KineticTypographyPlan? = nil
@@ -353,6 +398,7 @@ struct SubtitlePreviewPlayer: View {
         self.isMuted = isMuted
         self.karaokeMode = karaokeMode
         self.kineticStyle = kineticStyle
+        self.kineticAccent = kineticAccent
         self.kineticLineIndex = kineticLineIndex
         self.kineticRepeatCount = kineticRepeatCount
         self.kineticScenePlan = kineticScenePlan
@@ -392,7 +438,8 @@ struct SubtitlePreviewPlayer: View {
                                 playbackTime: karaokeWords.isEmpty
                                     ? samplePlaybackTime(words: previewWords, plan: plan)
                                     : playbackTime,
-                                previewHeight: geo.size.height
+                                previewHeight: geo.size.height,
+                                accent: kineticAccent
                             )
                         } else if karaokeWords.isEmpty {
                             Text(sampleText)
@@ -472,14 +519,27 @@ private struct KineticPreviewLockup: View {
     let fontSize: Double
     let playbackTime: Double
     let previewHeight: CGFloat
+    let accent: KineticAccent
 
     private var activeIndex: Int? {
         words.firstIndex { playbackTime >= $0.start && playbackTime < $0.end }
     }
 
+    private var focusedIndex: Int {
+        if let activeIndex { return activeIndex }
+        if let past = words.lastIndex(where: { $0.start <= playbackTime }) { return past }
+        return words.indices.contains(plan.emphasisIndex) ? plan.emphasisIndex : 0
+    }
+
     private var visibleRows: [[Int]] {
         if plan.scene == .focusCut || plan.scene == .impactSequence {
-            return [[activeIndex ?? plan.emphasisIndex]]
+            return [[focusedIndex]]
+        }
+        if plan.scene == .captionWindow {
+            let page = plan.pages.first(where: { $0.contains(focusedIndex) })
+                ?? plan.pages.first
+                ?? []
+            return page.isEmpty ? [] : [page]
         }
         return plan.rows
     }
@@ -503,12 +563,36 @@ private struct KineticPreviewLockup: View {
                                 ))
                                 .foregroundColor(
                                     isActive
-                                        ? Theme.yellow
+                                        ? (plan.highlight == .pill ? .black : accent.previewColor)
                                         : (isPast ? .white.opacity(0.35) : .white)
                                 )
-                                .scaleEffect(isActive ? 1.06 : 1)
+                                .padding(.horizontal, plan.highlight == .pill ? 5 : 0)
+                                .padding(.vertical, plan.highlight == .pill ? 2 : 0)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                                        .fill(
+                                            isActive && plan.highlight == .pill
+                                                ? accent.previewColor
+                                                : Color.clear
+                                        )
+                                )
+                                .overlay(alignment: .bottom) {
+                                    Capsule()
+                                        .fill(
+                                            isActive && plan.highlight == .underline
+                                                ? accent.previewColor
+                                                : Color.clear
+                                        )
+                                        .frame(height: max(2, previewHeight / 135))
+                                        .offset(y: max(2, previewHeight / 180))
+                                }
+                                .scaleEffect(
+                                    isActive && plan.highlight != .pill ? 1.06 : 1
+                                )
                                 .shadow(
-                                    color: isActive ? Theme.yellow.opacity(0.45) : .black.opacity(0.8),
+                                    color: isActive && plan.highlight == .glow
+                                        ? accent.previewColor.opacity(0.55)
+                                        : .black.opacity(0.8),
                                     radius: isActive ? 4 : 2
                                 )
                                 .transition(.asymmetric(
@@ -529,6 +613,8 @@ private struct KineticPreviewLockup: View {
         switch plan.scene {
         case .phraseBuild:
             scale = plan.rows.count > 1 ? 0.88 : 1
+        case .captionWindow:
+            scale = 1.04
         case .focusCut:
             scale = 1.32
         case .impactSequence:
@@ -541,5 +627,11 @@ private struct KineticPreviewLockup: View {
                 : 1.08
         }
         return CGFloat(fontSize * scale) * (previewHeight / 1080.0)
+    }
+}
+
+private extension KineticAccent {
+    var previewColor: Color {
+        Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
     }
 }

@@ -38,6 +38,7 @@ struct ContentView: View {
     @AppStorage("subtitle.marginV") private var marginV: Double = 120.0
     @AppStorage("subtitle.karaokeMode") private var karaokeModeRaw: String = KaraokeMode.classic.rawValue
     @AppStorage("subtitle.kineticStyle") private var kineticStyleRaw: String = KineticStyle.automatic.rawValue
+    @AppStorage("subtitle.kineticAccent") private var kineticAccentRaw: String = KineticAccent.gold.rawValue
     @AppStorage("analysis.quality") private var analysisQualityRaw: String = AnalysisQuality.balanced.rawValue
 
     // Geçmiş (kaydedilmiş projeler): analizden sonra proje otomatik kaydedilir,
@@ -70,6 +71,7 @@ struct ContentView: View {
                                 marginV: $marginV,
                                 karaokeMode: karaokeModeBinding,
                                 kineticStyle: kineticStyleBinding,
+                                kineticAccent: kineticAccentBinding,
                                 analysisQuality: analysisQualityBinding,
                                 isLoadingVideo: isLoadingVideo,
                                 fonts: FontCatalog.hepsi
@@ -85,7 +87,8 @@ struct ContentView: View {
                                 fontSize: $fontSize,
                                 marginV: $marginV,
                                 karaokeMode: karaokeModeBinding,
-                                kineticStyle: kineticStyleBinding
+                                kineticStyle: kineticStyleBinding,
+                                kineticAccent: kineticAccentBinding
                             )
                         case .processing:
                             ProcessingView(
@@ -122,6 +125,7 @@ struct ContentView: View {
             marginV = min(max(marginV, 30), 950)
             karaokeModeRaw = KaraokeMode.resolved(karaokeModeRaw).rawValue
             kineticStyleRaw = KineticStyle.resolved(kineticStyleRaw).rawValue
+            kineticAccentRaw = KineticAccent.resolved(kineticAccentRaw).rawValue
             VideoProcessor.shared.cleanupStaleTemporaryFiles()
         }
         .sheet(isPresented: $showHistory) {
@@ -151,6 +155,7 @@ struct ContentView: View {
         .onChange(of: marginV) { _ in editorContentDidChange() }
         .onChange(of: karaokeModeRaw) { _ in editorContentDidChange() }
         .onChange(of: kineticStyleRaw) { _ in editorContentDidChange() }
+        .onChange(of: kineticAccentRaw) { _ in editorContentDidChange() }
         .onChange(of: scenePhase) { phase in
             if phase != .active {
                 autosaveWorkItem?.cancel()
@@ -315,6 +320,13 @@ struct ContentView: View {
         )
     }
 
+    private var kineticAccentBinding: Binding<KineticAccent> {
+        Binding(
+            get: { KineticAccent.resolved(kineticAccentRaw) },
+            set: { kineticAccentRaw = $0.rawValue }
+        )
+    }
+
     // MARK: - İş Mantığı
 
     // Galeriden seçilen videoyu kopyalayıp player'a yerleştirir
@@ -451,7 +463,8 @@ struct ContentView: View {
                         fontBoyu: self.fontSize,
                         dikeyKonum: self.marginV,
                         karaokeModu: KaraokeMode.resolved(self.karaokeModeRaw),
-                        kinetikStil: KineticStyle.resolved(self.kineticStyleRaw)
+                        kinetikStil: KineticStyle.resolved(self.kineticStyleRaw),
+                        kinetikVurgu: KineticAccent.resolved(self.kineticAccentRaw)
                    ) {
                     self.currentProjectID = proje.id
                     let yeniURL = self.store.videoURL(proje)
@@ -510,6 +523,7 @@ struct ContentView: View {
                 marginV: Int(marginV),
                 karaokeMode: KaraokeMode.resolved(karaokeModeRaw),
                 kineticStyle: KineticStyle.resolved(kineticStyleRaw),
+                kineticAccent: KineticAccent.resolved(kineticAccentRaw),
                 videoURL: url
             )
 
@@ -658,6 +672,7 @@ struct ContentView: View {
             dikeyKonum: marginV,
             karaokeModu: KaraokeMode.resolved(karaokeModeRaw),
             kinetikStil: KineticStyle.resolved(kineticStyleRaw),
+            kinetikVurgu: KineticAccent.resolved(kineticAccentRaw),
             disaAktarildi: exported
         )
     }
@@ -691,6 +706,7 @@ struct ContentView: View {
         marginV = proje.dikeyKonum
         karaokeModeRaw = proje.karaokeMode.rawValue
         kineticStyleRaw = proje.kineticStyle.rawValue
+        kineticAccentRaw = proje.kineticAccent.rawValue
         currentProjectID = proje.id
         selectedItem = nil
 

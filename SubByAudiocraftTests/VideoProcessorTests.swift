@@ -178,7 +178,7 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(plan.scene, .impactSequence)
     }
 
-    func testKineticPlanRespondsToSustainedVocal() {
+    func testKineticPlanKeepsSustainedVocalCalmAndReadable() {
         let words = [
             VideoProcessor.WordTimestamp(text: "gece", start: 0.0, end: 0.3),
             VideoProcessor.WordTimestamp(text: "bana", start: 0.4, end: 0.7),
@@ -187,8 +187,9 @@ final class VideoProcessorTests: XCTestCase {
 
         let plan = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 2)
 
-        XCTAssertEqual(plan.scene, .editorialStack)
-        XCTAssertTrue(plan.rows.contains([plan.emphasisIndex]))
+        XCTAssertEqual(plan.scene, .phraseBuild)
+        XCTAssertEqual(plan.energy, .calm)
+        XCTAssertEqual(plan.motion, .softLift)
     }
 
     func testKineticPlanIsDeterministicAndNeverLosesAWord() {
@@ -198,8 +199,20 @@ final class VideoProcessorTests: XCTestCase {
         let second = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 7)
 
         XCTAssertEqual(first, second)
-        XCTAssertEqual(first.rows.flatMap { $0 }.sorted(), Array(words.indices))
-        XCTAssertEqual(Set(first.rows.flatMap { $0 }).count, words.count)
+        XCTAssertEqual(first.pages.flatMap { $0 }.sorted(), Array(words.indices))
+        XCTAssertEqual(Set(first.pages.flatMap { $0 }).count, words.count)
+    }
+
+    func testCaptionWindowBuildsStableShortPagesWithoutDroppingWords() {
+        let words = makeWords(["bu", "gece", "yine", "seni", "sessizce", "aradım", "durmadan"])
+
+        let plan = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 3)
+
+        XCTAssertEqual(plan.scene, .captionWindow)
+        XCTAssertEqual(plan.highlight, .pill)
+        XCTAssertEqual(plan.motion, .pagePop)
+        XCTAssertTrue(plan.pages.allSatisfy { (1...4).contains($0.count) })
+        XCTAssertEqual(plan.pages.flatMap { $0 }, Array(words.indices))
     }
 
     func testRepeatedLyricsReceiveTheSameChorusLockup() {
@@ -229,7 +242,7 @@ final class VideoProcessorTests: XCTestCase {
         )
 
         XCTAssertEqual(plans[0].scene, .editorialStack)
-        XCTAssertEqual(plans[1].scene, .phraseBuild)
+        XCTAssertEqual(plans[1].scene, .captionWindow)
         XCTAssertEqual(plans[2].scene, .editorialStack)
     }
 
@@ -253,8 +266,11 @@ final class VideoProcessorTests: XCTestCase {
         )
 
         XCTAssertEqual(cinematic.scene, .phraseBuild)
+        XCTAssertEqual(cinematic.highlight, .color)
         XCTAssertEqual(editorial.scene, .editorialStack)
+        XCTAssertEqual(editorial.highlight, .underline)
         XCTAssertEqual(impact.scene, .impactSequence)
+        XCTAssertEqual(impact.highlight, .glow)
     }
 
     func testKineticASSCreatesTimedLayerForEveryWord() {
@@ -276,12 +292,87 @@ final class VideoProcessorTests: XCTestCase {
             virtualHeight: 1080
         )
 
-        XCTAssertEqual(ass.components(separatedBy: "Dialogue:").count - 1, words.count)
-        XCTAssertTrue(ass.contains("\\an5\\pos("))
-        XCTAssertTrue(ass.contains("\\c&H2FCCFE&"))
+        let regularWords = ass.components(separatedBy: "Dialogue: 2,").count - 1
+        let emphasizedWords = ass.components(separatedBy: "Dialogue: 3,").count - 1
+        XCTAssertEqual(regularWords + emphasizedWords, words.count)
+        XCTAssertEqual(ass.components(separatedBy: "Dialogue: 0,").count - 1, words.count)
+        XCTAssertTrue(ass.contains("\\an5\\move("))
+        XCTAssertTrue(ass.contains("\\p1"))
+        XCTAssertTrue(ass.contains("\\c&H000000&"))
         XCTAssertTrue(ass.contains("\\t("))
         XCTAssertFalse(ass.contains("\\frz"))
         XCTAssertEqual(ass.filter { $0 == "{" }.count, ass.filter { $0 == "}" }.count)
+    }
+
+    func testEditorialASSUsesAnimatedUnderlineInsteadOfRandomScaling() {
+        let words = makeWords(["gecenin", "içinde", "seni", "aradım"])
+
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.8,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            style: .editorial
+        )
+
+        XCTAssertTrue(ass.contains("\\p1"))
+        XCTAssertTrue(ass.contains("\\fscx0"))
+        XCTAssertTrue(ass.contains("\\c&H2FCCFE&"))
+        XCTAssertFalse(ass.contains("\\frz"))
+    }
+
+    func testCinematicASSKeepsCleanTextWithoutDecorationShapes() {
+        let words = makeWords(["sessizce", "sana", "dönerim"])
+
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.4,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            style: .cinematic
+        )
+
+        XCTAssertFalse(ass.contains("\\p1"))
+        XCTAssertTrue(ass.contains("\\move("))
+        XCTAssertTrue(ass.contains("\\c&H2FCCFE&"))
+    }
+
+    func testKineticAccentChangesASSWithoutChangingAnimationPlan() {
+        let words = makeWords(["kara", "sevda", "içimde"])
+        let plan = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            style: .editorial
+        )
+
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.4,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            style: .editorial,
+            accent: .coral,
+            scenePlan: plan
+        )
+
+        XCTAssertTrue(ass.contains("\\c&H7A5CFF&"))
+        XCTAssertFalse(ass.contains("\\c&H2FCCFE&"))
+        XCTAssertEqual(plan.highlight, .underline)
     }
 
     func testUnknownAndLegacyKaraokeModesResolveToClassic() {
@@ -291,6 +382,9 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(KineticStyle.resolved(nil), .automatic)
         XCTAssertEqual(KineticStyle.resolved("bilinmeyen"), .automatic)
         XCTAssertEqual(KineticStyle.resolved("editorial"), .editorial)
+        XCTAssertEqual(KineticAccent.resolved(nil), .gold)
+        XCTAssertEqual(KineticAccent.resolved("bilinmeyen"), .gold)
+        XCTAssertEqual(KineticAccent.resolved("mint"), .mint)
     }
 
     func testLegacyProjectWithoutKaraokeModeDecodesAsClassic() throws {
@@ -314,8 +408,10 @@ final class VideoProcessorTests: XCTestCase {
 
         XCTAssertNil(project.karaokeModu)
         XCTAssertNil(project.kinetikStil)
+        XCTAssertNil(project.kinetikVurgu)
         XCTAssertEqual(project.karaokeMode, .classic)
         XCTAssertEqual(project.kineticStyle, .automatic)
+        XCTAssertEqual(project.kineticAccent, .gold)
     }
 
     private func makeWords(_ texts: [String]) -> [VideoProcessor.WordTimestamp] {

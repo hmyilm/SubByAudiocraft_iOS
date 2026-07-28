@@ -120,7 +120,7 @@ enum KineticStyle: String, CaseIterable, Identifiable, Codable {
     var detail: String {
         switch self {
         case .automatic:
-            return "Nakarat tekrarını, vokal hızını ve uzayan kelimeleri okuyup tutarlı sahneler kurar."
+            return "Nakaratı, bölüm aralarını ve vokal ritmini okuyup kelime sayfalarıyla tutarlı sahneler kurar."
         case .cinematic:
             return "Yumuşak girişler, sakin ölçek ve temiz cümle kompozisyonları kullanır."
         case .editorial:
@@ -136,18 +136,90 @@ enum KineticStyle: String, CaseIterable, Identifiable, Codable {
     }
 }
 
+enum KineticAccent: String, CaseIterable, Identifiable, Codable {
+    case gold
+    case coral
+    case ice
+    case violet
+    case mint
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .gold: return "Altın"
+        case .coral: return "Mercan"
+        case .ice: return "Buz"
+        case .violet: return "Menekşe"
+        case .mint: return "Nane"
+        }
+    }
+
+    // ASS renkleri BBGGRR sırasındadır.
+    var assColor: String {
+        switch self {
+        case .gold: return "2FCCFE"    // #FECC2F
+        case .coral: return "7A5CFF"   // #FF5C7A
+        case .ice: return "FFD558"     // #58D5FF
+        case .violet: return "FA8BA7"  // #A78BFA
+        case .mint: return "A5E654"    // #54E6A5
+        }
+    }
+
+    var rgb: (red: Double, green: Double, blue: Double) {
+        switch self {
+        case .gold: return (254.0 / 255.0, 204.0 / 255.0, 47.0 / 255.0)
+        case .coral: return (255.0 / 255.0, 92.0 / 255.0, 122.0 / 255.0)
+        case .ice: return (88.0 / 255.0, 213.0 / 255.0, 255.0 / 255.0)
+        case .violet: return (167.0 / 255.0, 139.0 / 255.0, 250.0 / 255.0)
+        case .mint: return (84.0 / 255.0, 230.0 / 255.0, 165.0 / 255.0)
+        }
+    }
+
+    static func resolved(_ rawValue: String?) -> KineticAccent {
+        guard let rawValue else { return .gold }
+        return KineticAccent(rawValue: rawValue) ?? .gold
+    }
+}
+
 enum KineticScene: String, Equatable {
     case phraseBuild
+    case captionWindow
     case focusCut
     case editorialStack
     case chorusLockup
     case impactSequence
 }
 
+enum KineticMotion: String, Equatable {
+    case softLift
+    case pagePop
+    case sideReveal
+    case lockedReveal
+    case punchCut
+}
+
+enum KineticHighlight: String, Equatable {
+    case color
+    case pill
+    case underline
+    case glow
+}
+
+enum KineticEnergy: String, Equatable {
+    case calm
+    case steady
+    case driving
+}
+
 struct KineticTypographyPlan: Equatable {
     let scene: KineticScene
+    let motion: KineticMotion
+    let highlight: KineticHighlight
+    let energy: KineticEnergy
     let emphasisIndex: Int
     let rows: [[Int]]
+    let pages: [[Int]]
     let repeatCount: Int
 }
 
@@ -676,8 +748,12 @@ class VideoProcessor: ObservableObject {
         guard !words.isEmpty else {
             return KineticTypographyPlan(
                 scene: .phraseBuild,
+                motion: .softLift,
+                highlight: .color,
+                energy: .calm,
                 emphasisIndex: 0,
                 rows: [],
+                pages: [],
                 repeatCount: max(1, repeatCount)
             )
         }
@@ -689,6 +765,14 @@ class VideoProcessor: ObservableObject {
         let cadence = Double(words.count) / lineDuration
         let longestDuration = durations.max() ?? 0
         let emphasisIndex = semanticEmphasisIndex(words: words, durations: durations)
+        let energy: KineticEnergy
+        if cadence >= 3.4 {
+            energy = .driving
+        } else if cadence <= 1.7 || longestDuration >= 0.72 {
+            energy = .calm
+        } else {
+            energy = .steady
+        }
         let scene: KineticScene
 
         switch style {
@@ -697,12 +781,12 @@ class VideoProcessor: ObservableObject {
                 scene = .chorusLockup
             } else if words.count <= 2 {
                 scene = .focusCut
-            } else if cadence >= 3.4 {
+            } else if energy == .driving {
                 scene = .impactSequence
-            } else if longestDuration >= 0.72 {
-                scene = .editorialStack
-            } else {
+            } else if energy == .calm {
                 scene = .phraseBuild
+            } else {
+                scene = .captionWindow
             }
         case .cinematic:
             scene = words.count <= 2 ? .focusCut : .phraseBuild
@@ -712,10 +796,19 @@ class VideoProcessor: ObservableObject {
             scene = .impactSequence
         }
 
+        let pages: [[Int]]
+        if scene == .captionWindow {
+            pages = kineticCaptionPages(for: words)
+        } else {
+            pages = [Array(words.indices)]
+        }
+
         let rows: [[Int]]
         switch scene {
         case .focusCut, .impactSequence:
             rows = [Array(words.indices)]
+        case .captionWindow:
+            rows = pages.first.map { [$0] } ?? []
         case .phraseBuild:
             let characterCount = words.reduce(0) { $0 + $1.text.count }
             rows = (words.count >= 6 || characterCount > 28)
@@ -733,13 +826,43 @@ class VideoProcessor: ObservableObject {
             rows = designedRows
         }
 
+        let motion: KineticMotion
+        switch scene {
+        case .phraseBuild: motion = .softLift
+        case .captionWindow: motion = .pagePop
+        case .focusCut, .impactSequence: motion = .punchCut
+        case .editorialStack: motion = .sideReveal
+        case .chorusLockup: motion = .lockedReveal
+        }
+
+        let highlight: KineticHighlight
+        switch style {
+        case .cinematic:
+            highlight = .color
+        case .editorial:
+            highlight = .underline
+        case .impact:
+            highlight = .glow
+        case .automatic:
+            switch scene {
+            case .captionWindow: highlight = .pill
+            case .editorialStack, .chorusLockup: highlight = .underline
+            case .focusCut, .impactSequence: highlight = .glow
+            case .phraseBuild: highlight = .color
+            }
+        }
+
         // lineIndex API uyumluluğu ve ön izleme çağrılarında satır kimliği için korunur.
         // Sahne seçimi özellikle bu değere bağlanmaz; satır sırası tasarımı değiştirmez.
         _ = lineIndex
         return KineticTypographyPlan(
             scene: scene,
+            motion: motion,
+            highlight: highlight,
+            energy: energy,
             emphasisIndex: emphasisIndex,
             rows: rows,
+            pages: pages,
             repeatCount: max(1, repeatCount)
         )
     }
@@ -762,7 +885,8 @@ class VideoProcessor: ObservableObject {
                 style: style,
                 repeatCount: repeatCount
             )
-            guard style == .automatic, basePlan.scene == .phraseBuild else {
+            guard style == .automatic,
+                  basePlan.scene == .phraseBuild || basePlan.scene == .captionWindow else {
                 return basePlan
             }
 
@@ -781,6 +905,33 @@ class VideoProcessor: ObservableObject {
             }
             return basePlan
         }
+    }
+
+    private func kineticCaptionPages(for words: [WordTimestamp]) -> [[Int]] {
+        guard !words.isEmpty else { return [] }
+        let maximumPageDuration = 1.35
+        let maximumWords = 4
+        let naturalPause = 0.38
+        var pages: [[Int]] = []
+        var current: [Int] = []
+        var pageStart = words[0].start
+
+        for index in words.indices {
+            if let previousIndex = current.last {
+                let gap = max(0, words[index].start - words[previousIndex].end)
+                let pageDuration = words[index].end - pageStart
+                if current.count >= maximumWords
+                    || (current.count >= 2 && pageDuration > maximumPageDuration)
+                    || (current.count >= 2 && gap >= naturalPause) {
+                    pages.append(current)
+                    current = []
+                    pageStart = words[index].start
+                }
+            }
+            current.append(index)
+        }
+        if !current.isEmpty { pages.append(current) }
+        return pages
     }
 
     private func kineticLineKey(_ words: [WordTimestamp]) -> String {
@@ -880,6 +1031,7 @@ class VideoProcessor: ObservableObject {
         let index: Int
         let rowIndex: Int
         let fontSize: Int
+        let width: Double
         let x: Int
         let y: Int
     }
@@ -887,11 +1039,14 @@ class VideoProcessor: ObservableObject {
     private func kineticRowScale(
         plan: KineticTypographyPlan,
         rowIndex: Int,
-        row: [Int]
+        row: [Int],
+        rowCount: Int
     ) -> Double {
         switch plan.scene {
         case .phraseBuild:
-            return plan.rows.count > 1 ? 0.88 : 1
+            return rowCount > 1 ? 0.88 : 1
+        case .captionWindow:
+            return rowCount > 1 ? 0.90 : 1.04
         case .focusCut:
             return 1.32
         case .impactSequence:
@@ -899,8 +1054,8 @@ class VideoProcessor: ObservableObject {
         case .editorialStack:
             return row.contains(plan.emphasisIndex) ? 1.28 : 0.72
         case .chorusLockup:
-            guard plan.rows.count > 1 else { return 1.08 }
-            return rowIndex == plan.rows.count - 1 ? 1.04 : 0.82
+            guard rowCount > 1 else { return 1.08 }
+            return rowIndex == rowCount - 1 ? 1.04 : 0.82
         }
     }
 
@@ -911,10 +1066,12 @@ class VideoProcessor: ObservableObject {
         requestedFontSize: Int,
         marginV: Int,
         virtualWidth: Int,
-        virtualHeight: Int
+        virtualHeight: Int,
+        rowsOverride: [[Int]]? = nil
     ) -> [KineticWordPlacement] {
         let baseSize = max(24, requestedFontSize)
         let safeWidth = Double(virtualWidth) * 0.90
+        let layoutRows = rowsOverride ?? plan.rows
         let targetY = min(
             Double(virtualHeight) - 30,
             max(Double(baseSize) + 30, Double(virtualHeight - marginV) - Double(baseSize) * 0.38)
@@ -925,7 +1082,8 @@ class VideoProcessor: ObservableObject {
                 let proposed = max(24, Int((Double(baseSize) * kineticRowScale(
                     plan: plan,
                     rowIndex: 0,
-                    row: Array(cleaned.indices)
+                    row: Array(cleaned.indices),
+                    rowCount: 1
                 )).rounded()))
                 let measured = kineticWordWidth(
                     text: cleaned[index].text,
@@ -937,10 +1095,16 @@ class VideoProcessor: ObservableObject {
                     measuredWidth: measured,
                     maximumWidth: safeWidth
                 )
+                let fittedWidth = kineticWordWidth(
+                    text: cleaned[index].text,
+                    fontName: fontName,
+                    fontSize: fitted
+                )
                 return KineticWordPlacement(
                     index: index,
                     rowIndex: 0,
                     fontSize: fitted,
+                    width: fittedWidth,
                     x: virtualWidth / 2,
                     y: Int(targetY.rounded())
                 )
@@ -948,13 +1112,21 @@ class VideoProcessor: ObservableObject {
         }
 
         let rowGap = max(44, Double(baseSize) * 0.92)
-        let firstY = targetY - (Double(max(0, plan.rows.count - 1)) * rowGap / 2)
+        let firstY = targetY - (Double(max(0, layoutRows.count - 1)) * rowGap / 2)
         var placements: [KineticWordPlacement] = []
 
-        for (rowIndex, row) in plan.rows.enumerated() where !row.isEmpty {
-            let scale = kineticRowScale(plan: plan, rowIndex: rowIndex, row: row)
+        for (rowIndex, row) in layoutRows.enumerated() where !row.isEmpty {
+            let scale = kineticRowScale(
+                plan: plan,
+                rowIndex: rowIndex,
+                row: row,
+                rowCount: layoutRows.count
+            )
             var rowSize = max(24, Int((Double(baseSize) * scale).rounded()))
             var spacing = max(7, Double(rowSize) * 0.13)
+            if plan.highlight == .pill {
+                spacing = max(spacing, Double(rowSize) * 0.30)
+            }
             var widths = row.map {
                 kineticWordWidth(text: cleaned[$0].text, fontName: fontName, fontSize: rowSize)
             }
@@ -963,7 +1135,10 @@ class VideoProcessor: ObservableObject {
             if rowWidth > safeWidth {
                 let ratio = safeWidth / rowWidth
                 rowSize = max(24, Int((Double(rowSize) * ratio).rounded(.down)))
-                spacing = max(5, spacing * ratio)
+                let minimumSpacing = plan.highlight == .pill
+                    ? Double(rowSize) * 0.22
+                    : 5
+                spacing = max(minimumSpacing, spacing * ratio)
                 widths = row.map {
                     kineticWordWidth(text: cleaned[$0].text, fontName: fontName, fontSize: rowSize)
                 }
@@ -983,6 +1158,7 @@ class VideoProcessor: ObservableObject {
                     index: wordIndex,
                     rowIndex: rowIndex,
                     fontSize: rowSize,
+                    width: width,
                     x: Int((xCursor + width / 2).rounded()),
                     y: y
                 ))
@@ -999,12 +1175,76 @@ class VideoProcessor: ObservableObject {
         let initialScale: Int
         switch plan.scene {
         case .focusCut, .impactSequence: initialScale = 84
+        case .captionWindow: initialScale = 90
         case .chorusLockup: initialScale = 90
         case .editorialStack: initialScale = 92
         case .phraseBuild: initialScale = style == .cinematic ? 96 : 92
         }
         return "\\fad(120,140)\\fscx\(initialScale)\\fscy\(initialScale)\\blur1.0" +
             "\\t(0,240,1.8,\\fscx100\\fscy100\\blur0.25)"
+    }
+
+    private func kineticRoundedRectanglePath(
+        width: Int,
+        height: Int,
+        radius: Int
+    ) -> String {
+        let safeWidth = max(2, width)
+        let safeHeight = max(2, height)
+        let safeRadius = max(1, min(radius, min(safeWidth, safeHeight) / 2))
+        return [
+            "m \(safeRadius) 0",
+            "l \(safeWidth - safeRadius) 0",
+            "b \(safeWidth) 0 \(safeWidth) 0 \(safeWidth) \(safeRadius)",
+            "l \(safeWidth) \(safeHeight - safeRadius)",
+            "b \(safeWidth) \(safeHeight) \(safeWidth) \(safeHeight) \(safeWidth - safeRadius) \(safeHeight)",
+            "l \(safeRadius) \(safeHeight)",
+            "b 0 \(safeHeight) 0 \(safeHeight) 0 \(safeHeight - safeRadius)",
+            "l 0 \(safeRadius)",
+            "b 0 0 0 0 \(safeRadius) 0"
+        ].joined(separator: " ")
+    }
+
+    private func kineticDecorationDialogue(
+        placement: KineticWordPlacement,
+        word: WordTimestamp,
+        plan: KineticTypographyPlan,
+        accent: KineticAccent,
+        segmentStart: Double,
+        segmentEnd: Double
+    ) -> String {
+        guard plan.highlight == .pill || plan.highlight == .underline else { return "" }
+        let start = max(segmentStart, word.start - 0.045)
+        let end = min(segmentEnd, max(start + 0.08, word.end + 0.08))
+        guard end > start else { return "" }
+
+        let width: Int
+        let height: Int
+        let radius: Int
+        let left: Int
+        let top: Int
+        let tags: String
+
+        if plan.highlight == .pill {
+            width = max(26, Int(placement.width.rounded(.up)) + max(18, placement.fontSize / 3))
+            height = max(22, Int((Double(placement.fontSize) * 1.18).rounded()))
+            radius = max(6, height / 4)
+            left = placement.x - width / 2
+            top = placement.y - height / 2
+            tags = "{\\an7\\move(\(left),\(top + 6),\(left),\(top),0,80)" +
+                "\\p1\\bord0\\shad0\\c&H\(accent.assColor)&\\alpha&H12&\\fad(45,70)}"
+        } else {
+            width = max(24, Int((placement.width * 0.94).rounded(.up)))
+            height = max(4, Int((Double(placement.fontSize) * 0.075).rounded()))
+            radius = max(2, height / 2)
+            left = placement.x - width / 2
+            top = placement.y + Int((Double(placement.fontSize) * 0.57).rounded())
+            tags = "{\\an7\\pos(\(left),\(top))\\p1\\bord0\\shad0\\c&H\(accent.assColor)&" +
+                "\\fscx0\\fad(35,70)\\t(0,100,1.8,\\fscx100)}"
+        }
+
+        let path = kineticRoundedRectanglePath(width: width, height: height, radius: radius)
+        return "Dialogue: 0,\(formatASSTime(start)),\(formatASSTime(end)),Default,,0,0,0,,\(tags)\(path)\n"
     }
 
     // İç erişim, gerçek ASS üretiminin regresyon testlerinde doğrulanabilmesi içindir.
@@ -1019,6 +1259,7 @@ class VideoProcessor: ObservableObject {
         virtualWidth: Int,
         virtualHeight: Int,
         style: KineticStyle = .automatic,
+        accent: KineticAccent = .gold,
         repeatCount: Int = 1,
         scenePlan: KineticTypographyPlan? = nil
     ) -> String {
@@ -1034,27 +1275,76 @@ class VideoProcessor: ObservableObject {
             style: style,
             repeatCount: repeatCount
         )
-        let placements = kineticPlacements(
-            cleaned: cleaned,
-            plan: plan,
-            fontName: fontName,
-            requestedFontSize: requestedFontSize,
-            marginV: marginV,
-            virtualWidth: virtualWidth,
-            virtualHeight: virtualHeight
-        )
+        let placements: [KineticWordPlacement]
+        if plan.scene == .captionWindow {
+            placements = plan.pages.flatMap { page in
+                kineticPlacements(
+                    cleaned: cleaned,
+                    plan: plan,
+                    fontName: fontName,
+                    requestedFontSize: requestedFontSize,
+                    marginV: marginV,
+                    virtualWidth: virtualWidth,
+                    virtualHeight: virtualHeight,
+                    rowsOverride: [page]
+                )
+            }.sorted { $0.index < $1.index }
+        } else {
+            placements = kineticPlacements(
+                cleaned: cleaned,
+                plan: plan,
+                fontName: fontName,
+                requestedFontSize: requestedFontSize,
+                marginV: marginV,
+                virtualWidth: virtualWidth,
+                virtualHeight: virtualHeight
+            )
+        }
         var result = ""
 
         for placement in placements {
             let index = placement.index
             let item = cleaned[index]
             let emphasis = index == plan.emphasisIndex
-            let isolatedWord = plan.scene == .focusCut || plan.scene == .impactSequence
-            let eventStart = isolatedWord ? max(segStart, item.word.start - 0.12) : segStart
-            let eventEnd = isolatedWord
-                ? min(segEnd, max(eventStart + 0.20, item.word.end + 0.18))
-                : segEnd
-            let eventDurationMs = max(200, Int((eventEnd - eventStart) * 1000))
+            let pageIndex = plan.pages.firstIndex { $0.contains(index) } ?? 0
+            let page = plan.pages.indices.contains(pageIndex) ? plan.pages[pageIndex] : [index]
+            let localIndex = page.firstIndex(of: index) ?? index
+            let isolatedWord = plan.motion == .punchCut
+            let pagedWords = plan.scene == .captionWindow
+
+            let eventStart: Double
+            let eventEnd: Double
+            if isolatedWord {
+                eventStart = max(segStart, item.word.start - 0.12)
+                eventEnd = min(segEnd, max(eventStart + 0.20, item.word.end + 0.18))
+            } else if pagedWords, let firstIndex = page.first, let lastIndex = page.last {
+                let rawStart = cleaned[firstIndex].word.start - 0.10
+                let rawEnd = cleaned[lastIndex].word.end + 0.12
+                let previousBoundary: Double
+                if pageIndex > 0, let previousLast = plan.pages[pageIndex - 1].last {
+                    previousBoundary = (
+                        cleaned[previousLast].word.end + cleaned[firstIndex].word.start
+                    ) / 2
+                } else {
+                    previousBoundary = segStart
+                }
+                let nextBoundary: Double
+                if pageIndex + 1 < plan.pages.count,
+                   let nextFirst = plan.pages[pageIndex + 1].first {
+                    nextBoundary = (
+                        cleaned[lastIndex].word.end + cleaned[nextFirst].word.start
+                    ) / 2
+                } else {
+                    nextBoundary = segEnd
+                }
+                eventStart = max(segStart, max(rawStart, previousBoundary))
+                eventEnd = min(segEnd, min(rawEnd, nextBoundary))
+            } else {
+                eventStart = segStart
+                eventEnd = segEnd
+            }
+            let safeEventEnd = max(eventStart + 0.05, eventEnd)
+            let eventDurationMs = max(200, Int((safeEventEnd - eventStart) * 1000))
             let wordStartMs = min(
                 eventDurationMs,
                 max(0, Int((max(eventStart, item.word.start) - eventStart) * 1000))
@@ -1076,44 +1366,75 @@ class VideoProcessor: ObservableObject {
                 text += "{\\alpha&H00&\\t(\(startMs),\(fadeEnd),\\alpha&HA0&)}\(character)"
             }
 
-            let entryStart = isolatedWord ? 0 : min(120, index * 24)
-            let entryPeak = min(eventDurationMs, entryStart + (isolatedWord ? 120 : 190))
+            let entryStart = isolatedWord ? 0 : min(90, localIndex * 22)
+            let entranceDuration: Int
+            switch plan.energy {
+            case .calm: entranceDuration = 220
+            case .steady: entranceDuration = 170
+            case .driving: entranceDuration = 120
+            }
+            let entryPeak = min(eventDurationMs, entryStart + entranceDuration)
             let entryEnd = min(eventDurationMs, entryPeak + (isolatedWord ? 90 : 70))
             let entranceScale: Int
-            switch plan.scene {
-            case .focusCut, .impactSequence: entranceScale = 72
-            case .chorusLockup: entranceScale = 88
-            case .editorialStack: entranceScale = 92
-            case .phraseBuild: entranceScale = style == .cinematic ? 96 : 92
+            switch plan.motion {
+            case .punchCut: entranceScale = 72
+            case .pagePop: entranceScale = 86
+            case .lockedReveal: entranceScale = 90
+            case .sideReveal: entranceScale = 92
+            case .softLift: entranceScale = style == .cinematic ? 96 : 93
             }
 
             var tags = "{\\an5"
-            if plan.scene == .editorialStack {
+            switch plan.motion {
+            case .sideReveal:
                 let slide = placement.rowIndex.isMultiple(of: 2) ? -18 : 18
                 tags += "\\move(\(placement.x + slide),\(placement.y),\(placement.x),\(placement.y),0,\(entryPeak))"
-            } else if isolatedWord {
+            case .punchCut:
                 tags += "\\move(\(placement.x),\(placement.y + 16),\(placement.x),\(placement.y),0,\(entryPeak))"
-            } else {
+            case .softLift:
+                tags += "\\move(\(placement.x),\(placement.y + 10),\(placement.x),\(placement.y),0,\(entryPeak))"
+            case .pagePop:
+                tags += "\\move(\(placement.x),\(placement.y + 12),\(placement.x),\(placement.y),0,\(entryPeak))"
+            case .lockedReveal:
                 tags += "\\pos(\(placement.x),\(placement.y))"
             }
-            tags += "\\fs\(placement.fontSize)\\c&HFFFFFF&\\fad(\(isolatedWord ? 70 : 110),\(isolatedWord ? 100 : 140))"
+            let fadeIn = isolatedWord ? 70 : (pagedWords ? 75 : 110)
+            let fadeOut = isolatedWord ? 100 : (pagedWords ? 95 : 140)
+            tags += "\\fs\(placement.fontSize)\\c&HFFFFFF&\\fad(\(fadeIn),\(fadeOut))"
             tags += "\\fscx\(entranceScale)\\fscy\(entranceScale)\\blur\(isolatedWord ? "1.3" : "0.9")"
-            let peakScale = isolatedWord ? 108 : 100
+            let peakScale = isolatedWord ? 108 : (plan.motion == .pagePop ? 103 : 100)
             tags += "\\t(\(entryStart),\(entryPeak),1.8,\\fscx\(peakScale)\\fscy\(peakScale)\\blur0.2)"
-            if isolatedWord, entryEnd > entryPeak {
+            if (isolatedWord || plan.motion == .pagePop), entryEnd > entryPeak {
                 tags += "\\t(\(entryPeak),\(entryEnd),1.4,\\fscx100\\fscy100)"
             }
             let colorInEnd = min(eventDurationMs, wordStartMs + 70)
             let colorOutEnd = min(eventDurationMs, wordEndMs + 100)
-            tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H2FCCFE&)"
-            tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&)"
+            let activeColor = plan.highlight == .pill ? "000000" : accent.assColor
+            if plan.highlight == .pill {
+                tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&\\3a&HFF&\\4a&HFF&)"
+                tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&\\3a&H00&\\4a&H00&)"
+            } else {
+                tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&)"
+                tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&)"
+            }
+            if plan.highlight == .glow {
+                tags += "\\4c&H\(accent.assColor)&\\4a&H55&\\shad2.4"
+            }
             if emphasis {
                 tags += "\\3c&H3A2610&\\bord3.4"
             }
             tags += "}"
 
-            let layer = emphasis ? 1 : 0
-            result += "Dialogue: \(layer),\(formatASSTime(eventStart)),\(formatASSTime(eventEnd)),Default,,0,0,0,,\(tags)\(text)\n"
+            result += kineticDecorationDialogue(
+                placement: placement,
+                word: item.word,
+                plan: plan,
+                accent: accent,
+                segmentStart: eventStart,
+                segmentEnd: safeEventEnd
+            )
+            let layer = emphasis ? 3 : 2
+            result += "Dialogue: \(layer),\(formatASSTime(eventStart)),\(formatASSTime(safeEventEnd)),Default,,0,0,0,,\(tags)\(text)\n"
         }
         return result
     }
@@ -1128,6 +1449,7 @@ class VideoProcessor: ObservableObject {
         marginV: Int,
         karaokeMode: KaraokeMode = .classic,
         kineticStyle: KineticStyle = .automatic,
+        kineticAccent: KineticAccent = .gold,
         videoURL: URL
     ) async -> URL? {
         let asset = AVAsset(url: videoURL)
@@ -1280,6 +1602,7 @@ class VideoProcessor: ObservableObject {
                     virtualWidth: virtualWidth,
                     virtualHeight: virtualHeight,
                     style: kineticStyle,
+                    accent: kineticAccent,
                     repeatCount: kineticPlans[index].repeatCount,
                     scenePlan: kineticPlans[index]
                 )

@@ -11,6 +11,7 @@ struct EditWordsView: View {
     @Binding var marginV: Double
     @Binding var karaokeMode: KaraokeMode
     @Binding var kineticStyle: KineticStyle
+    @Binding var kineticAccent: KineticAccent
 
     @State private var expandedWordID: UUID? = nil
     @State private var previewLine: String = ""
@@ -51,6 +52,7 @@ struct EditWordsView: View {
                         isMuted: false,
                         karaokeMode: karaokeMode,
                         kineticStyle: kineticStyle,
+                        kineticAccent: kineticAccent,
                         kineticLineIndex: previewLineIndex,
                         kineticRepeatCount: previewPlan?.repeatCount ?? 1,
                         kineticScenePlan: previewPlan
@@ -63,7 +65,11 @@ struct EditWordsView: View {
                     .font(.caption2)
                     .foregroundColor(.gray)
 
-                    KaraokeModePicker(selection: $karaokeMode, kineticStyle: $kineticStyle)
+                    KaraokeModePicker(
+                        selection: $karaokeMode,
+                        kineticStyle: $kineticStyle,
+                        kineticAccent: $kineticAccent
+                    )
 
                     // Font burada da değiştirilebilir: Geçmiş'ten açılan projelerde
                     // 1. adıma (video seçme) dönüş yoktur, stilin tamamı bu ekrandan yönetilir.
