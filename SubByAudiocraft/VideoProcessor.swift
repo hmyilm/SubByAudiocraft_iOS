@@ -120,7 +120,7 @@ enum KineticStyle: String, CaseIterable, Identifiable, Codable {
     var detail: String {
         switch self {
         case .automatic:
-            return "Nakaratı, bölüm aralarını ve vokal ritmini okuyup kelime sayfalarıyla tutarlı sahneler kurar."
+            return "Parçanın tamamından tek bir görsel kimlik çıkarır; nakarat, bölüm ve enerji değişimlerinde yalnız uyumlu sahneleri birlikte kullanır."
         case .cinematic:
             return "Yumuşak girişler, sakin ölçek ve temiz cümle kompozisyonları kullanır."
         case .editorial:
@@ -289,7 +289,7 @@ enum KineticOverlayStyle: String, CaseIterable, Identifiable, Codable {
     var detail: String {
         switch self {
         case .automatic:
-            return "Cümle yapısına göre Cam, Panel veya Spot katmanını seçer; nakarat tekrarlarında aynı görünümü korur."
+            return "Parçanın görsel kimliğine göre uyumlu iki veya üç katmanı bölüm boyunca yönetir; bağımsız ve rastgele seçim yapmaz."
         case .none:
             return "Arka katman kullanmaz; yalnız tipografi ve kelime vurguları görünür."
         case .glass:
@@ -312,6 +312,35 @@ enum KineticOverlayStyle: String, CaseIterable, Identifiable, Codable {
             return .accentPanel
         case .focusCut, .impactSequence:
             return .spotlight
+        }
+    }
+
+    func resolved(for plan: KineticTypographyPlan) -> KineticOverlayStyle {
+        guard self == .automatic else { return self }
+        switch plan.creativeDirection {
+        case .cinematicFlow:
+            switch plan.scene {
+            case .editorialStack, .chorusLockup: return .accentPanel
+            case .phraseBuild, .captionWindow, .focusCut, .impactSequence: return .glass
+            }
+        case .editorialStory:
+            switch plan.scene {
+            case .editorialStack, .chorusLockup: return .accentPanel
+            case .phraseBuild, .captionWindow, .focusCut, .impactSequence: return .glass
+            }
+        case .rhythmicPulse:
+            switch plan.scene {
+            case .focusCut, .impactSequence: return .spotlight
+            case .captionWindow: return .cinematicBand
+            case .editorialStack, .chorusLockup: return .accentPanel
+            case .phraseBuild: return .glass
+            }
+        case .anthemLift:
+            switch plan.scene {
+            case .editorialStack, .chorusLockup: return .accentPanel
+            case .focusCut, .impactSequence: return .spotlight
+            case .phraseBuild, .captionWindow: return .cinematicBand
+            }
         }
     }
 
@@ -471,11 +500,41 @@ enum KineticEnergy: String, Equatable {
     case driving
 }
 
+enum KineticCreativeDirection: String, Equatable {
+    case cinematicFlow
+    case editorialStory
+    case rhythmicPulse
+    case anthemLift
+
+    var title: String {
+        switch self {
+        case .cinematicFlow: return "Sinematik Akış"
+        case .editorialStory: return "Editoryal Anlatı"
+        case .rhythmicPulse: return "Ritmik Darbe"
+        case .anthemLift: return "Nakarat Yükselişi"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .cinematicFlow:
+            return "Uzun vokaller ve geniş boşluklar için sakin plakalar, nefesli harf aralığı ve yumuşak geçişler."
+        case .editorialStory:
+            return "Orta tempolu anlatıda Cam ve Panel kompozisyonlarını afiş vurgularıyla dengeler."
+        case .rhythmicPulse:
+            return "Hızlı vokalde Sinema bandı ve Spot katmanını kısa kelime kesmeleriyle birlikte kullanır."
+        case .anthemLift:
+            return "Tekrarlanan nakaratları sabit bir imza düzeninde tutup bölüm yükselişlerini kontrollü büyütür."
+        }
+    }
+}
+
 struct KineticTypographyPlan: Equatable {
     let scene: KineticScene
     let motion: KineticMotion
     let highlight: KineticHighlight
     let energy: KineticEnergy
+    let creativeDirection: KineticCreativeDirection
     let emphasisIndex: Int
     let rows: [[Int]]
     let pages: [[Int]]
@@ -1003,14 +1062,18 @@ class VideoProcessor: ObservableObject {
         lineIndex: Int,
         style: KineticStyle = .automatic,
         repeatCount: Int = 1,
-        emphasisWordID: UUID? = nil
+        emphasisWordID: UUID? = nil,
+        creativeDirection: KineticCreativeDirection? = nil
     ) -> KineticTypographyPlan {
+        let direction = creativeDirection
+            ?? kineticCreativeDirection(for: [words], style: style)
         guard !words.isEmpty else {
             return KineticTypographyPlan(
                 scene: .phraseBuild,
                 motion: .softLift,
                 highlight: .color,
                 energy: .calm,
+                creativeDirection: direction,
                 emphasisIndex: 0,
                 rows: [],
                 pages: [],
@@ -1040,17 +1103,12 @@ class VideoProcessor: ObservableObject {
 
         switch style {
         case .automatic:
-            if repeatCount > 1, words.count > 2 {
-                scene = .chorusLockup
-            } else if words.count <= 2 {
-                scene = .focusCut
-            } else if energy == .driving {
-                scene = .impactSequence
-            } else if energy == .calm {
-                scene = .phraseBuild
-            } else {
-                scene = .captionWindow
-            }
+            scene = automaticKineticScene(
+                wordCount: words.count,
+                energy: energy,
+                repeatCount: repeatCount,
+                direction: direction
+            )
         case .cinematic:
             scene = words.count <= 2 ? .focusCut : .phraseBuild
         case .editorial:
@@ -1068,8 +1126,42 @@ class VideoProcessor: ObservableObject {
             energy: energy,
             emphasisIndex: emphasisIndex,
             repeatCount: repeatCount,
-            style: style
+            style: style,
+            creativeDirection: direction
         )
+    }
+
+    private func automaticKineticScene(
+        wordCount: Int,
+        energy: KineticEnergy,
+        repeatCount: Int,
+        direction: KineticCreativeDirection
+    ) -> KineticScene {
+        if repeatCount > 1, wordCount > 2 {
+            return .chorusLockup
+        }
+        if wordCount <= 2 {
+            return .focusCut
+        }
+
+        switch direction {
+        case .cinematicFlow:
+            return energy == .driving ? .captionWindow : .phraseBuild
+        case .editorialStory:
+            return energy == .calm ? .phraseBuild : .captionWindow
+        case .rhythmicPulse:
+            switch energy {
+            case .driving: return .impactSequence
+            case .steady: return .captionWindow
+            case .calm: return .phraseBuild
+            }
+        case .anthemLift:
+            switch energy {
+            case .driving: return .impactSequence
+            case .steady: return .captionWindow
+            case .calm: return .phraseBuild
+            }
+        }
     }
 
     private func composeKineticPlan(
@@ -1078,7 +1170,8 @@ class VideoProcessor: ObservableObject {
         energy: KineticEnergy,
         emphasisIndex: Int,
         repeatCount: Int,
-        style: KineticStyle
+        style: KineticStyle,
+        creativeDirection: KineticCreativeDirection
     ) -> KineticTypographyPlan {
         let pages: [[Int]]
         if scene == .captionWindow {
@@ -1128,11 +1221,26 @@ class VideoProcessor: ObservableObject {
         case .impact:
             highlight = .glow
         case .automatic:
-            switch scene {
-            case .captionWindow: highlight = .pill
-            case .editorialStack, .chorusLockup: highlight = .underline
-            case .focusCut, .impactSequence: highlight = .glow
-            case .phraseBuild: highlight = .color
+            switch creativeDirection {
+            case .cinematicFlow:
+                switch scene {
+                case .editorialStack, .chorusLockup: highlight = .underline
+                case .phraseBuild, .captionWindow, .focusCut, .impactSequence:
+                    highlight = .color
+                }
+            case .editorialStory:
+                switch scene {
+                case .editorialStack, .chorusLockup, .focusCut: highlight = .underline
+                case .captionWindow: highlight = .pill
+                case .phraseBuild, .impactSequence: highlight = .color
+                }
+            case .rhythmicPulse, .anthemLift:
+                switch scene {
+                case .captionWindow: highlight = .pill
+                case .editorialStack, .chorusLockup: highlight = .underline
+                case .focusCut, .impactSequence: highlight = .glow
+                case .phraseBuild: highlight = .color
+                }
             }
         }
 
@@ -1141,6 +1249,7 @@ class VideoProcessor: ObservableObject {
             motion: motion,
             highlight: highlight,
             energy: energy,
+            creativeDirection: creativeDirection,
             emphasisIndex: emphasisIndex,
             rows: rows,
             pages: pages,
@@ -1148,11 +1257,88 @@ class VideoProcessor: ObservableObject {
         )
     }
 
+    func kineticCreativeDirection(
+        for groups: [[WordTimestamp]],
+        style: KineticStyle = .automatic
+    ) -> KineticCreativeDirection {
+        switch style {
+        case .cinematic: return .cinematicFlow
+        case .editorial: return .editorialStory
+        case .impact: return .rhythmicPulse
+        case .automatic: break
+        }
+
+        let validGroups = groups.filter { !$0.isEmpty }
+        guard !validGroups.isEmpty else { return .editorialStory }
+
+        let keys = validGroups.map { kineticLineKey($0) }
+        let frequencies = Dictionary(
+            keys.map { ($0, 1) },
+            uniquingKeysWith: { first, second in first + second }
+        )
+        var cadences: [Double] = []
+        var calmLines = 0
+        var drivingLines = 0
+        var sectionOpenings = 0
+        var totalCharacters = 0
+
+        for (index, group) in validGroups.enumerated() {
+            let start = group.first?.start ?? 0
+            let end = group.last?.end ?? start + 0.05
+            let duration = max(0.05, end - start)
+            let cadence = Double(group.count) / duration
+            let longestHold = group.map { max(0.05, $0.end - $0.start) }.max() ?? 0
+            cadences.append(cadence)
+            totalCharacters += group.reduce(0) { $0 + $1.text.count }
+            if cadence <= 1.7 || longestHold >= 0.72 { calmLines += 1 }
+            if cadence >= 3.4 { drivingLines += 1 }
+
+            if index > 0, let previousEnd = validGroups[index - 1].last?.end {
+                let gap = max(0, (group.first?.start ?? previousEnd) - previousEnd)
+                if gap >= 0.75 { sectionOpenings += 1 }
+            }
+        }
+
+        let sortedCadences = cadences.sorted()
+        let midpoint = sortedCadences.count / 2
+        let medianCadence: Double
+        if sortedCadences.count.isMultiple(of: 2), midpoint > 0 {
+            medianCadence = (sortedCadences[midpoint - 1] + sortedCadences[midpoint]) / 2
+        } else {
+            medianCadence = sortedCadences[midpoint]
+        }
+        let lineCount = Double(validGroups.count)
+        let repeatedLineRatio = Double(
+            keys.filter { frequencies[$0, default: 0] > 1 }.count
+        ) / lineCount
+        let calmRatio = Double(calmLines) / lineCount
+        let drivingRatio = Double(drivingLines) / lineCount
+        let sectionRatio = Double(sectionOpenings) / Double(max(1, validGroups.count - 1))
+        let averageCharacters = Double(totalCharacters) / lineCount
+
+        // Öncelik sırası da parçanın yapısından gelir: belirgin nakarat kimliği tempodan,
+        // yoğun hızlı vokal ise tek tek uzun kelimelerden daha baskın bir tasarım sinyalidir.
+        if repeatedLineRatio >= 0.28 {
+            return .anthemLift
+        }
+        if drivingRatio >= 0.34 || medianCadence >= 3.25 {
+            return .rhythmicPulse
+        }
+        if calmRatio >= 0.42 || medianCadence <= 1.75 {
+            return .cinematicFlow
+        }
+        if sectionRatio >= 0.24 || averageCharacters >= 22 {
+            return .editorialStory
+        }
+        return .editorialStory
+    }
+
     func kineticScenePlans(
         for groups: [[WordTimestamp]],
         style: KineticStyle = .automatic,
         emphasisWordIDs: Set<UUID> = []
     ) -> [KineticTypographyPlan] {
+        let creativeDirection = kineticCreativeDirection(for: groups, style: style)
         let keys = groups.map { kineticLineKey($0) }
         let frequencies = Dictionary(
             keys.map { ($0, 1) },
@@ -1171,7 +1357,8 @@ class VideoProcessor: ObservableObject {
                 lineIndex: index,
                 style: style,
                 repeatCount: repeatCount,
-                emphasisWordID: emphasisWordID
+                emphasisWordID: emphasisWordID,
+                creativeDirection: creativeDirection
             )
             var plan = basePlan
             let previousEnd = index > 0 ? groups[index - 1].last?.end : nil
@@ -1184,14 +1371,21 @@ class VideoProcessor: ObservableObject {
 
             if isSectionOpening,
                basePlan.scene == .phraseBuild || basePlan.scene == .captionWindow {
-                // Gerçek bir sessizlikten sonraki ilk söz, yeni bölümü afiş düzeniyle açar.
+                // Sessizlikten sonraki açılış da parçanın seçilmiş görsel ailesinde kalır.
+                let openingScene: KineticScene
+                switch creativeDirection {
+                case .cinematicFlow: openingScene = .phraseBuild
+                case .editorialStory, .anthemLift: openingScene = .editorialStack
+                case .rhythmicPulse: openingScene = .captionWindow
+                }
                 plan = composeKineticPlan(
                     for: group,
-                    scene: .editorialStack,
+                    scene: openingScene,
                     energy: basePlan.energy,
                     emphasisIndex: basePlan.emphasisIndex,
                     repeatCount: repeatCount,
-                    style: .automatic
+                    style: .automatic,
+                    creativeDirection: creativeDirection
                 )
             }
 
@@ -1210,7 +1404,8 @@ class VideoProcessor: ObservableObject {
                     // rastgelelik veya yapay bir şablon döngüsü kullanılmaz.
                     let breathingScene = kineticBreathingScene(
                         after: plan.scene,
-                        wordCount: group.count
+                        wordCount: group.count,
+                        direction: creativeDirection
                     )
                     plan = composeKineticPlan(
                         for: group,
@@ -1218,7 +1413,8 @@ class VideoProcessor: ObservableObject {
                         energy: basePlan.energy,
                         emphasisIndex: basePlan.emphasisIndex,
                         repeatCount: repeatCount,
-                        style: .automatic
+                        style: .automatic,
+                        creativeDirection: creativeDirection
                     )
                 }
             }
@@ -1236,8 +1432,47 @@ class VideoProcessor: ObservableObject {
 
     private func kineticBreathingScene(
         after scene: KineticScene,
-        wordCount: Int
+        wordCount: Int,
+        direction: KineticCreativeDirection
     ) -> KineticScene {
+        switch direction {
+        case .cinematicFlow:
+            switch scene {
+            case .phraseBuild:
+                return wordCount >= 3 ? .editorialStack : .focusCut
+            case .editorialStack, .captionWindow, .impactSequence:
+                return .phraseBuild
+            case .focusCut:
+                return .phraseBuild
+            case .chorusLockup:
+                return .chorusLockup
+            }
+        case .editorialStory:
+            break
+        case .rhythmicPulse:
+            switch scene {
+            case .focusCut, .impactSequence:
+                return wordCount >= 3 ? .captionWindow : .phraseBuild
+            case .captionWindow:
+                return .phraseBuild
+            case .phraseBuild, .editorialStack:
+                return wordCount >= 3 ? .captionWindow : .focusCut
+            case .chorusLockup:
+                return .chorusLockup
+            }
+        case .anthemLift:
+            switch scene {
+            case .focusCut, .impactSequence:
+                return wordCount >= 3 ? .editorialStack : .phraseBuild
+            case .editorialStack, .captionWindow:
+                return .phraseBuild
+            case .phraseBuild:
+                return wordCount >= 3 ? .editorialStack : .focusCut
+            case .chorusLockup:
+                return .chorusLockup
+            }
+        }
+
         switch scene {
         case .focusCut, .impactSequence:
             return wordCount >= 3 ? .captionWindow : .phraseBuild
@@ -1361,13 +1596,26 @@ class VideoProcessor: ObservableObject {
                     treatment: .standard
                 )
             }
-            switch plan.scene {
-            case .phraseBuild:
-                treatment = .wide
-            case .captionWindow, .chorusLockup:
-                treatment = .rhythm
-            case .focusCut, .editorialStack, .impactSequence:
-                treatment = .poster
+            switch plan.creativeDirection {
+            case .cinematicFlow:
+                switch plan.scene {
+                case .editorialStack, .chorusLockup: treatment = .poster
+                case .phraseBuild, .captionWindow, .focusCut, .impactSequence:
+                    treatment = .wide
+                }
+            case .editorialStory, .rhythmicPulse:
+                switch plan.scene {
+                case .phraseBuild: treatment = .wide
+                case .captionWindow, .chorusLockup: treatment = .rhythm
+                case .focusCut, .editorialStack, .impactSequence: treatment = .poster
+                }
+            case .anthemLift:
+                switch plan.scene {
+                case .phraseBuild: treatment = .wide
+                case .captionWindow: treatment = .rhythm
+                case .focusCut, .editorialStack, .chorusLockup, .impactSequence:
+                    treatment = .poster
+                }
             }
         }
 
@@ -1980,7 +2228,7 @@ class VideoProcessor: ObservableObject {
         segmentStart: Double,
         segmentEnd: Double
     ) -> String {
-        let resolvedStyle = overlayStyle.resolved(for: plan.scene)
+        let resolvedStyle = overlayStyle.resolved(for: plan)
         guard resolvedStyle != .none else { return "" }
         let groups = kineticOverlayGroups(
             placements: placements,
@@ -2169,6 +2417,7 @@ class VideoProcessor: ObservableObject {
             motion: plan.motion,
             highlight: plan.highlight,
             energy: plan.energy,
+            creativeDirection: plan.creativeDirection,
             emphasisIndex: 0,
             rows: [[0]],
             pages: [[0]],

@@ -816,7 +816,7 @@ private struct KineticPreviewLockup: View {
     }
 
     private var resolvedOverlay: KineticOverlayStyle {
-        overlayStyle.resolved(for: plan.scene)
+        overlayStyle.resolved(for: plan)
     }
 
     private var groupOverlayHorizontalPadding: CGFloat {

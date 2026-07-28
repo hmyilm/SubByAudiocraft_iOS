@@ -275,6 +275,103 @@ final class VideoProcessorTests: XCTestCase {
         )
     }
 
+    func testAutomaticDirectorBuildsOneIdentityFromWholeSong() {
+        let slow = [
+            [
+                VideoProcessor.WordTimestamp(text: "gece", start: 0.0, end: 0.8),
+                VideoProcessor.WordTimestamp(text: "sessiz", start: 0.9, end: 1.8),
+                VideoProcessor.WordTimestamp(text: "kalır", start: 1.9, end: 2.8)
+            ],
+            [
+                VideoProcessor.WordTimestamp(text: "içimde", start: 3.4, end: 4.2),
+                VideoProcessor.WordTimestamp(text: "izin", start: 4.3, end: 5.1),
+                VideoProcessor.WordTimestamp(text: "kalır", start: 5.2, end: 6.2)
+            ]
+        ]
+        let fast = [
+            makeRapidWords(["dön", "bana", "şimdi", "hemen"], offset: 0),
+            makeRapidWords(["kal", "burada", "sakın", "gitme"], offset: 1.0),
+            makeRapidWords(["ses", "ver", "duy", "beni"], offset: 2.0)
+        ]
+        let chorus = makeWords(["sensiz", "geceler", "bitmiyor", "yine"])
+        let repeated = [
+            chorus,
+            shiftedWords(chorus, by: 8),
+            makeRapidWords(["kal", "benimle", "bu", "gece"], offset: 10)
+        ]
+
+        XCTAssertEqual(
+            VideoProcessor.shared.kineticCreativeDirection(for: slow),
+            .cinematicFlow
+        )
+        XCTAssertEqual(
+            VideoProcessor.shared.kineticCreativeDirection(for: fast),
+            .rhythmicPulse
+        )
+        XCTAssertEqual(
+            VideoProcessor.shared.kineticCreativeDirection(for: repeated),
+            .anthemLift
+        )
+
+        let slowPlans = VideoProcessor.shared.kineticScenePlans(for: slow)
+        XCTAssertFalse(slowPlans.contains { $0.scene == .impactSequence })
+        XCTAssertTrue(
+            slowPlans.allSatisfy {
+                let overlay = KineticOverlayStyle.automatic.resolved(for: $0)
+                return overlay == .glass || overlay == .accentPanel
+            }
+        )
+    }
+
+    func testAutomaticPlansShareIdentityAndOnlyUseItsCompatibleSceneFamily() {
+        let groups = [
+            makeRapidWords(["dön", "bana", "şimdi", "hemen"], offset: 0),
+            makeRapidWords(["kal", "burada", "sakın", "gitme"], offset: 1.0),
+            shiftedWords(makeWords(["biraz", "nefes", "al"]), by: 2.2),
+            makeRapidWords(["ses", "ver", "duy", "beni"], offset: 4.0)
+        ]
+
+        let first = VideoProcessor.shared.kineticScenePlans(for: groups)
+        let second = VideoProcessor.shared.kineticScenePlans(for: groups)
+        let allowedScenes: [KineticScene] = [
+            .impactSequence,
+            .captionWindow,
+            .phraseBuild,
+            .focusCut,
+            .chorusLockup
+        ]
+
+        XCTAssertEqual(first, second)
+        XCTAssertTrue(first.allSatisfy { $0.creativeDirection == .rhythmicPulse })
+        XCTAssertTrue(first.allSatisfy { allowedScenes.contains($0.scene) })
+        XCTAssertFalse(first.contains { $0.scene == .editorialStack })
+    }
+
+    func testAutomaticOverlayUsesSongIdentityNotOnlyLocalScene() {
+        let words = makeWords(["kal", "benimle"])
+        let cinematic = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            creativeDirection: .cinematicFlow
+        )
+        let rhythmic = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            creativeDirection: .rhythmicPulse
+        )
+
+        XCTAssertEqual(cinematic.scene, .focusCut)
+        XCTAssertEqual(rhythmic.scene, .focusCut)
+        XCTAssertEqual(
+            KineticOverlayStyle.automatic.resolved(for: cinematic),
+            .glass
+        )
+        XCTAssertEqual(
+            KineticOverlayStyle.automatic.resolved(for: rhythmic),
+            .spotlight
+        )
+    }
+
     func testManualKineticStylesProduceCoherentSceneFamilies() {
         let words = makeWords(["gecenin", "içinde", "seni", "aradım"])
 

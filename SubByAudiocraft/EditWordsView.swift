@@ -67,6 +67,24 @@ struct EditWordsView: View {
                         kineticScenePlan: previewPlan
                     )
 
+                    if karaokeMode == .kinetic,
+                       kineticStyle == .automatic,
+                       let direction = previewPlan?.creativeDirection {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Label(
+                                "Otomatik yönetmen · \(direction.title)",
+                                systemImage: "wand.and.rays"
+                            )
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(Theme.yellow)
+
+                            Text(direction.detail)
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+
                     Label(
                         "Vurgulanan kelime o anda söylenen bölümü gösterir; sesi dinleyerek zamanlamayı kontrol edebilirsin.",
                         systemImage: "waveform"
