@@ -120,13 +120,13 @@ enum KineticStyle: String, CaseIterable, Identifiable, Codable {
     var detail: String {
         switch self {
         case .automatic:
-            return "Parçanın tamamından tek bir görsel kimlik çıkarır; nakarat, bölüm ve enerji değişimlerinde yalnız uyumlu sahneleri birlikte kullanır."
+            return "Parçanın tamamından tek kimlik çıkarır; açılış, kıta, yükseliş, nakarat ve rahatlama anlarında yalnız uyumlu kompozisyonları yönetir."
         case .cinematic:
-            return "Yumuşak girişler, sakin ölçek ve temiz cümle kompozisyonları kullanır."
+            return "Sakin cümle akışını korur; hızlı bölümlerde kısa sayfalara, nakaratta sabit imza düzenine kontrollü geçer."
         case .editorial:
-            return "Sözü afiş gibi iki veya üç katmanlı, güçlü bir tipografik düzende kurar."
+            return "Sözü afiş gibi katmanlar; vurgu satırını sağ-sol ekseninde kurar, hızlı ve sakin bölümlerde aynı editoryal kimliği korur."
         case .impact:
-            return "Her kelimeyi ritim üzerinde tek tek, büyük ve net kesmelerle öne çıkarır."
+            return "Güçlü kelimeleri ritim üzerinde kademeli sahneye taşır; arka arkaya darbeleri nefes sayfaları ve nakarat kilidiyle dengeler."
         }
     }
 
@@ -412,6 +412,7 @@ enum KineticLetterStyle: String, CaseIterable, Identifiable, Codable {
     case clean
     case poster
     case rhythm
+    case signature
 
     var id: String { rawValue }
 
@@ -421,6 +422,7 @@ enum KineticLetterStyle: String, CaseIterable, Identifiable, Codable {
         case .clean: return "Temiz"
         case .poster: return "Afiş"
         case .rhythm: return "Ritim"
+        case .signature: return "İmza"
         }
     }
 
@@ -430,6 +432,7 @@ enum KineticLetterStyle: String, CaseIterable, Identifiable, Codable {
         case .clean: return "textformat"
         case .poster: return "character.textbox"
         case .rhythm: return "waveform.path"
+        case .signature: return "textformat.alt"
         }
     }
 
@@ -443,6 +446,8 @@ enum KineticLetterStyle: String, CaseIterable, Identifiable, Codable {
             return "Yalnız odak kelimesinin anlam merkezindeki bir harfi büyütür."
         case .rhythm:
             return "Odak kelimesinde sesli harfleri hece akışına göre ölçülü dalgalandırır."
+        case .signature:
+            return "Odak kelimesini baş, merkez ve son harf arasında kontrollü boyut kontrastıyla bir başlık imzasına dönüştürür."
         }
     }
 
@@ -457,6 +462,7 @@ enum KineticGlyphTreatment: String, Equatable {
     case wide
     case poster
     case rhythm
+    case signature
 }
 
 struct KineticGlyphDesign {
@@ -529,16 +535,85 @@ enum KineticCreativeDirection: String, Equatable {
     }
 }
 
+enum KineticComposition: String, Equatable {
+    case centered
+    case leading
+    case trailing
+    case splitLeading
+    case splitTrailing
+    case staircase
+
+    var title: String {
+        switch self {
+        case .centered: return "Merkez Kilit"
+        case .leading: return "Sol Eksen"
+        case .trailing: return "Sağ Eksen"
+        case .splitLeading: return "Sol Vurgu Bölünümü"
+        case .splitTrailing: return "Sağ Vurgu Bölünümü"
+        case .staircase: return "Ritim Kademesi"
+        }
+    }
+}
+
+enum KineticSectionRole: String, Equatable {
+    case opening
+    case verse
+    case lift
+    case chorus
+    case release
+
+    var title: String {
+        switch self {
+        case .opening: return "Açılış"
+        case .verse: return "Kıta Akışı"
+        case .lift: return "Yükseliş"
+        case .chorus: return "Nakarat"
+        case .release: return "Rahatlama"
+        }
+    }
+}
+
 struct KineticTypographyPlan: Equatable {
     let scene: KineticScene
     let motion: KineticMotion
     let highlight: KineticHighlight
     let energy: KineticEnergy
     let creativeDirection: KineticCreativeDirection
+    let composition: KineticComposition
+    let sectionRole: KineticSectionRole
+    let motionGain: Double
     let emphasisIndex: Int
     let rows: [[Int]]
     let pages: [[Int]]
     let repeatCount: Int
+
+    init(
+        scene: KineticScene,
+        motion: KineticMotion,
+        highlight: KineticHighlight,
+        energy: KineticEnergy,
+        creativeDirection: KineticCreativeDirection,
+        composition: KineticComposition = .centered,
+        sectionRole: KineticSectionRole = .verse,
+        motionGain: Double = 1,
+        emphasisIndex: Int,
+        rows: [[Int]],
+        pages: [[Int]],
+        repeatCount: Int
+    ) {
+        self.scene = scene
+        self.motion = motion
+        self.highlight = highlight
+        self.energy = energy
+        self.creativeDirection = creativeDirection
+        self.composition = composition
+        self.sectionRole = sectionRole
+        self.motionGain = min(1.22, max(0.72, motionGain))
+        self.emphasisIndex = emphasisIndex
+        self.rows = rows
+        self.pages = pages
+        self.repeatCount = repeatCount
+    }
 }
 
 class VideoProcessor: ObservableObject {
@@ -946,8 +1021,10 @@ class VideoProcessor: ObservableObject {
         return fontName.replacingOccurrences(of: "-Bold", with: "").replacingOccurrences(of: "-Heavy", with: "").replacingOccurrences(of: "-Regular", with: "")
     }
     
-    // Kelimeler arası boşluk ve satır uzunluğuna göre otomatik satır önerisi üretir
-    // (en fazla 4 kelime / ~18 karakter; 0.8 sn'den uzun boşlukta yeni satır)
+    // Kelimeler arası boşluk, noktalama ve doğal okuma süresine göre otomatik satır
+    // önerisi üretir. Kısa dikey video için 4 kelime sınırı korunur; salt karakter
+    // sayısı yüzünden anlamlı bir tamlamayı ortadan bölmemek için 26 karaktere kadar
+    // izin verilir ve gerçek vokal durakları daha güçlü sınır kabul edilir.
     func autoLineGroups(for words: [WordTimestamp]) -> [[WordTimestamp]] {
         var groups: [[WordTimestamp]] = []
         var current: [WordTimestamp] = []
@@ -956,8 +1033,22 @@ class VideoProcessor: ObservableObject {
         for word in words {
             let wordLength = word.text.count
             if let lastWord = current.last {
-                let gap = word.start - lastWord.end
-                if current.count >= 4 || currentChars + wordLength > 18 || gap > 0.8 {
+                let gap = max(0, word.start - lastWord.end)
+                let lineDuration = max(0, word.end - (current.first?.start ?? word.start))
+                let previousText = lastWord.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let hardPhraseEnding = previousText.last.map { ".!?;:".contains($0) } ?? false
+                let commaPause = (previousText.last == "," || previousText.last == "—")
+                    && gap >= 0.08
+                let naturalPause = current.count >= 2 && gap >= 0.42
+                let readingWindowFull = current.count >= 3 && lineDuration > 2.45
+
+                if current.count >= 4
+                    || currentChars + wordLength > 26
+                    || gap > 0.8
+                    || hardPhraseEnding
+                    || commaPause
+                    || naturalPause
+                    || readingWindowFull {
                     groups.append(current)
                     current = []
                     currentChars = 0
@@ -1127,7 +1218,8 @@ class VideoProcessor: ObservableObject {
             emphasisIndex: emphasisIndex,
             repeatCount: repeatCount,
             style: style,
-            creativeDirection: direction
+            creativeDirection: direction,
+            sectionRole: repeatCount > 1 ? .chorus : .verse
         )
     }
 
@@ -1171,7 +1263,8 @@ class VideoProcessor: ObservableObject {
         emphasisIndex: Int,
         repeatCount: Int,
         style: KineticStyle,
-        creativeDirection: KineticCreativeDirection
+        creativeDirection: KineticCreativeDirection,
+        sectionRole: KineticSectionRole = .verse
     ) -> KineticTypographyPlan {
         let pages: [[Int]]
         if scene == .captionWindow {
@@ -1250,11 +1343,110 @@ class VideoProcessor: ObservableObject {
             highlight: highlight,
             energy: energy,
             creativeDirection: creativeDirection,
+            composition: kineticComposition(
+                for: words,
+                scene: scene,
+                style: style,
+                direction: creativeDirection,
+                sectionRole: sectionRole,
+                emphasisIndex: emphasisIndex
+            ),
+            sectionRole: sectionRole,
+            motionGain: kineticMotionGain(energy: energy, sectionRole: sectionRole),
             emphasisIndex: emphasisIndex,
             rows: rows,
             pages: pages,
             repeatCount: max(1, repeatCount)
         )
+    }
+
+    private func kineticComposition(
+        for words: [WordTimestamp],
+        scene: KineticScene,
+        style: KineticStyle,
+        direction: KineticCreativeDirection,
+        sectionRole: KineticSectionRole,
+        emphasisIndex: Int
+    ) -> KineticComposition {
+        if sectionRole == .chorus || scene == .chorusLockup {
+            return .centered
+        }
+
+        let seed = kineticLineSeed(words)
+        let leansLeading = (seed + emphasisIndex).isMultiple(of: 2)
+        switch scene {
+        case .impactSequence:
+            return .staircase
+        case .editorialStack:
+            return leansLeading ? .splitLeading : .splitTrailing
+        case .focusCut:
+            if style == .cinematic || direction == .cinematicFlow {
+                return .centered
+            }
+            return leansLeading ? .leading : .trailing
+        case .captionWindow:
+            switch direction {
+            case .cinematicFlow:
+                return .centered
+            case .editorialStory, .rhythmicPulse:
+                return leansLeading ? .leading : .trailing
+            case .anthemLift:
+                return sectionRole == .lift
+                    ? (leansLeading ? .leading : .trailing)
+                    : .centered
+            }
+        case .phraseBuild:
+            switch style {
+            case .cinematic:
+                return .centered
+            case .editorial:
+                return leansLeading ? .leading : .trailing
+            case .impact:
+                return words.count > 3 ? .staircase : .centered
+            case .automatic:
+                switch direction {
+                case .cinematicFlow, .anthemLift:
+                    return .centered
+                case .editorialStory:
+                    return leansLeading ? .leading : .trailing
+                case .rhythmicPulse:
+                    return words.count > 3 ? .staircase : .centered
+                }
+            }
+        case .chorusLockup:
+            return .centered
+        }
+    }
+
+    private func kineticMotionGain(
+        energy: KineticEnergy,
+        sectionRole: KineticSectionRole
+    ) -> Double {
+        let energyGain: Double
+        switch energy {
+        case .calm: energyGain = 0.84
+        case .steady: energyGain = 1
+        case .driving: energyGain = 1.13
+        }
+
+        let sectionGain: Double
+        switch sectionRole {
+        case .opening: sectionGain = 0.92
+        case .verse: sectionGain = 1
+        case .lift: sectionGain = 1.08
+        case .chorus: sectionGain = 1.06
+        case .release: sectionGain = 0.86
+        }
+        return energyGain * sectionGain
+    }
+
+    private func kineticLineSeed(_ words: [WordTimestamp]) -> Int {
+        var hash: UInt64 = 1_469_598_103_934_665_603
+        for scalar in kineticLineKey(words).unicodeScalars {
+            hash ^= UInt64(scalar.value)
+            hash &*= 1_099_511_628_211
+        }
+        return Int(hash % 10_007)
     }
 
     func kineticCreativeDirection(
@@ -1360,39 +1552,38 @@ class VideoProcessor: ObservableObject {
                 emphasisWordID: emphasisWordID,
                 creativeDirection: creativeDirection
             )
-            var plan = basePlan
             let previousEnd = index > 0 ? groups[index - 1].last?.end : nil
             let sectionGap = previousEnd.map { max(0, (group.first?.start ?? $0) - $0) }
                 ?? Double.greatestFiniteMagnitude
-            let isSectionOpening = style == .automatic
-                && sectionGap >= 0.75
-                && group.count > 2
-                && repeatCount == 1
+            let sectionRole = kineticSectionRole(
+                index: index,
+                repeatCount: repeatCount,
+                sectionGap: sectionGap,
+                energy: basePlan.energy,
+                previousEnergy: directed.last?.energy
+            )
+            let scene = directedKineticScene(
+                baseScene: basePlan.scene,
+                style: style,
+                direction: creativeDirection,
+                sectionRole: sectionRole,
+                energy: basePlan.energy,
+                wordCount: group.count
+            )
+            var plan = composeKineticPlan(
+                for: group,
+                scene: scene,
+                energy: basePlan.energy,
+                emphasisIndex: basePlan.emphasisIndex,
+                repeatCount: repeatCount,
+                style: style,
+                creativeDirection: creativeDirection,
+                sectionRole: sectionRole
+            )
 
-            if isSectionOpening,
-               basePlan.scene == .phraseBuild || basePlan.scene == .captionWindow {
-                // Sessizlikten sonraki açılış da parçanın seçilmiş görsel ailesinde kalır.
-                let openingScene: KineticScene
-                switch creativeDirection {
-                case .cinematicFlow: openingScene = .phraseBuild
-                case .editorialStory, .anthemLift: openingScene = .editorialStack
-                case .rhythmicPulse: openingScene = .captionWindow
-                }
-                plan = composeKineticPlan(
-                    for: group,
-                    scene: openingScene,
-                    energy: basePlan.energy,
-                    emphasisIndex: basePlan.emphasisIndex,
-                    repeatCount: repeatCount,
-                    style: .automatic,
-                    creativeDirection: creativeDirection
-                )
-            }
-
-            if style == .automatic,
-               !group.isEmpty,
+            if !group.isEmpty,
                repeatCount == 1,
-               !isSectionOpening,
+               sectionRole != .opening,
                let previousPlan = directed.last {
                 let backToBackPunch = plan.motion == .punchCut
                     && previousPlan.motion == .punchCut
@@ -1413,8 +1604,9 @@ class VideoProcessor: ObservableObject {
                         energy: basePlan.energy,
                         emphasisIndex: basePlan.emphasisIndex,
                         repeatCount: repeatCount,
-                        style: .automatic,
-                        creativeDirection: creativeDirection
+                        style: style,
+                        creativeDirection: creativeDirection,
+                        sectionRole: sectionRole
                     )
                 }
             }
@@ -1428,6 +1620,69 @@ class VideoProcessor: ObservableObject {
             directed.append(plan)
         }
         return directed
+    }
+
+    private func kineticSectionRole(
+        index: Int,
+        repeatCount: Int,
+        sectionGap: Double,
+        energy: KineticEnergy,
+        previousEnergy: KineticEnergy?
+    ) -> KineticSectionRole {
+        if repeatCount > 1 { return .chorus }
+        if index == 0 || sectionGap >= 0.75 { return .opening }
+        guard let previousEnergy else { return .verse }
+
+        let rank: (KineticEnergy) -> Int = {
+            switch $0 {
+            case .calm: return 0
+            case .steady: return 1
+            case .driving: return 2
+            }
+        }
+        let change = rank(energy) - rank(previousEnergy)
+        if change > 0 { return .lift }
+        if change < 0 { return .release }
+        return .verse
+    }
+
+    private func directedKineticScene(
+        baseScene: KineticScene,
+        style: KineticStyle,
+        direction: KineticCreativeDirection,
+        sectionRole: KineticSectionRole,
+        energy: KineticEnergy,
+        wordCount: Int
+    ) -> KineticScene {
+        if sectionRole == .chorus, wordCount > 2 {
+            return .chorusLockup
+        }
+        if wordCount <= 2 {
+            return .focusCut
+        }
+
+        switch style {
+        case .automatic:
+            guard sectionRole == .opening,
+                  baseScene == .phraseBuild || baseScene == .captionWindow else {
+                return baseScene
+            }
+            switch direction {
+            case .cinematicFlow: return .phraseBuild
+            case .editorialStory, .anthemLift: return .editorialStack
+            case .rhythmicPulse: return .captionWindow
+            }
+        case .cinematic:
+            if energy == .driving { return .captionWindow }
+            return .phraseBuild
+        case .editorial:
+            if sectionRole == .release { return .phraseBuild }
+            if energy == .driving { return .captionWindow }
+            return .editorialStack
+        case .impact:
+            if sectionRole == .release || energy == .calm { return .captionWindow }
+            return .impactSequence
+        }
     }
 
     private func kineticBreathingScene(
@@ -1553,6 +1808,7 @@ class VideoProcessor: ObservableObject {
         let locale = Locale(identifier: "tr_TR")
         var bestIndex = 0
         var bestScore = -Double.greatestFiniteMagnitude
+        let phraseMidpoint = Double(max(0, words.count - 1)) / 2
 
         for (index, word) in words.enumerated() {
             let normalized = word.text
@@ -1563,7 +1819,16 @@ class VideoProcessor: ObservableObject {
             }.count
             let duration = durations.indices.contains(index) ? durations[index] : 0.05
             let stopWordPenalty = stopWords.contains(normalized) ? 12.0 : 0
-            let score = (Double(letterCount) * 1.8) + (min(duration, 1.5) * 3.2) - stopWordPenalty
+            let emotionalBoost = kineticTurkishMeaningBoost(normalized)
+            let phrasePosition = words.count > 1
+                ? abs(Double(index) - phraseMidpoint) / phraseMidpoint
+                : 0
+            let phraseEdgeBoost = min(0.8, phrasePosition * 0.8)
+            let score = (Double(letterCount) * 1.55)
+                + (min(duration, 1.5) * 3.6)
+                + emotionalBoost
+                + phraseEdgeBoost
+                - stopWordPenalty
 
             if score > bestScore {
                 bestScore = score
@@ -1571,6 +1836,24 @@ class VideoProcessor: ObservableObject {
             }
         }
         return bestIndex
+    }
+
+    private func kineticTurkishMeaningBoost(_ normalized: String) -> Double {
+        // Bu sözlük transkripsiyon üretmez; yalnız aynı satır içindeki görsel vurgu
+        // adayını seçer. Kök eşleşmesi çekimli Türkçe sözlerde de "sevdam", "gözlerin",
+        // "dönmedin" gibi biçimleri yakalarken bilinmeyen kelimeleri değiştirmez.
+        let emotionalRoots = [
+            "aşk", "sev", "kalp", "özle", "yalnız", "hasret", "yara", "acı",
+            "göz", "ruh", "hayal", "rüya", "umut", "kader", "gece", "karan",
+            "sessiz", "yangın", "kül", "veda"
+        ]
+        let actionRoots = [
+            "dön", "git", "kal", "yan", "ağla", "öl", "bekle", "unut",
+            "sarıl", "kaç", "sus", "duy", "haykır"
+        ]
+        if emotionalRoots.contains(where: { normalized.hasPrefix($0) }) { return 6.2 }
+        if actionRoots.contains(where: { normalized.hasPrefix($0) }) { return 3.8 }
+        return 0
     }
 
     func kineticGlyphDesign(
@@ -1587,6 +1870,8 @@ class VideoProcessor: ObservableObject {
             treatment = wordIndex == plan.emphasisIndex ? .poster : .standard
         case .rhythm:
             treatment = wordIndex == plan.emphasisIndex ? .rhythm : .standard
+        case .signature:
+            treatment = wordIndex == plan.emphasisIndex ? .signature : .standard
         case .automatic:
             guard wordIndex == plan.emphasisIndex else {
                 return KineticGlyphDesign(
@@ -1606,14 +1891,16 @@ class VideoProcessor: ObservableObject {
             case .editorialStory, .rhythmicPulse:
                 switch plan.scene {
                 case .phraseBuild: treatment = .wide
-                case .captionWindow, .chorusLockup: treatment = .rhythm
+                case .captionWindow: treatment = .rhythm
+                case .chorusLockup: treatment = .signature
                 case .focusCut, .editorialStack, .impactSequence: treatment = .poster
                 }
             case .anthemLift:
                 switch plan.scene {
                 case .phraseBuild: treatment = .wide
                 case .captionWindow: treatment = .rhythm
-                case .focusCut, .editorialStack, .chorusLockup, .impactSequence:
+                case .chorusLockup: treatment = .signature
+                case .focusCut, .editorialStack, .impactSequence:
                     treatment = .poster
                 }
             }
@@ -1673,6 +1960,21 @@ class VideoProcessor: ObservableObject {
                 characters: characters,
                 scaleFactors: scales,
                 trackingFactor: 0.018,
+                treatment: treatment
+            )
+        case .signature:
+            let anchor = kineticAnchorGlyphIndex(in: characters)
+            let scales = characters.indices.map { index -> Double in
+                if index == anchor { return characters.count <= 3 ? 1.24 : 1.36 }
+                if index == characters.startIndex { return 1.18 }
+                if index == characters.index(before: characters.endIndex) { return 0.88 }
+                if abs(index - anchor) == 1 { return 1.02 }
+                return index.isMultiple(of: 2) ? 0.94 : 0.98
+            }
+            return KineticGlyphDesign(
+                characters: characters,
+                scaleFactors: scales,
+                trackingFactor: 0.012,
                 treatment: treatment
             )
         }
@@ -1798,13 +2100,76 @@ class VideoProcessor: ObservableObject {
         treatment: KineticGlyphTreatment
     ) -> Double {
         guard wordIndex == plan.emphasisIndex else { return 1 }
-        if treatment == .poster || treatment == .rhythm { return 1 }
+        if treatment == .poster || treatment == .rhythm || treatment == .signature { return 1 }
         switch plan.scene {
         case .phraseBuild: return 1.10
         case .captionWindow: return 1.08
         case .chorusLockup: return 1.12
         case .focusCut, .editorialStack, .impactSequence: return 1
         }
+    }
+
+    private func kineticIsolatedX(
+        plan: KineticTypographyPlan,
+        wordIndex: Int,
+        wordWidth: Double,
+        virtualWidth: Int
+    ) -> Int {
+        let inset = max(18.0, Double(virtualWidth) * 0.065)
+        let minimum = inset + wordWidth / 2
+        let maximum = Double(virtualWidth) - inset - wordWidth / 2
+        let center = Double(virtualWidth) / 2
+        let proposed: Double
+
+        switch plan.composition {
+        case .centered:
+            proposed = center
+        case .leading:
+            proposed = minimum
+        case .trailing:
+            proposed = maximum
+        case .splitLeading:
+            proposed = wordIndex == plan.emphasisIndex ? minimum : maximum
+        case .splitTrailing:
+            proposed = wordIndex == plan.emphasisIndex ? maximum : minimum
+        case .staircase:
+            let stops = [0.30, 0.50, 0.70]
+            proposed = Double(virtualWidth) * stops[wordIndex % stops.count]
+        }
+        return Int(min(maximum, max(minimum, proposed)).rounded())
+    }
+
+    private func kineticRowStartX(
+        plan: KineticTypographyPlan,
+        row: [Int],
+        rowIndex: Int,
+        rowCount: Int,
+        rowWidth: Double,
+        virtualWidth: Int
+    ) -> Double {
+        let inset = max(18.0, Double(virtualWidth) * 0.065)
+        let leading = inset
+        let trailing = Double(virtualWidth) - inset - rowWidth
+        let centered = (Double(virtualWidth) - rowWidth) / 2
+        let emphasizedRow = row.contains(plan.emphasisIndex)
+        let proposed: Double
+
+        switch plan.composition {
+        case .centered:
+            proposed = centered
+        case .leading:
+            proposed = leading
+        case .trailing:
+            proposed = trailing
+        case .splitLeading:
+            proposed = emphasizedRow ? leading : trailing
+        case .splitTrailing:
+            proposed = emphasizedRow ? trailing : leading
+        case .staircase:
+            let centeredIndex = Double(rowIndex) - (Double(max(1, rowCount) - 1) / 2)
+            proposed = centered + centeredIndex * max(12, Double(virtualWidth) * 0.055)
+        }
+        return min(trailing, max(leading, proposed))
     }
 
     private func kineticPlacements(
@@ -1819,7 +2184,7 @@ class VideoProcessor: ObservableObject {
         rowsOverride: [[Int]]? = nil
     ) -> [KineticWordPlacement] {
         let baseSize = max(24, requestedFontSize)
-        let safeWidth = Double(virtualWidth) * 0.90
+        let safeWidth = Double(virtualWidth) * 0.87
         let layoutRows = rowsOverride ?? plan.rows
         let targetY = min(
             Double(virtualHeight) - 30,
@@ -1859,20 +2224,46 @@ class VideoProcessor: ObservableObject {
                     fitted,
                     Int((Double(fitted) * glyphDesign.maximumScale).rounded(.up))
                 )
+                let x = kineticIsolatedX(
+                    plan: plan,
+                    wordIndex: index,
+                    wordWidth: fittedWidth,
+                    virtualWidth: virtualWidth
+                )
+                let staircaseOffset: Double
+                if plan.composition == .staircase {
+                    staircaseOffset = [-0.16, 0.04, 0.16][index % 3] * Double(baseSize)
+                } else {
+                    staircaseOffset = 0
+                }
+                let safeY = min(
+                    Double(virtualHeight) - Double(visualSize) * 0.55 - 16,
+                    max(
+                        Double(visualSize) * 0.55 + 16,
+                        targetY + staircaseOffset
+                    )
+                )
                 return KineticWordPlacement(
                     index: index,
                     rowIndex: 0,
                     fontSize: fitted,
                     visualFontSize: visualSize,
                     width: fittedWidth,
-                    x: virtualWidth / 2,
-                    y: Int(targetY.rounded()),
+                    x: x,
+                    y: Int(safeY.rounded()),
                     glyphDesign: glyphDesign
                 )
             }
         }
 
-        let rowGap = max(44, Double(baseSize) * 0.92)
+        let rowGapMultiplier: Double
+        switch plan.scene {
+        case .editorialStack: rowGapMultiplier = 1.10
+        case .chorusLockup: rowGapMultiplier = 1.02
+        case .phraseBuild, .captionWindow, .focusCut, .impactSequence:
+            rowGapMultiplier = 0.94
+        }
+        let rowGap = max(46, Double(baseSize) * rowGapMultiplier)
         let firstY = targetY - (Double(max(0, layoutRows.count - 1)) * rowGap / 2)
         var placements: [KineticWordPlacement] = []
 
@@ -1940,7 +2331,14 @@ class VideoProcessor: ObservableObject {
                 rowWidth = widths.reduce(0, +) + spacing * Double(max(0, row.count - 1))
             }
 
-            var xCursor = (Double(virtualWidth) - rowWidth) / 2
+            var xCursor = kineticRowStartX(
+                plan: plan,
+                row: row,
+                rowIndex: rowIndex,
+                rowCount: layoutRows.count,
+                rowWidth: rowWidth,
+                virtualWidth: virtualWidth
+            )
             let rawY = firstY + Double(rowIndex) * rowGap
             let visualSizes = wordSizes.enumerated().map { offset, size in
                 max(
@@ -1985,9 +2383,13 @@ class VideoProcessor: ObservableObject {
         case .editorialStack: baseInitialScale = 92
         case .phraseBuild: baseInitialScale = style == .cinematic ? 96 : 92
         }
-        let depth = Double(100 - baseInitialScale) * intensity.motionMultiplier
+        let effectiveMotion = intensity.motionMultiplier * plan.motionGain
+        let depth = Double(100 - baseInitialScale) * effectiveMotion
         let initialScale = max(76, min(99, 100 - Int(depth.rounded())))
-        let duration = max(140, Int((240.0 * intensity.durationMultiplier).rounded()))
+        let duration = max(
+            120,
+            Int((240.0 * intensity.durationMultiplier / max(0.82, plan.motionGain)).rounded())
+        )
         return "\\fad(120,140)\\fscx\(initialScale)\\fscy\(initialScale)\\blur1.0" +
             "\\t(0,\(duration),1.8,\\fscx100\\fscy100\\blur0.25)"
     }
@@ -2035,7 +2437,11 @@ class VideoProcessor: ObservableObject {
         let tags: String
         let decorationDuration = max(
             55,
-            Int((80.0 * intensity.durationMultiplier).rounded())
+            Int((
+                80.0
+                    * intensity.durationMultiplier
+                    / max(0.82, plan.motionGain)
+            ).rounded())
         )
 
         if plan.highlight == .pill {
@@ -2044,7 +2450,10 @@ class VideoProcessor: ObservableObject {
             radius = max(6, height / 4)
             left = placement.x - width / 2
             top = placement.y - height / 2
-            let lift = max(2, Int((6.0 * intensity.motionMultiplier).rounded()))
+            let lift = max(
+                2,
+                Int((6.0 * intensity.motionMultiplier * plan.motionGain).rounded())
+            )
             tags = "{\\an7\\move(\(left),\(top + lift),\(left),\(top),0,\(decorationDuration))" +
                 "\\p1\\bord0\\shad0\\c&H\(accent.assColor)&\\alpha&H12&\\fad(45,70)}"
         } else {
@@ -2282,10 +2691,18 @@ class VideoProcessor: ObservableObject {
                     alpha: "4E",
                     extraTags: "\\bord1.2\\3c&HFFFFFF&\\3a&HD5&\\fad(75,100)"
                 )
+                let hairlineWidth = min(max(40, bounds.width / 3), 110)
+                let hairlineLeft: Int
+                switch plan.composition {
+                case .trailing, .splitTrailing:
+                    hairlineLeft = bounds.left + bounds.width - hairlineWidth - max(12, bounds.radius)
+                case .centered, .leading, .splitLeading, .staircase:
+                    hairlineLeft = bounds.left + max(12, bounds.radius)
+                }
                 let hairline = KineticOverlayBounds(
-                    left: bounds.left + max(12, bounds.radius),
+                    left: hairlineLeft,
                     top: bounds.top,
-                    width: min(max(40, bounds.width / 3), 110),
+                    width: hairlineWidth,
                     height: 3,
                     radius: 1
                 )
@@ -2334,8 +2751,10 @@ class VideoProcessor: ObservableObject {
                     alpha: "42",
                     extraTags: "\\bord1\\3c&HFFFFFF&\\3a&HE0&\\fad(80,110)"
                 )
+                let sideBarOnRight = plan.composition == .trailing
+                    || plan.composition == .splitTrailing
                 let sideBar = KineticOverlayBounds(
-                    left: bounds.left,
+                    left: sideBarOnRight ? bounds.left + bounds.width - 5 : bounds.left,
                     top: bounds.top + max(9, bounds.radius / 2),
                     width: 5,
                     height: max(12, bounds.height - max(18, bounds.radius)),
@@ -2350,6 +2769,25 @@ class VideoProcessor: ObservableObject {
                     alpha: "08",
                     extraTags: "\\fad(90,110)"
                 )
+                if plan.sectionRole == .chorus {
+                    let chorusRuleWidth = min(max(56, bounds.width / 2), 180)
+                    let chorusRule = KineticOverlayBounds(
+                        left: bounds.left + (bounds.width - chorusRuleWidth) / 2,
+                        top: bounds.top + bounds.height - 3,
+                        width: chorusRuleWidth,
+                        height: 3,
+                        radius: 1
+                    )
+                    result += kineticOverlayShapeDialogue(
+                        layer: 1,
+                        start: group.start,
+                        end: group.end,
+                        bounds: chorusRule,
+                        color: accent.assColor,
+                        alpha: "18",
+                        extraTags: "\\fscx0\\fad(90,110)\\t(0,140,1.8,\\fscx100)"
+                    )
+                }
             case .spotlight:
                 result += kineticOverlayShapeDialogue(
                     layer: 0,
@@ -2418,6 +2856,9 @@ class VideoProcessor: ObservableObject {
             highlight: plan.highlight,
             energy: plan.energy,
             creativeDirection: plan.creativeDirection,
+            composition: plan.composition,
+            sectionRole: plan.sectionRole,
+            motionGain: plan.motionGain,
             emphasisIndex: 0,
             rows: [[0]],
             pages: [[0]],
@@ -2591,7 +3032,11 @@ class VideoProcessor: ObservableObject {
             }
             let entranceDuration = max(
                 80,
-                Int((Double(baseEntranceDuration) * intensity.durationMultiplier).rounded())
+                Int((
+                    Double(baseEntranceDuration)
+                        * intensity.durationMultiplier
+                        / max(0.82, plan.motionGain)
+                ).rounded())
             )
             let entryPeak = min(eventDurationMs, entryStart + entranceDuration)
             let entryEnd = min(eventDurationMs, entryPeak + (isolatedWord ? 90 : 70))
@@ -2603,22 +3048,44 @@ class VideoProcessor: ObservableObject {
             case .sideReveal: baseEntranceScale = 92
             case .softLift: baseEntranceScale = style == .cinematic ? 96 : 93
             }
-            let entranceDepth = Double(100 - baseEntranceScale) * intensity.motionMultiplier
+            let effectiveMotion = intensity.motionMultiplier * plan.motionGain
+            let entranceDepth = Double(100 - baseEntranceScale) * effectiveMotion
             let entranceScale = max(66, min(99, 100 - Int(entranceDepth.rounded())))
             let motionOffset: (Int) -> Int = { base in
-                max(1, Int((Double(base) * intensity.motionMultiplier).rounded()))
+                max(1, Int((Double(base) * effectiveMotion).rounded()))
             }
 
             var tags = "{\\an5"
             switch plan.motion {
             case .sideReveal:
                 let distance = motionOffset(18)
-                let slide = placement.rowIndex.isMultiple(of: 2) ? -distance : distance
+                let slide: Int
+                switch plan.composition {
+                case .leading, .splitLeading:
+                    slide = -distance
+                case .trailing, .splitTrailing:
+                    slide = distance
+                case .centered, .staircase:
+                    slide = placement.rowIndex.isMultiple(of: 2) ? -distance : distance
+                }
                 tags += "\\move(\(placement.x + slide),\(placement.y),\(placement.x),\(placement.y),0,\(entryPeak))"
             case .punchCut:
-                tags += "\\move(\(placement.x),\(placement.y + motionOffset(16)),\(placement.x),\(placement.y),0,\(entryPeak))"
+                if plan.composition == .staircase {
+                    let horizontal = index.isMultiple(of: 2)
+                        ? -motionOffset(12)
+                        : motionOffset(12)
+                    tags += "\\move(\(placement.x + horizontal),\(placement.y + motionOffset(10)),\(placement.x),\(placement.y),0,\(entryPeak))"
+                } else {
+                    tags += "\\move(\(placement.x),\(placement.y + motionOffset(16)),\(placement.x),\(placement.y),0,\(entryPeak))"
+                }
             case .softLift:
-                tags += "\\move(\(placement.x),\(placement.y + motionOffset(10)),\(placement.x),\(placement.y),0,\(entryPeak))"
+                let horizontal: Int
+                switch plan.composition {
+                case .leading, .splitLeading: horizontal = -motionOffset(5)
+                case .trailing, .splitTrailing: horizontal = motionOffset(5)
+                case .centered, .staircase: horizontal = 0
+                }
+                tags += "\\move(\(placement.x + horizontal),\(placement.y + motionOffset(10)),\(placement.x),\(placement.y),0,\(entryPeak))"
             case .pagePop:
                 tags += "\\move(\(placement.x),\(placement.y + motionOffset(12)),\(placement.x),\(placement.y),0,\(entryPeak))"
             case .lockedReveal:
@@ -2661,8 +3128,14 @@ class VideoProcessor: ObservableObject {
                 : resolvedAccent.assColor
             let shouldPulse = !isolatedWord && wordStartMs >= entryPeak
             let highlightScale = plan.highlight == .glow
-                ? min(112, intensity.activeScale + 2)
-                : intensity.activeScale
+                ? min(
+                    114,
+                    100 + Int((Double(intensity.activeScale - 98) * plan.motionGain).rounded())
+                )
+                : min(
+                    112,
+                    100 + Int((Double(intensity.activeScale - 100) * plan.motionGain).rounded())
+                )
             let activeScaleTags = shouldPulse
                 ? "\\fscx\(highlightScale)\\fscy\(highlightScale)"
                 : ""

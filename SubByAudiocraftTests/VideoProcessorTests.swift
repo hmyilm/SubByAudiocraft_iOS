@@ -21,6 +21,17 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(groups.map(\.count), [2, 1])
     }
 
+    func testAutomaticGroupingHonorsNaturalPhrasePunctuation() {
+        let words = makeWords(["seni", "bekledim,", "ama", "gelmedin"])
+
+        let groups = VideoProcessor.shared.autoLineGroups(for: words)
+
+        XCTAssertEqual(groups.map { $0.map(\.text) }, [
+            ["seni", "bekledim,"],
+            ["ama", "gelmedin"]
+        ])
+    }
+
     func testAutomaticBreaksContainEveryGroupEnd() {
         let words = makeWords(["a", "b", "c", "d", "e", "f"])
 
@@ -230,6 +241,8 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(plans.map(\.scene), [.chorusLockup, .chorusLockup])
         XCTAssertEqual(plans.map(\.repeatCount), [2, 2])
         XCTAssertEqual(plans[0].rows, plans[1].rows)
+        XCTAssertEqual(plans.map(\.composition), [.centered, .centered])
+        XCTAssertEqual(plans.map(\.sectionRole), [.chorus, .chorus])
     }
 
     func testAutomaticDirectorUsesRealSectionGapInsteadOfLineNumberRandomness() {
@@ -513,6 +526,114 @@ final class VideoProcessorTests: XCTestCase {
 
         XCTAssertEqual(plans[0].emphasisIndex, 1)
         XCTAssertEqual(plans[1].emphasisIndex, 2)
+    }
+
+    func testSemanticDirectorPrefersEmotionalTurkishRootOverLongNeutralWord() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "uzaklarda", start: 0.0, end: 0.3),
+            VideoProcessor.WordTimestamp(text: "sevdam", start: 0.4, end: 0.7),
+            VideoProcessor.WordTimestamp(text: "duruyor", start: 0.8, end: 1.1)
+        ]
+
+        let plan = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 0)
+
+        XCTAssertEqual(plan.emphasisIndex, 1)
+    }
+
+    func testEachManualModeUsesAConsistentButVariedSceneFamily() {
+        let calm = [
+            VideoProcessor.WordTimestamp(text: "gece", start: 0.0, end: 0.8),
+            VideoProcessor.WordTimestamp(text: "sessiz", start: 0.9, end: 1.7),
+            VideoProcessor.WordTimestamp(text: "kalır", start: 1.8, end: 2.7)
+        ]
+        let rapid = makeRapidWords(["dön", "bana", "şimdi", "hemen"], offset: 3.0)
+        let chorus = shiftedWords(makeWords(["sensiz", "geceler", "bitmiyor", "yine"]), by: 5.0)
+        let chorusRepeat = shiftedWords(chorus, by: 5.0)
+        let groups = [calm, rapid, chorus, chorusRepeat]
+
+        let cinematic = VideoProcessor.shared.kineticScenePlans(for: groups, style: .cinematic)
+        let editorial = VideoProcessor.shared.kineticScenePlans(for: groups, style: .editorial)
+        let impact = VideoProcessor.shared.kineticScenePlans(for: groups, style: .impact)
+
+        XCTAssertEqual(cinematic.map(\.scene), [
+            .phraseBuild, .captionWindow, .chorusLockup, .chorusLockup
+        ])
+        XCTAssertEqual(editorial.map(\.scene), [
+            .editorialStack, .captionWindow, .chorusLockup, .chorusLockup
+        ])
+        XCTAssertEqual(impact.map(\.scene), [
+            .captionWindow, .impactSequence, .chorusLockup, .chorusLockup
+        ])
+        XCTAssertTrue(cinematic.allSatisfy { $0.creativeDirection == .cinematicFlow })
+        XCTAssertTrue(editorial.allSatisfy { $0.creativeDirection == .editorialStory })
+        XCTAssertTrue(impact.allSatisfy { $0.creativeDirection == .rhythmicPulse })
+    }
+
+    func testCompositionLanguageMatchesModeInsteadOfLineNumberRandomness() {
+        let words = makeWords(["gecenin", "içinde", "seni", "aradım"])
+        let cinematic = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 2,
+            style: .cinematic
+        )
+        let editorial = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 92,
+            style: .editorial
+        )
+        let impact = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 17,
+            style: .impact
+        )
+
+        XCTAssertEqual(cinematic.composition, .centered)
+        XCTAssertTrue([.splitLeading, .splitTrailing].contains(editorial.composition))
+        XCTAssertEqual(impact.composition, .staircase)
+        XCTAssertEqual(
+            editorial.composition,
+            VideoProcessor.shared.kineticTypographyPlan(
+                for: words,
+                lineIndex: 999,
+                style: .editorial
+            ).composition
+        )
+    }
+
+    func testSectionEnergyShapesMotionWithoutChangingUserIntensity() {
+        let calm = [
+            VideoProcessor.WordTimestamp(text: "sessiz", start: 0.0, end: 0.9),
+            VideoProcessor.WordTimestamp(text: "gece", start: 1.0, end: 1.9),
+            VideoProcessor.WordTimestamp(text: "kalır", start: 2.0, end: 3.0)
+        ]
+        let rapid = makeRapidWords(["dön", "bana", "şimdi", "hemen"], offset: 3.2)
+
+        let plans = VideoProcessor.shared.kineticScenePlans(for: [calm, rapid])
+
+        XCTAssertEqual(plans[0].sectionRole, .opening)
+        XCTAssertEqual(plans[1].sectionRole, .lift)
+        XCTAssertGreaterThan(plans[1].motionGain, plans[0].motionGain)
+    }
+
+    func testSignatureLetterDesignCreatesControlledThreeLevelContrast() {
+        let words = makeWords(["bu", "sevdam", "benim"])
+        let plan = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            emphasisWordID: words[1].id
+        )
+        let design = VideoProcessor.shared.kineticGlyphDesign(
+            text: words[1].text,
+            wordIndex: 1,
+            plan: plan,
+            letterStyle: .signature
+        )
+
+        XCTAssertEqual(String(design.characters), "SEVDAM")
+        XCTAssertEqual(design.treatment, .signature)
+        XCTAssertGreaterThanOrEqual(Set(design.scaleFactors).count, 4)
+        XCTAssertGreaterThanOrEqual(design.maximumScale, 1.36)
+        XCTAssertTrue(design.scaleFactors.contains(where: { $0 < 0.9 }))
     }
 
     func testKineticASSCreatesTimedLayerForEveryWord() {
@@ -806,6 +927,7 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(KineticLetterStyle.resolved(nil), .clean)
         XCTAssertEqual(KineticLetterStyle.resolved("bilinmeyen"), .clean)
         XCTAssertEqual(KineticLetterStyle.resolved("poster"), .poster)
+        XCTAssertEqual(KineticLetterStyle.resolved("signature"), .signature)
         XCTAssertEqual(KineticOverlayStyle.resolved("glass"), .glass)
     }
 

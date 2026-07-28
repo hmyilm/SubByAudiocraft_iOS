@@ -796,8 +796,13 @@ private struct KineticPreviewLockup: View {
                     }
                 }
                 .frame(
-                    maxWidth: resolvedOverlay == .cinematicBand ? .infinity : nil,
-                    alignment: .center
+                    maxWidth: usesSplitPreviewLayout || resolvedOverlay == .cinematicBand
+                        ? .infinity
+                        : nil,
+                    alignment: previewRowAlignment(
+                        rowIndex: rowItem.offset,
+                        row: rowItem.element
+                    )
                 )
             }
         }
@@ -808,6 +813,7 @@ private struct KineticPreviewLockup: View {
             alignment: .center
         )
         .background { groupOverlayBackground }
+        .frame(maxWidth: .infinity, alignment: previewGroupAlignment)
         .animation(.easeOut(duration: previewAnimationDuration), value: activeIndex)
     }
 
@@ -898,26 +904,75 @@ private struct KineticPreviewLockup: View {
     }
 
     private var previewActiveScale: CGFloat {
+        let base: CGFloat
         switch intensity {
-        case .subtle: return 1.025
-        case .balanced: return 1.06
-        case .energetic: return 1.10
+        case .subtle: base = 1.025
+        case .balanced: base = 1.06
+        case .energetic: base = 1.10
         }
+        return min(1.14, 1 + ((base - 1) * CGFloat(plan.motionGain)))
     }
 
     private var previewEntranceScale: CGFloat {
+        let base: CGFloat
         switch intensity {
-        case .subtle: return 0.88
-        case .balanced: return 0.72
-        case .energetic: return 0.64
+        case .subtle: base = 0.88
+        case .balanced: base = 0.72
+        case .energetic: base = 0.64
         }
+        return max(0.58, 1 - ((1 - base) * CGFloat(plan.motionGain)))
     }
 
     private var previewAnimationDuration: Double {
+        let base: Double
         switch intensity {
-        case .subtle: return 0.26
-        case .balanced: return 0.18
-        case .energetic: return 0.12
+        case .subtle: base = 0.26
+        case .balanced: base = 0.18
+        case .energetic: base = 0.12
+        }
+        return max(0.09, base / max(0.82, plan.motionGain))
+    }
+
+    private var usesSplitPreviewLayout: Bool {
+        plan.composition == .splitLeading || plan.composition == .splitTrailing
+    }
+
+    private var previewGroupAlignment: Alignment {
+        switch plan.composition {
+        case .leading, .splitLeading:
+            return .leading
+        case .trailing, .splitTrailing:
+            return .trailing
+        case .staircase:
+            switch focusedIndex % 3 {
+            case 0: return .leading
+            case 2: return .trailing
+            default: return .center
+            }
+        case .centered:
+            return .center
+        }
+    }
+
+    private func previewRowAlignment(rowIndex: Int, row: [Int]) -> Alignment {
+        let emphasizedRow = row.contains(plan.emphasisIndex)
+        switch plan.composition {
+        case .splitLeading:
+            return emphasizedRow ? .leading : .trailing
+        case .splitTrailing:
+            return emphasizedRow ? .trailing : .leading
+        case .leading:
+            return .leading
+        case .trailing:
+            return .trailing
+        case .staircase:
+            switch rowIndex % 3 {
+            case 0: return .leading
+            case 2: return .trailing
+            default: return .center
+            }
+        case .centered:
+            return .center
         }
     }
 
@@ -947,7 +1002,8 @@ private struct KineticPreviewLockup: View {
         let emphasisScale: Double
         if wordIndex == plan.emphasisIndex
             && treatment != .poster
-            && treatment != .rhythm {
+            && treatment != .rhythm
+            && treatment != .signature {
             switch plan.scene {
             case .phraseBuild: emphasisScale = 1.10
             case .captionWindow: emphasisScale = 1.08

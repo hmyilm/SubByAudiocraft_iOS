@@ -68,17 +68,19 @@ struct EditWordsView: View {
                     )
 
                     if karaokeMode == .kinetic,
-                       kineticStyle == .automatic,
-                       let direction = previewPlan?.creativeDirection {
+                       let plan = previewPlan {
                         VStack(alignment: .leading, spacing: 3) {
                             Label(
-                                "Otomatik yönetmen · \(direction.title)",
-                                systemImage: "wand.and.rays"
+                                "\(kineticStyle.title) yönetmen · \(plan.creativeDirection.title)",
+                                systemImage: kineticStyle.icon
                             )
                             .font(.caption.weight(.semibold))
                             .foregroundColor(Theme.yellow)
 
-                            Text(direction.detail)
+                            Text(
+                                "\(plan.sectionRole.title) · \(plan.composition.title) · " +
+                                plan.creativeDirection.detail
+                            )
                                 .font(.caption2)
                                 .foregroundColor(.gray)
                                 .fixedSize(horizontal: false, vertical: true)
