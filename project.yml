@@ -8,18 +8,24 @@ packages:
   Qwen3Speech:
     url: https://github.com/soniqo/speech-swift
     exactVersion: 0.0.23
+  # mlx-swift 0.31.5+ CudaBuild eklentisini tüm hedef grafiğine ekliyor.
+  # CUDA iOS'ta kullanılmadığı halde Xcode, etkileşimsiz CI testinde eklenti onayı
+  # bekliyor. Qwen3Speech 0.0.23 ile uyumlu son eklentisiz sürümü sabit tut.
+  MLXSwift:
+    url: https://github.com/ml-explore/mlx-swift
+    exactVersion: 0.31.4
 targets:
   SubByAudiocraft:
     type: application
     platform: iOS
     deploymentTarget: "18.0"
-    version: 1.18.0
-    build: 42
+    version: 1.18.1
+    build: 43
     settings:
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       PRODUCT_BUNDLE_IDENTIFIER: com.hmyilm.SubByAudiocraft
-      MARKETING_VERSION: "1.18.0"
-      CURRENT_PROJECT_VERSION: "42"
+      MARKETING_VERSION: "1.18.1"
+      CURRENT_PROJECT_VERSION: "43"
     sources: [SubByAudiocraft]
     dependencies:
       - package: WhisperKit
@@ -60,8 +66,8 @@ targets:
         UILaunchScreen: {}
         CFBundleIconName: AppIcon
         CFBundleDisplayName: Sub by Audiocraft
-        CFBundleShortVersionString: "1.18.0"
-        CFBundleVersion: "42"
+        CFBundleShortVersionString: "1.18.1"
+        CFBundleVersion: "43"
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
