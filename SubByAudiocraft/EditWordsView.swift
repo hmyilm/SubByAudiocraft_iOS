@@ -10,6 +10,7 @@ struct EditWordsView: View {
     @Binding var fontSize: Double
     @Binding var marginV: Double
     @Binding var karaokeMode: KaraokeMode
+    @Binding var kineticStyle: KineticStyle
 
     @State private var expandedWordID: UUID? = nil
     @State private var previewLine: String = ""
@@ -49,7 +50,10 @@ struct EditWordsView: View {
                         playbackTime: playbackTime,
                         isMuted: false,
                         karaokeMode: karaokeMode,
-                        kineticLineIndex: previewLineIndex
+                        kineticStyle: kineticStyle,
+                        kineticLineIndex: previewLineIndex,
+                        kineticRepeatCount: previewPlan?.repeatCount ?? 1,
+                        kineticScenePlan: previewPlan
                     )
 
                     Label(
@@ -59,7 +63,7 @@ struct EditWordsView: View {
                     .font(.caption2)
                     .foregroundColor(.gray)
 
-                    KaraokeModePicker(selection: $karaokeMode)
+                    KaraokeModePicker(selection: $karaokeMode, kineticStyle: $kineticStyle)
 
                     // Font burada da değiştirilebilir: Geçmiş'ten açılan projelerde
                     // 1. adıma (video seçme) dönüş yoktur, stilin tamamı bu ekrandan yönetilir.
@@ -144,6 +148,12 @@ struct EditWordsView: View {
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
             updatePreviewLine()
         }
+    }
+
+    private var previewPlan: KineticTypographyPlan? {
+        guard lines.indices.contains(previewLineIndex) else { return nil }
+        let plans = VideoProcessor.shared.kineticScenePlans(for: lines, style: kineticStyle)
+        return plans[previewLineIndex]
     }
 
     private func updatePreviewLine() {

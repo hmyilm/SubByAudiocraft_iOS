@@ -153,16 +153,16 @@ final class VideoProcessorTests: XCTestCase {
         let plan = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 0)
 
         XCTAssertEqual(plan.emphasisIndex, 2)
-        XCTAssertGreaterThanOrEqual(plan.scales[2], 1.2)
+        XCTAssertEqual(plan.rows.flatMap { $0 }.sorted(), Array(words.indices))
     }
 
-    func testKineticPlanUsesStatementForShortPhrase() {
+    func testKineticPlanUsesFocusCutForShortPhrase() {
         let words = makeWords(["kara", "sevda"])
 
         let plan = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 4)
 
-        XCTAssertEqual(plan.composition, .statement)
-        XCTAssertEqual(plan.scales.count, words.count)
+        XCTAssertEqual(plan.scene, .focusCut)
+        XCTAssertEqual(plan.rows, [[0, 1]])
     }
 
     func testKineticPlanRespondsToFastVocalCadence() {
@@ -175,7 +175,7 @@ final class VideoProcessorTests: XCTestCase {
 
         let plan = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 1)
 
-        XCTAssertEqual(plan.composition, .rhythmic)
+        XCTAssertEqual(plan.scene, .impactSequence)
     }
 
     func testKineticPlanRespondsToSustainedVocal() {
@@ -187,19 +187,74 @@ final class VideoProcessorTests: XCTestCase {
 
         let plan = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 2)
 
-        XCTAssertEqual(plan.composition, .sustain)
+        XCTAssertEqual(plan.scene, .editorialStack)
+        XCTAssertTrue(plan.rows.contains([plan.emphasisIndex]))
     }
 
-    func testKineticPlanIsDeterministicAndKeepsTastefulBounds() {
+    func testKineticPlanIsDeterministicAndNeverLosesAWord() {
         let words = makeWords(["gecenin", "içinde", "seni", "aradım"])
 
         let first = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 7)
         let second = VideoProcessor.shared.kineticTypographyPlan(for: words, lineIndex: 7)
 
         XCTAssertEqual(first, second)
-        XCTAssertTrue(first.scales.allSatisfy { (0.78...1.34).contains($0) })
-        XCTAssertTrue(first.rotations.allSatisfy { (-2.5...2.5).contains($0) })
-        XCTAssertGreaterThan(Set(first.scales).count, 1)
+        XCTAssertEqual(first.rows.flatMap { $0 }.sorted(), Array(words.indices))
+        XCTAssertEqual(Set(first.rows.flatMap { $0 }).count, words.count)
+    }
+
+    func testRepeatedLyricsReceiveTheSameChorusLockup() {
+        let first = makeWords(["sensiz", "geceler", "bitmiyor", "yine"])
+        let second = first.enumerated().map { index, word in
+            VideoProcessor.WordTimestamp(
+                text: index == 3 ? "yine!" : word.text,
+                start: word.start + 8,
+                end: word.end + 8
+            )
+        }
+
+        let plans = VideoProcessor.shared.kineticScenePlans(for: [first, second])
+
+        XCTAssertEqual(plans.map(\.scene), [.chorusLockup, .chorusLockup])
+        XCTAssertEqual(plans.map(\.repeatCount), [2, 2])
+        XCTAssertEqual(plans[0].rows, plans[1].rows)
+    }
+
+    func testAutomaticDirectorUsesRealSectionGapInsteadOfLineNumberRandomness() {
+        let first = makeWords(["gece", "yine", "üstüme", "çöktü"])
+        let second = shiftedWords(makeWords(["seni", "sessizce", "aradım"]), by: 1.6)
+        let newSection = shiftedWords(makeWords(["dön", "artık", "bana"]), by: 4.0)
+
+        let plans = VideoProcessor.shared.kineticScenePlans(
+            for: [first, second, newSection]
+        )
+
+        XCTAssertEqual(plans[0].scene, .editorialStack)
+        XCTAssertEqual(plans[1].scene, .phraseBuild)
+        XCTAssertEqual(plans[2].scene, .editorialStack)
+    }
+
+    func testManualKineticStylesProduceCoherentSceneFamilies() {
+        let words = makeWords(["gecenin", "içinde", "seni", "aradım"])
+
+        let cinematic = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            style: .cinematic
+        )
+        let editorial = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            style: .editorial
+        )
+        let impact = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            style: .impact
+        )
+
+        XCTAssertEqual(cinematic.scene, .phraseBuild)
+        XCTAssertEqual(editorial.scene, .editorialStack)
+        XCTAssertEqual(impact.scene, .impactSequence)
     }
 
     func testKineticASSCreatesTimedLayerForEveryWord() {
@@ -225,6 +280,7 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertTrue(ass.contains("\\an5\\pos("))
         XCTAssertTrue(ass.contains("\\c&H2FCCFE&"))
         XCTAssertTrue(ass.contains("\\t("))
+        XCTAssertFalse(ass.contains("\\frz"))
         XCTAssertEqual(ass.filter { $0 == "{" }.count, ass.filter { $0 == "}" }.count)
     }
 
@@ -232,6 +288,9 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(KaraokeMode.resolved(nil), .classic)
         XCTAssertEqual(KaraokeMode.resolved("bilinmeyen"), .classic)
         XCTAssertEqual(KaraokeMode.resolved("kinetic"), .kinetic)
+        XCTAssertEqual(KineticStyle.resolved(nil), .automatic)
+        XCTAssertEqual(KineticStyle.resolved("bilinmeyen"), .automatic)
+        XCTAssertEqual(KineticStyle.resolved("editorial"), .editorial)
     }
 
     func testLegacyProjectWithoutKaraokeModeDecodesAsClassic() throws {
@@ -254,13 +313,28 @@ final class VideoProcessorTests: XCTestCase {
         let project = try JSONDecoder().decode(SavedProject.self, from: Data(json.utf8))
 
         XCTAssertNil(project.karaokeModu)
+        XCTAssertNil(project.kinetikStil)
         XCTAssertEqual(project.karaokeMode, .classic)
+        XCTAssertEqual(project.kineticStyle, .automatic)
     }
 
     private func makeWords(_ texts: [String]) -> [VideoProcessor.WordTimestamp] {
         texts.enumerated().map { index, text in
             let start = Double(index) * 0.4
             return VideoProcessor.WordTimestamp(text: text, start: start, end: start + 0.3)
+        }
+    }
+
+    private func shiftedWords(
+        _ words: [VideoProcessor.WordTimestamp],
+        by offset: Double
+    ) -> [VideoProcessor.WordTimestamp] {
+        words.map {
+            VideoProcessor.WordTimestamp(
+                text: $0.text,
+                start: $0.start + offset,
+                end: $0.end + offset
+            )
         }
     }
 }

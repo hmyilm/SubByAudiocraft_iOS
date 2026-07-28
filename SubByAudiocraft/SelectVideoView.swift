@@ -10,6 +10,7 @@ struct SelectVideoView: View {
     @Binding var fontSize: Double
     @Binding var marginV: Double
     @Binding var karaokeMode: KaraokeMode
+    @Binding var kineticStyle: KineticStyle
     @Binding var analysisQuality: AnalysisQuality
     let isLoadingVideo: Bool
     let fonts: [FontOption]
@@ -86,7 +87,8 @@ struct SelectVideoView: View {
                         marginV: marginV,
                         sampleText: karaokeMode == .kinetic ? "Söz Ritme Dönüşür" : "Altyazı Ön İzleme",
                         height: 260,
-                        karaokeMode: karaokeMode
+                        karaokeMode: karaokeMode,
+                        kineticStyle: kineticStyle
                     )
 
                     PhotosPicker(selection: $selectedItem, matching: .videos, photoLibrary: .shared()) {
@@ -130,7 +132,7 @@ struct SelectVideoView: View {
                 // Stil paneli
                 VStack(alignment: .leading, spacing: 16) {
                     SectionHeader(icon: "paintbrush.fill", title: "Altyazı Tasarımı")
-                    KaraokeModePicker(selection: $karaokeMode)
+                    KaraokeModePicker(selection: $karaokeMode, kineticStyle: $kineticStyle)
                     Divider()
                         .overlay(Theme.cardStroke)
                     FontChipPicker(fonts: fonts, selection: $fontName)

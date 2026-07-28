@@ -98,7 +98,9 @@ struct HistoryView: View {
                     Text("\(proje.kelimeler.count) kelime")
                     Text("•")
                     Label(
-                        proje.karaokeMode.title,
+                        proje.karaokeMode == .kinetic
+                            ? "\(proje.karaokeMode.title) · \(proje.kineticStyle.title)"
+                            : proje.karaokeMode.title,
                         systemImage: proje.karaokeMode == .kinetic ? "sparkles" : "captions.bubble"
                     )
                     if proje.disaAktarimSayisi > 0 {

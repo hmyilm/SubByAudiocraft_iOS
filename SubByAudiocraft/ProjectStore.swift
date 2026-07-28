@@ -18,11 +18,17 @@ struct SavedProject: Identifiable, Codable {
     // Optional tutulur: 1.6.0 öncesi proje.json dosyalarında bu alan yoktur.
     // Eksik değer her zaman Klasik olarak çözülerek eski projelerin görünümü korunur.
     var karaokeModu: String?
+    // Optional tutulur: eski Kinetik projeler yeni yönetmende güvenli Otomatik stile geçer.
+    var kinetikStil: String?
     var videoDosyasi: String
     var disaAktarimSayisi: Int
 
     var karaokeMode: KaraokeMode {
         KaraokeMode.resolved(karaokeModu)
+    }
+
+    var kineticStyle: KineticStyle {
+        KineticStyle.resolved(kinetikStil)
     }
 }
 
@@ -105,7 +111,8 @@ final class ProjectStore: ObservableObject {
                  fontAdi: String,
                  fontBoyu: Double,
                  dikeyKonum: Double,
-                 karaokeModu: KaraokeMode) -> SavedProject? {
+                 karaokeModu: KaraokeMode,
+                 kinetikStil: KineticStyle) -> SavedProject? {
         let id = UUID()
         let fm = FileManager.default
         let hedefKlasor = klasor(id)
@@ -142,6 +149,7 @@ final class ProjectStore: ObservableObject {
             fontBoyu: fontBoyu,
             dikeyKonum: dikeyKonum,
             karaokeModu: karaokeModu.rawValue,
+            kinetikStil: kinetikStil.rawValue,
             videoDosyasi: dosyaAdi,
             disaAktarimSayisi: 0
         )
@@ -173,6 +181,7 @@ final class ProjectStore: ObservableObject {
                   fontBoyu: Double,
                   dikeyKonum: Double,
                   karaokeModu: KaraokeMode,
+                  kinetikStil: KineticStyle,
                   disaAktarildi: Bool) {
         guard let idx = projeler.firstIndex(where: { $0.id == id }) else { return }
         var proje = projeler[idx]
@@ -182,6 +191,7 @@ final class ProjectStore: ObservableObject {
         proje.fontBoyu = fontBoyu
         proje.dikeyKonum = dikeyKonum
         proje.karaokeModu = karaokeModu.rawValue
+        proje.kinetikStil = kinetikStil.rawValue
         proje.baslik = Self.baslikUret(kelimeler)
         proje.guncelleme = Date()
         if disaAktarildi { proje.disaAktarimSayisi += 1 }

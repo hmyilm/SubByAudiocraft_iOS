@@ -37,6 +37,7 @@ struct ContentView: View {
     @AppStorage("subtitle.fontSize") private var fontSize: Double = 70.0
     @AppStorage("subtitle.marginV") private var marginV: Double = 120.0
     @AppStorage("subtitle.karaokeMode") private var karaokeModeRaw: String = KaraokeMode.classic.rawValue
+    @AppStorage("subtitle.kineticStyle") private var kineticStyleRaw: String = KineticStyle.automatic.rawValue
     @AppStorage("analysis.quality") private var analysisQualityRaw: String = AnalysisQuality.balanced.rawValue
 
     // Geçmiş (kaydedilmiş projeler): analizden sonra proje otomatik kaydedilir,
@@ -68,6 +69,7 @@ struct ContentView: View {
                                 fontSize: $fontSize,
                                 marginV: $marginV,
                                 karaokeMode: karaokeModeBinding,
+                                kineticStyle: kineticStyleBinding,
                                 analysisQuality: analysisQualityBinding,
                                 isLoadingVideo: isLoadingVideo,
                                 fonts: FontCatalog.hepsi
@@ -82,7 +84,8 @@ struct ContentView: View {
                                 fontName: $fontName,
                                 fontSize: $fontSize,
                                 marginV: $marginV,
-                                karaokeMode: karaokeModeBinding
+                                karaokeMode: karaokeModeBinding,
+                                kineticStyle: kineticStyleBinding
                             )
                         case .processing:
                             ProcessingView(
@@ -118,6 +121,7 @@ struct ContentView: View {
             fontSize = min(max(fontSize, 30), 150)
             marginV = min(max(marginV, 30), 950)
             karaokeModeRaw = KaraokeMode.resolved(karaokeModeRaw).rawValue
+            kineticStyleRaw = KineticStyle.resolved(kineticStyleRaw).rawValue
             VideoProcessor.shared.cleanupStaleTemporaryFiles()
         }
         .sheet(isPresented: $showHistory) {
@@ -146,6 +150,7 @@ struct ContentView: View {
         .onChange(of: fontSize) { _ in editorContentDidChange() }
         .onChange(of: marginV) { _ in editorContentDidChange() }
         .onChange(of: karaokeModeRaw) { _ in editorContentDidChange() }
+        .onChange(of: kineticStyleRaw) { _ in editorContentDidChange() }
         .onChange(of: scenePhase) { phase in
             if phase != .active {
                 autosaveWorkItem?.cancel()
@@ -303,6 +308,13 @@ struct ContentView: View {
         )
     }
 
+    private var kineticStyleBinding: Binding<KineticStyle> {
+        Binding(
+            get: { KineticStyle.resolved(kineticStyleRaw) },
+            set: { kineticStyleRaw = $0.rawValue }
+        )
+    }
+
     // MARK: - İş Mantığı
 
     // Galeriden seçilen videoyu kopyalayıp player'a yerleştirir
@@ -438,7 +450,8 @@ struct ContentView: View {
                         fontAdi: self.fontName,
                         fontBoyu: self.fontSize,
                         dikeyKonum: self.marginV,
-                        karaokeModu: KaraokeMode.resolved(self.karaokeModeRaw)
+                        karaokeModu: KaraokeMode.resolved(self.karaokeModeRaw),
+                        kinetikStil: KineticStyle.resolved(self.kineticStyleRaw)
                    ) {
                     self.currentProjectID = proje.id
                     let yeniURL = self.store.videoURL(proje)
@@ -496,6 +509,7 @@ struct ContentView: View {
                 fontSize: Int(fontSize),
                 marginV: Int(marginV),
                 karaokeMode: KaraokeMode.resolved(karaokeModeRaw),
+                kineticStyle: KineticStyle.resolved(kineticStyleRaw),
                 videoURL: url
             )
 
@@ -643,6 +657,7 @@ struct ContentView: View {
             fontBoyu: fontSize,
             dikeyKonum: marginV,
             karaokeModu: KaraokeMode.resolved(karaokeModeRaw),
+            kinetikStil: KineticStyle.resolved(kineticStyleRaw),
             disaAktarildi: exported
         )
     }
@@ -675,6 +690,7 @@ struct ContentView: View {
         fontSize = proje.fontBoyu
         marginV = proje.dikeyKonum
         karaokeModeRaw = proje.karaokeMode.rawValue
+        kineticStyleRaw = proje.kineticStyle.rawValue
         currentProjectID = proje.id
         selectedItem = nil
 
