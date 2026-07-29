@@ -10,6 +10,52 @@ enum AppStep {
     case done
 }
 
+// ContentView'daki her düzenleyici alan için ayrı bir SwiftUI modifier zinciri
+// kurmak Xcode 26'da body'nin generic tipini aşırı büyütüyordu. Metin ve stil
+// değişikliklerini iki küçük Equatable değerde toplamak aynı autosave davranışını
+// korurken derleyicinin çözeceği View tipini belirgin biçimde küçültür.
+private struct TranscriptAutosaveToken: Equatable {
+    let words: [VideoProcessor.WordTimestamp]
+    let lineBreaks: Set<UUID>
+    let emphasisWordIDs: Set<UUID>
+}
+
+private struct StyleAutosaveToken: Equatable {
+    let fontName: String
+    let fontSize: Double
+    let marginV: Double
+    let karaokeMode: String
+    let lyricTrackingMode: String
+    let kineticStyle: String
+    let kineticAccent: String
+    let kineticCustomColorHex: String
+    let kineticIntensity: String
+    let kineticLetterStyle: String
+    let kineticOverlayStyle: String
+}
+
+private struct BottomBarSurface<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            content
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
+        .background(
+            Color(white: 0.06)
+                .opacity(0.95)
+                .ignoresSafeArea(edges: .bottom)
+        )
+    }
+}
+
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
 
@@ -54,6 +100,12 @@ struct ContentView: View {
     @State private var currentProjectID: UUID? = nil
 
     var body: some View {
+        lifecycleObservedContent
+    }
+
+    // MARK: - Derleyici Dostu Görünüm Katmanları
+
+    private var baseContent: some View {
         ZStack {
             Theme.background
                 .ignoresSafeArea()
@@ -67,62 +119,7 @@ struct ContentView: View {
                             .padding(.horizontal, 24)
                             .padding(.top, 4)
 
-                        switch currentStep {
-                        case .selectVideo:
-                            SelectVideoView(
-                                selectedItem: $selectedItem,
-                                player: player,
-                                fontName: $fontName,
-                                fontSize: $fontSize,
-                                marginV: $marginV,
-                                karaokeMode: karaokeModeBinding,
-                                lyricTrackingMode: lyricTrackingModeBinding,
-                                kineticStyle: kineticStyleBinding,
-                                kineticAccent: kineticAccentBinding,
-                                kineticCustomColorHex: $kineticCustomColorHex,
-                                kineticIntensity: kineticIntensityBinding,
-                                kineticLetterStyle: kineticLetterStyleBinding,
-                                kineticOverlayStyle: kineticOverlayStyleBinding,
-                                analysisQuality: analysisQualityBinding,
-                                isLoadingVideo: isLoadingVideo,
-                                fonts: FontCatalog.hepsi
-                            )
-                        case .editLines:
-                            LineEditView(words: $words, breaks: $lineBreaks)
-                        case .editSubtitles:
-                            EditWordsView(
-                                words: $words,
-                                breaks: $lineBreaks,
-                                player: player,
-                                fontName: $fontName,
-                                fontSize: $fontSize,
-                                marginV: $marginV,
-                                karaokeMode: karaokeModeBinding,
-                                lyricTrackingMode: lyricTrackingModeBinding,
-                                kineticStyle: kineticStyleBinding,
-                                kineticAccent: kineticAccentBinding,
-                                kineticCustomColorHex: $kineticCustomColorHex,
-                                kineticIntensity: kineticIntensityBinding,
-                                kineticLetterStyle: kineticLetterStyleBinding,
-                                kineticOverlayStyle: kineticOverlayStyleBinding,
-                                kineticEmphasisWordIDs: $kineticEmphasisWordIDs
-                            )
-                        case .processing:
-                            ProcessingView(
-                                stage: processingStage,
-                                message: statusMessage,
-                                downloadProgress: modelDownloadProgress,
-                                onCancel: processingStage == .saving ? nil : cancelCurrentOperation
-                            )
-                        case .done:
-                            SuccessView(
-                                onNewVideo: resetToImport,
-                                onEditAgain: {
-                                    currentStep = .editSubtitles
-                                    statusMessage = "Düzenlemeye geri dönüldü. Değişiklik yapıp yeniden dışa aktarabilirsin."
-                                }
-                            )
-                        }
+                        currentStepContent
 
                         if showBanner {
                             StatusBanner(message: statusMessage)
@@ -135,68 +132,180 @@ struct ContentView: View {
                 bottomBar
             }
         }
+    }
+
+    private var presentationObservedContent: some View {
+        baseContent
         .preferredColorScheme(.dark)
-        .onAppear {
-            if FontCatalog.secenek(fontName) == nil { fontName = "Anton-Regular" }
-            fontSize = min(max(fontSize, 30), 150)
-            marginV = min(max(marginV, 30), 950)
-            karaokeModeRaw = KaraokeMode.resolved(karaokeModeRaw).rawValue
-            lyricTrackingModeRaw = LyricTrackingMode.resolved(lyricTrackingModeRaw).rawValue
-            kineticStyleRaw = KineticStyle.resolved(kineticStyleRaw).rawValue
-            kineticAccentRaw = KineticAccent.resolved(kineticAccentRaw).rawValue
-            kineticCustomColorHex = KineticResolvedColor.normalizedHex(kineticCustomColorHex)
-                ?? KineticAccent.defaultCustomHex
-            kineticIntensityRaw = KineticIntensity.resolved(kineticIntensityRaw).rawValue
-            kineticLetterStyleRaw = KineticLetterStyle(rawValue: kineticLetterStyleRaw)?.rawValue
-                ?? KineticLetterStyle.automatic.rawValue
-            kineticOverlayStyleRaw = KineticOverlayStyle(
-                rawValue: kineticOverlayStyleRaw
-            )?.rawValue ?? KineticOverlayStyle.automatic.rawValue
-            VideoProcessor.shared.cleanupStaleTemporaryFiles()
-        }
+        .onAppear(perform: prepareInitialState)
         .sheet(isPresented: $showHistory) {
             HistoryView(store: store, protectedProjectID: currentProjectID, onOpen: openProject)
         }
         .onChange(of: selectedItem) { newValue in
-            if newValue != nil {
-                statusMessage = "Video yükleniyor..."
-                loadAndPreviewVideo()
-            }
+            selectedVideoItemDidChange(newValue)
         }
         // Döngüsel oynatma (observer sızıntısı yaratmadan)
         .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { note in
-            if let item = note.object as? AVPlayerItem, item === player?.currentItem {
-                player?.seek(to: .zero)
-                player?.play()
-            }
+            playerItemDidFinish(note)
         }
+    }
+
+    private var editorObservedContent: some View {
+        presentationObservedContent
         // Uzun süren analiz/kodlama sırasında ekranın kilitlenip işlemin kesilmesini önler
         .onChange(of: isProcessing) { processing in
             UIApplication.shared.isIdleTimerDisabled = processing
         }
-        .onChange(of: words) { _ in editorContentDidChange() }
-        .onChange(of: lineBreaks) { _ in editorContentDidChange() }
-        .onChange(of: kineticEmphasisWordIDs) { _ in editorContentDidChange() }
-        .onChange(of: fontName) { _ in editorContentDidChange() }
-        .onChange(of: fontSize) { _ in editorContentDidChange() }
-        .onChange(of: marginV) { _ in editorContentDidChange() }
-        .onChange(of: karaokeModeRaw) { _ in editorContentDidChange() }
-        .onChange(of: lyricTrackingModeRaw) { _ in editorContentDidChange() }
-        .onChange(of: kineticStyleRaw) { _ in editorContentDidChange() }
-        .onChange(of: kineticAccentRaw) { _ in editorContentDidChange() }
-        .onChange(of: kineticCustomColorHex) { _ in editorContentDidChange() }
-        .onChange(of: kineticIntensityRaw) { _ in editorContentDidChange() }
-        .onChange(of: kineticLetterStyleRaw) { _ in editorContentDidChange() }
-        .onChange(of: kineticOverlayStyleRaw) { _ in editorContentDidChange() }
+        .onChange(of: transcriptAutosaveToken) { _ in
+            editorContentDidChange()
+        }
+        .onChange(of: styleAutosaveToken) { _ in
+            editorContentDidChange()
+        }
+    }
+
+    private var lifecycleObservedContent: some View {
+        editorObservedContent
         .onChange(of: scenePhase) { phase in
-            if phase != .active {
-                autosaveWorkItem?.cancel()
-                saveProjectEdits(exported: false)
-            }
+            scenePhaseDidChange(phase)
         }
-        .onDisappear {
-            UIApplication.shared.isIdleTimerDisabled = false
+        .onDisappear(perform: cleanupViewState)
+    }
+
+    @ViewBuilder
+    private var currentStepContent: some View {
+        switch currentStep {
+        case .selectVideo:
+            selectVideoContent
+        case .editLines:
+            LineEditView(words: $words, breaks: $lineBreaks)
+        case .editSubtitles:
+            editSubtitlesContent
+        case .processing:
+            ProcessingView(
+                stage: processingStage,
+                message: statusMessage,
+                downloadProgress: modelDownloadProgress,
+                onCancel: processingStage == .saving ? nil : cancelCurrentOperation
+            )
+        case .done:
+            SuccessView(
+                onNewVideo: resetToImport,
+                onEditAgain: editAgain
+            )
         }
+    }
+
+    private var selectVideoContent: some View {
+        SelectVideoView(
+            selectedItem: $selectedItem,
+            player: player,
+            fontName: $fontName,
+            fontSize: $fontSize,
+            marginV: $marginV,
+            karaokeMode: karaokeModeBinding,
+            lyricTrackingMode: lyricTrackingModeBinding,
+            kineticStyle: kineticStyleBinding,
+            kineticAccent: kineticAccentBinding,
+            kineticCustomColorHex: $kineticCustomColorHex,
+            kineticIntensity: kineticIntensityBinding,
+            kineticLetterStyle: kineticLetterStyleBinding,
+            kineticOverlayStyle: kineticOverlayStyleBinding,
+            analysisQuality: analysisQualityBinding,
+            isLoadingVideo: isLoadingVideo,
+            fonts: FontCatalog.hepsi
+        )
+    }
+
+    private var editSubtitlesContent: some View {
+        EditWordsView(
+            words: $words,
+            breaks: $lineBreaks,
+            player: player,
+            fontName: $fontName,
+            fontSize: $fontSize,
+            marginV: $marginV,
+            karaokeMode: karaokeModeBinding,
+            lyricTrackingMode: lyricTrackingModeBinding,
+            kineticStyle: kineticStyleBinding,
+            kineticAccent: kineticAccentBinding,
+            kineticCustomColorHex: $kineticCustomColorHex,
+            kineticIntensity: kineticIntensityBinding,
+            kineticLetterStyle: kineticLetterStyleBinding,
+            kineticOverlayStyle: kineticOverlayStyleBinding,
+            kineticEmphasisWordIDs: $kineticEmphasisWordIDs
+        )
+    }
+
+    private var transcriptAutosaveToken: TranscriptAutosaveToken {
+        TranscriptAutosaveToken(
+            words: words,
+            lineBreaks: lineBreaks,
+            emphasisWordIDs: kineticEmphasisWordIDs
+        )
+    }
+
+    private var styleAutosaveToken: StyleAutosaveToken {
+        StyleAutosaveToken(
+            fontName: fontName,
+            fontSize: fontSize,
+            marginV: marginV,
+            karaokeMode: karaokeModeRaw,
+            lyricTrackingMode: lyricTrackingModeRaw,
+            kineticStyle: kineticStyleRaw,
+            kineticAccent: kineticAccentRaw,
+            kineticCustomColorHex: kineticCustomColorHex,
+            kineticIntensity: kineticIntensityRaw,
+            kineticLetterStyle: kineticLetterStyleRaw,
+            kineticOverlayStyle: kineticOverlayStyleRaw
+        )
+    }
+
+    private func prepareInitialState() {
+        if FontCatalog.secenek(fontName) == nil { fontName = "Anton-Regular" }
+        fontSize = min(max(fontSize, 30), 150)
+        marginV = min(max(marginV, 30), 950)
+        karaokeModeRaw = KaraokeMode.resolved(karaokeModeRaw).rawValue
+        lyricTrackingModeRaw = LyricTrackingMode.resolved(lyricTrackingModeRaw).rawValue
+        kineticStyleRaw = KineticStyle.resolved(kineticStyleRaw).rawValue
+        kineticAccentRaw = KineticAccent.resolved(kineticAccentRaw).rawValue
+        kineticCustomColorHex = KineticResolvedColor.normalizedHex(kineticCustomColorHex)
+            ?? KineticAccent.defaultCustomHex
+        kineticIntensityRaw = KineticIntensity.resolved(kineticIntensityRaw).rawValue
+        kineticLetterStyleRaw = KineticLetterStyle(rawValue: kineticLetterStyleRaw)?.rawValue
+            ?? KineticLetterStyle.automatic.rawValue
+        kineticOverlayStyleRaw = KineticOverlayStyle(
+            rawValue: kineticOverlayStyleRaw
+        )?.rawValue ?? KineticOverlayStyle.automatic.rawValue
+        VideoProcessor.shared.cleanupStaleTemporaryFiles()
+    }
+
+    private func selectedVideoItemDidChange(_ item: PhotosPickerItem?) {
+        guard item != nil else { return }
+        statusMessage = "Video yükleniyor..."
+        loadAndPreviewVideo()
+    }
+
+    private func playerItemDidFinish(_ notification: Notification) {
+        guard let item = notification.object as? AVPlayerItem,
+              item === player?.currentItem else { return }
+        player?.seek(to: .zero)
+        player?.play()
+    }
+
+    private func scenePhaseDidChange(_ phase: ScenePhase) {
+        guard phase != .active else { return }
+        autosaveWorkItem?.cancel()
+        saveProjectEdits(exported: false)
+    }
+
+    private func cleanupViewState() {
+        UIApplication.shared.isIdleTimerDisabled = false
+    }
+
+    private func editAgain() {
+        currentStep = .editSubtitles
+        statusMessage = "Düzenlemeye geri dönüldü. Değişiklik yapıp yeniden dışa aktarabilirsin."
     }
 
     // MARK: - Alt Görünümler
@@ -248,71 +357,99 @@ struct ContentView: View {
 
     @ViewBuilder
     private var bottomBar: some View {
-        if currentStep == .selectVideo || currentStep == .editLines || currentStep == .editSubtitles {
-            VStack(spacing: 10) {
-                if currentStep == .selectVideo {
-                    Button(action: startAnalysis) {
-                        Label(isLoadingVideo ? "Video Yükleniyor" : "Analizi Başlat", systemImage: isLoadingVideo ? "hourglass" : "wand.and.stars")
-                    }
-                    .buttonStyle(PrimaryButtonStyle(enabled: videoURL != nil && !isLoadingVideo && !isProcessing))
-                    .disabled(videoURL == nil || isLoadingVideo || isProcessing)
-                } else if currentStep == .editLines {
-                    Button(action: {
-                        currentStep = .editSubtitles
-                        saveProjectEdits(exported: false)
-                        statusMessage = "Satırlar onaylandı. Şimdi zamanlamaları kontrol edebilirsin."
-                    }) {
-                        Label("Satırları Onayla", systemImage: "checkmark.circle.fill")
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
-
-                    Button(action: resetToImport) {
-                        Text("İptal (Başa Dön)")
-                            .font(.footnote)
-                            .foregroundColor(.gray)
-                    }
-                } else {
-                    if pendingOutputURL != nil {
-                        Button(action: retryGallerySave) {
-                            Label("Hazır Videoyu Galeriye Kaydet", systemImage: "photo.badge.arrow.down")
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
-
-                        Button {
-                            discardPendingOutput()
-                            burnFinalVideo()
-                        } label: {
-                            Text("Videoyu Yeniden Oluştur")
-                                .font(.footnote)
-                                .foregroundColor(Theme.yellow)
-                        }
-                    } else {
-                        Button(action: burnFinalVideo) {
-                            Label("Videoya Göm ve Kaydet", systemImage: "square.and.arrow.down")
-                        }
-                        .buttonStyle(PrimaryButtonStyle())
-                    }
-
-                    Button(action: {
-                        saveProjectEdits(exported: false)
-                        currentStep = .editLines
-                        statusMessage = "Satır düzenine dönüldü."
-                    }) {
-                        Text("Satır Düzenine Dön")
-                            .font(.footnote)
-                            .foregroundColor(.gray)
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
-            .background(
-                Color(white: 0.06)
-                    .opacity(0.95)
-                    .ignoresSafeArea(edges: .bottom)
-            )
+        switch currentStep {
+        case .selectVideo:
+            selectVideoBottomBar
+        case .editLines:
+            lineEditorBottomBar
+        case .editSubtitles:
+            subtitleEditorBottomBar
+        case .processing, .done:
+            EmptyView()
         }
+    }
+
+    private var selectVideoBottomBar: some View {
+        BottomBarSurface {
+            Button(action: startAnalysis) {
+                Label(
+                    isLoadingVideo ? "Video Yükleniyor" : "Analizi Başlat",
+                    systemImage: isLoadingVideo ? "hourglass" : "wand.and.stars"
+                )
+            }
+            .buttonStyle(
+                PrimaryButtonStyle(
+                    enabled: videoURL != nil && !isLoadingVideo && !isProcessing
+                )
+            )
+            .disabled(videoURL == nil || isLoadingVideo || isProcessing)
+        }
+    }
+
+    private var lineEditorBottomBar: some View {
+        BottomBarSurface {
+            Button(action: confirmLineLayout) {
+                Label("Satırları Onayla", systemImage: "checkmark.circle.fill")
+            }
+            .buttonStyle(PrimaryButtonStyle())
+
+            Button(action: resetToImport) {
+                Text("İptal (Başa Dön)")
+                    .font(.footnote)
+                    .foregroundColor(.gray)
+            }
+        }
+    }
+
+    private var subtitleEditorBottomBar: some View {
+        BottomBarSurface {
+            if pendingOutputURL != nil {
+                Button(action: retryGallerySave) {
+                    Label(
+                        "Hazır Videoyu Galeriye Kaydet",
+                        systemImage: "photo.badge.arrow.down"
+                    )
+                }
+                .buttonStyle(PrimaryButtonStyle())
+
+                Button(action: recreateFinalVideo) {
+                    Text("Videoyu Yeniden Oluştur")
+                        .font(.footnote)
+                        .foregroundColor(Theme.yellow)
+                }
+            } else {
+                Button(action: burnFinalVideo) {
+                    Label(
+                        "Videoya Göm ve Kaydet",
+                        systemImage: "square.and.arrow.down"
+                    )
+                }
+                .buttonStyle(PrimaryButtonStyle())
+            }
+
+            Button(action: returnToLineLayout) {
+                Text("Satır Düzenine Dön")
+                    .font(.footnote)
+                    .foregroundColor(.gray)
+            }
+        }
+    }
+
+    private func confirmLineLayout() {
+        currentStep = .editSubtitles
+        saveProjectEdits(exported: false)
+        statusMessage = "Satırlar onaylandı. Şimdi zamanlamaları kontrol edebilirsin."
+    }
+
+    private func recreateFinalVideo() {
+        discardPendingOutput()
+        burnFinalVideo()
+    }
+
+    private func returnToLineLayout() {
+        saveProjectEdits(exported: false)
+        currentStep = .editLines
+        statusMessage = "Satır düzenine dönüldü."
     }
 
     private var stepIndex: Int {
