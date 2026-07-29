@@ -8,6 +8,7 @@ struct SelectVideoView: View {
     @Binding var selectedItem: PhotosPickerItem?
     let player: AVPlayer?
     @Binding var analysisQuality: AnalysisQuality
+    @Binding var groqAPIKey: String
     let isLoadingVideo: Bool
 
     @State private var showsAnalysisOptions = false
@@ -119,7 +120,7 @@ struct SelectVideoView: View {
                             .foregroundColor(.gray)
                     }
                     Spacer()
-                    Text(analysisQuality == .balanced ? "Önerilen" : analysisQuality.title)
+                    Text(analysisBadge)
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(Theme.yellow)
                         .padding(.horizontal, 9)
@@ -149,8 +150,16 @@ struct SelectVideoView: View {
 
                 Text(analysisQuality.detail)
                     .font(.caption)
-                    .foregroundColor(analysisQuality == .best ? .orange : .gray)
+                    .foregroundColor(
+                        analysisQuality == .best
+                            ? .orange
+                            : (analysisQuality == .cloud ? Theme.yellow : .gray)
+                    )
                     .fixedSize(horizontal: false, vertical: true)
+
+                if analysisQuality == .cloud {
+                    cloudAPIKeyEditor
+                }
 
                 if let qwenModelID = analysisQuality.qwenModelID() {
                     Label(
@@ -179,6 +188,88 @@ struct SelectVideoView: View {
             }
         }
         .card()
+    }
+
+    private var analysisBadge: String {
+        switch analysisQuality {
+        case .balanced: return "Yerel öneri"
+        case .cloud: return "En güçlü"
+        default: return analysisQuality.title
+        }
+    }
+
+    private var cloudAPIKeyEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Divider()
+                .overlay(Theme.cardStroke)
+
+            HStack(spacing: 8) {
+                Image(systemName: "key.fill")
+                    .foregroundColor(Theme.yellow)
+                SecureField("gsk_… Groq API anahtarı", text: $groqAPIKey)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundColor(.white)
+
+                if !groqAPIKey.isEmpty {
+                    Button {
+                        Theme.haptic()
+                        groqAPIKey = ""
+                        SecureAPIKeyStore.deleteGroqAPIKey()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(.gray)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Groq anahtarını sil")
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(minHeight: 48)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.field)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(
+                        GroqSpeechClient.isPlausibleAPIKey(groqAPIKey)
+                            ? Color.green.opacity(0.6)
+                            : Theme.cardStroke,
+                        lineWidth: 1
+                    )
+            )
+            .onChange(of: groqAPIKey) { newValue in
+                SecureAPIKeyStore.saveGroqAPIKey(newValue)
+            }
+
+            if GroqSpeechClient.isPlausibleAPIKey(groqAPIKey) {
+                Label("Anahtar iPhone Keychain'de güvenli saklanıyor.", systemImage: "checkmark.shield.fill")
+                    .font(.caption2)
+                    .foregroundColor(.green)
+            } else {
+                Text("Ücretsiz Groq anahtarını girince Bulut Hassas kullanılabilir.")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+
+            Link(
+                destination: URL(string: "https://console.groq.com/keys")!
+            ) {
+                Label("Ücretsiz Groq anahtarı oluştur", systemImage: "arrow.up.right.square")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(Theme.yellow)
+            }
+
+            Text(
+                "Bu modda yalnız analiz edilen ses Groq'ya gönderilir. "
+                + "Diğer modlar tamamen cihazda çalışır. Bulut hatasında yerel analiz otomatik başlar."
+            )
+            .font(.caption2)
+            .foregroundColor(.gray)
+            .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 

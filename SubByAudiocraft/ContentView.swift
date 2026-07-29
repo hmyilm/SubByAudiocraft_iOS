@@ -92,6 +92,7 @@ struct ContentView: View {
     @AppStorage("subtitle.kineticLetterStyle") private var kineticLetterStyleRaw: String = KineticLetterStyle.automatic.rawValue
     @AppStorage("subtitle.kineticOverlayStyle") private var kineticOverlayStyleRaw: String = KineticOverlayStyle.automatic.rawValue
     @AppStorage("analysis.quality") private var analysisQualityRaw: String = AnalysisQuality.balanced.rawValue
+    @State private var groqAPIKey: String = SecureAPIKeyStore.loadGroqAPIKey()
 
     // Geçmiş (kaydedilmiş projeler): analizden sonra proje otomatik kaydedilir,
     // buradan yeniden açılıp düzenlenebilir ve tekrar dışa aktarılabilir.
@@ -203,6 +204,7 @@ struct ContentView: View {
             selectedItem: $selectedItem,
             player: player,
             analysisQuality: analysisQualityBinding,
+            groqAPIKey: $groqAPIKey,
             isLoadingVideo: isLoadingVideo
         )
     }
@@ -286,6 +288,7 @@ struct ContentView: View {
     private func scenePhaseDidChange(_ phase: ScenePhase) {
         guard phase != .active else { return }
         autosaveWorkItem?.cancel()
+        SecureAPIKeyStore.saveGroqAPIKey(groqAPIKey)
         saveProjectEdits(exported: false)
     }
 
@@ -360,19 +363,33 @@ struct ContentView: View {
     }
 
     private var selectVideoBottomBar: some View {
-        BottomBarSurface {
+        let cloudKeyIsReady = !analysisQualityBinding.wrappedValue.usesCloudTranscription
+            || GroqSpeechClient.isPlausibleAPIKey(groqAPIKey)
+        return BottomBarSurface {
             Button(action: startAnalysis) {
                 Label(
-                    isLoadingVideo ? "Video Yükleniyor" : "Sözleri Çıkar",
-                    systemImage: isLoadingVideo ? "hourglass" : "text.badge.plus"
+                    isLoadingVideo
+                        ? "Video Yükleniyor"
+                        : (cloudKeyIsReady ? "Sözleri Çıkar" : "Önce Groq Anahtarı Gir"),
+                    systemImage: isLoadingVideo
+                        ? "hourglass"
+                        : (cloudKeyIsReady ? "text.badge.plus" : "key.fill")
                 )
             }
             .buttonStyle(
                 PrimaryButtonStyle(
-                    enabled: videoURL != nil && !isLoadingVideo && !isProcessing
+                    enabled: videoURL != nil
+                        && !isLoadingVideo
+                        && !isProcessing
+                        && cloudKeyIsReady
                 )
             )
-            .disabled(videoURL == nil || isLoadingVideo || isProcessing)
+            .disabled(
+                videoURL == nil
+                    || isLoadingVideo
+                    || isProcessing
+                    || !cloudKeyIsReady
+            )
         }
     }
 
@@ -455,7 +472,9 @@ struct ContentView: View {
     // Banner yalnızca hata ve anlamlı başarı mesajlarında görünür
     private var showBanner: Bool {
         guard currentStep == .selectVideo || currentStep == .editLines || currentStep == .editSubtitles else { return false }
-        return statusMessage.hasPrefix("Hata:") || statusMessage.contains("başarıyla")
+        return statusMessage.hasPrefix("Hata:")
+            || statusMessage.contains("başarıyla")
+            || statusMessage.hasPrefix("Bulut kullanılamadı")
     }
 
     private var analysisQualityBinding: Binding<AnalysisQuality> {
@@ -580,9 +599,14 @@ struct ContentView: View {
             return
         }
 
+        let quality = AnalysisQuality(rawValue: analysisQualityRaw) ?? .balanced
+        if quality.usesCloudTranscription,
+           !GroqSpeechClient.isPlausibleAPIKey(groqAPIKey) {
+            statusMessage = "Hata: Bulut Hassas için geçerli bir Groq API anahtarı girin."
+            return
+        }
         let operationID = UUID()
         activeOperationID = operationID
-        let quality = AnalysisQuality(rawValue: analysisQualityRaw) ?? .balanced
         isProcessing = true
         statusMessage = "Video dosyası hazırlanıyor..."
         processingStage = .extractingAudio
@@ -603,18 +627,30 @@ struct ContentView: View {
 
             self.audioURL = audioURL
             self.processingStage = .transcribing
-            if quality.usesDedicatedLyricModel {
+            if quality.usesCloudTranscription {
+                self.statusMessage = "Whisper Large V3 bulutta Türkçe sözleri ve kelime saniyelerini birlikte çözüyor."
+            } else if quality.usesDedicatedLyricModel {
                 self.statusMessage = "Qwen3 şarkı sözlerini çözüyor; Whisper kelime saniyelerini hizalıyor. Modeller belleği korumak için sırayla çalışır. İlk kullanımda Wi‑Fi önerilir."
             } else {
                 self.statusMessage = "Hızlı yerel model sözleri ve kelime saniyelerini analiz ediyor. İlk kullanımda model indirilir; Wi‑Fi önerilir."
             }
 
-            VideoProcessor.shared.runSpeechRecognition(audioURL: audioURL, quality: quality, downloadProgress: { fraction in
+            VideoProcessor.shared.runSpeechRecognition(
+                audioURL: audioURL,
+                quality: quality,
+                cloudAPIKey: quality.usesCloudTranscription ? self.groqAPIKey : nil,
+                statusUpdate: { message in
+                    DispatchQueue.main.async {
+                        guard self.activeOperationID == operationID else { return }
+                        self.statusMessage = message
+                    }
+                },
+                downloadProgress: { fraction in
                 DispatchQueue.main.async {
                     guard self.activeOperationID == operationID else { return }
                     self.modelDownloadProgress = fraction >= 1.0 ? nil : fraction
                 }
-            }) { words, speechError in
+            }) { words, speechError, cloudFallbackReason in
                 VideoProcessor.shared.deleteFile(at: audioURL)
                 if self.audioURL == audioURL { self.audioURL = nil }
 
@@ -682,7 +718,12 @@ struct ContentView: View {
                 self.isProcessing = false
                 self.currentStep = .editLines
                 if projectWasSaved {
-                    self.statusMessage = "Sözler çıkarıldı. Satır düzenini kontrol edip onaylayın."
+                    if let cloudFallbackReason {
+                        self.statusMessage = "Bulut kullanılamadı: \(cloudFallbackReason). "
+                            + "Sözler Dengeli yerel motorla çıkarıldı; satır düzenini kontrol edin."
+                    } else {
+                        self.statusMessage = "Sözler çıkarıldı. Satır düzenini kontrol edip onaylayın."
+                    }
                 } else {
                     self.statusMessage = "Hata: Sözler çıkarıldı ancak proje Geçmiş'e kaydedilemedi. Cihazdaki boş alanı kontrol edin."
                 }

@@ -10,6 +10,7 @@ enum AnalysisQuality: String, CaseIterable, Identifiable {
     case fast
     case balanced
     case best
+    case cloud
 
     // large-v3 modeli sıkıştırılmış olsa da Core ML özelleştirme ve çözümleme
     // sırasında bunun birkaç katı geçici bellek kullanabilir. 8 GB altındaki
@@ -29,6 +30,7 @@ enum AnalysisQuality: String, CaseIterable, Identifiable {
         case .fast: return "Hızlı"
         case .balanced: return "Dengeli"
         case .best: return "En İyi"
+        case .cloud: return "Bulut"
         }
     }
 
@@ -43,6 +45,8 @@ enum AnalysisQuality: String, CaseIterable, Identifiable {
                 return "Qwen3 söz motoru + çift geçişli, bellek dostu zaman hizalama"
             }
             return "Qwen3 söz motoru + büyük modelle çift geçişli zaman hizalama"
+        case .cloud:
+            return "Whisper Large V3 • güçlü bulut analizi ve doğrudan kelime zamanları"
         }
     }
 
@@ -51,11 +55,19 @@ enum AnalysisQuality: String, CaseIterable, Identifiable {
     }
 
     var usesDedicatedLyricModel: Bool {
-        self != .fast
+        self == .balanced || self == .best
     }
 
     var usesSecondTimingPass: Bool {
-        self != .fast
+        self == .balanced || self == .best
+    }
+
+    var usesCloudTranscription: Bool {
+        self == .cloud
+    }
+
+    var localFallbackQuality: AnalysisQuality {
+        self == .cloud ? .balanced : self
     }
 
     func qwenModelID(
@@ -83,6 +95,10 @@ enum AnalysisQuality: String, CaseIterable, Identifiable {
                 "openai_whisper-small",
                 "openai_whisper-base"
             ]
+        case .cloud:
+            return AnalysisQuality.balanced.modelCandidates(
+                physicalMemory: physicalMemory
+            )
         }
     }
 }
@@ -807,8 +823,10 @@ class VideoProcessor: ObservableObject {
     func runSpeechRecognition(
         audioURL: URL,
         quality: AnalysisQuality,
+        cloudAPIKey: String?,
+        statusUpdate: @escaping (String) -> Void,
         downloadProgress: @escaping (Double) -> Void,
-        completion: @escaping ([WordTimestamp], String?) -> Void
+        completion: @escaping ([WordTimestamp], String?, String?) -> Void
     ) {
         cancelSpeechRecognition()
         let recognitionID = UUID()
@@ -819,14 +837,53 @@ class VideoProcessor: ObservableObject {
         let task = Task(priority: .userInitiated) {
             var whisperKit: WhisperKit?
             var qwenModel: Qwen3ASRModel?
+            var cloudFallbackReason: String?
             do {
+                if quality.usesCloudTranscription {
+                    do {
+                        statusUpdate(
+                            "Ses güvenli bağlantıyla Bulut Hassas motora gönderiliyor. "
+                            + "Whisper Large V3 sözleri ve kelime saniyelerini birlikte çözüyor."
+                        )
+                        let cloudWords = try await GroqSpeechClient.shared.transcribe(
+                            audioURL: audioURL,
+                            apiKey: cloudAPIKey ?? ""
+                        )
+                        let normalizedCloudWords = self.normalizeRecognizedWords(cloudWords)
+                        guard !normalizedCloudWords.isEmpty else {
+                            throw GroqSpeechClient.ClientError.missingWordTimestamps
+                        }
+                        downloadProgress(1.0)
+                        try Task.checkCancellation()
+                        guard self.finishRecognitionIfActive(recognitionID) else { return }
+                        self.completeOnMain {
+                            completion(normalizedCloudWords, nil, nil)
+                        }
+                        return
+                    } catch is CancellationError {
+                        throw CancellationError()
+                    } catch {
+                        cloudFallbackReason = self.friendlyCloudFallbackReason(error)
+                        print(
+                            "Bulut Hassas kullanılamadı; yerel motora geçiliyor: "
+                            + error.localizedDescription
+                        )
+                        statusUpdate(
+                            "Bulut kullanılamadı: \(cloudFallbackReason ?? "servis hatası"). "
+                            + "Analiz kaybolmadan Dengeli yerel motorla sürdürülüyor."
+                        )
+                        downloadProgress(0)
+                    }
+                }
+
+                let effectiveQuality = quality.localFallbackQuality
                 // Whisper yalnız kelime başlangıç/bitişlerini bulur. Qwen kullanılacaksa
                 // indirme göstergesinin ilk %40'ı hizalama modeline ayrılır.
-                let whisperProgressRange: ClosedRange<Double> = quality.usesDedicatedLyricModel
+                let whisperProgressRange: ClosedRange<Double> = effectiveQuality.usesDedicatedLyricModel
                     ? 0...0.4
                     : 0...1
                 let loadedModel = try await self.loadModel(
-                    quality: quality,
+                    quality: effectiveQuality,
                     progressRange: whisperProgressRange,
                     downloadProgress: downloadProgress
                 )
@@ -841,7 +898,7 @@ class VideoProcessor: ObservableObject {
                 )
 
                 var normalizedWords = vadWords
-                if quality.usesSecondTimingPass {
+                if effectiveQuality.usesSecondTimingPass {
                     try Task.checkCancellation()
                     // VAD şarkı vokallerini bazen konuşma dışı sayıp kelime başlarını
                     // kesebilir. İkinci geçiş aynı modeli sabit 30 sn pencerelerle
@@ -866,7 +923,7 @@ class VideoProcessor: ObservableObject {
 
                 // Bellek güvenliği: Qwen ancak Whisper tamamen boşaltıldıktan sonra
                 // yüklenir. Böylece iPhone 14'te iki modelin tepe belleği üst üste binmez.
-                if let qwenModelID = quality.qwenModelID(), !normalizedWords.isEmpty {
+                if let qwenModelID = effectiveQuality.qwenModelID(), !normalizedWords.isEmpty {
                     do {
                         let loadedQwenModel = try await Qwen3ASRModel.fromPretrained(
                             modelId: qwenModelID,
@@ -909,9 +966,13 @@ class VideoProcessor: ObservableObject {
                 guard self.finishRecognitionIfActive(recognitionID) else { return }
                 self.completeOnMain {
                     if normalizedWords.isEmpty {
-                        completion([], "Videoda deşifre edilebilecek net bir vokal veya konuşma bulunamadı.")
+                        completion(
+                            [],
+                            "Videoda deşifre edilebilecek net bir vokal veya konuşma bulunamadı.",
+                            cloudFallbackReason
+                        )
                     } else {
-                        completion(normalizedWords, nil)
+                        completion(normalizedWords, nil, cloudFallbackReason)
                     }
                 }
             } catch is CancellationError {
@@ -921,7 +982,7 @@ class VideoProcessor: ObservableObject {
                 qwenModel?.unload()
                 if self.finishRecognitionIfActive(recognitionID) {
                     self.completeOnMain {
-                        completion([], "İşlem iptal edildi.")
+                        completion([], "İşlem iptal edildi.", cloudFallbackReason)
                     }
                 }
             } catch {
@@ -933,7 +994,7 @@ class VideoProcessor: ObservableObject {
                 let message = self.friendlyRecognitionError(error)
                 if self.finishRecognitionIfActive(recognitionID) {
                     self.completeOnMain {
-                        completion([], message)
+                        completion([], message, cloudFallbackReason)
                     }
                 }
             }
@@ -946,6 +1007,41 @@ class VideoProcessor: ObservableObject {
             task.cancel()
         }
         recognitionLock.unlock()
+    }
+
+    private func friendlyCloudFallbackReason(_ error: Error) -> String {
+        if let clientError = error as? GroqSpeechClient.ClientError {
+            switch clientError {
+            case .invalidAPIKey:
+                return "API anahtarı geçersiz"
+            case .audioTooLarge:
+                return "ses dosyası ücretsiz 24 MB sınırını aşıyor"
+            case .unreadableAudio:
+                return "ses dosyası okunamadı"
+            case .invalidResponse:
+                return "servis geçersiz yanıt verdi"
+            case .missingWordTimestamps:
+                return "servis kelime zamanlarını döndürmedi"
+            case .service(let statusCode, _):
+                switch statusCode {
+                case 401, 403: return "API anahtarı reddedildi"
+                case 413: return "ses dosyası yükleme sınırını aşıyor"
+                case 429: return "ücretsiz kullanım limiti doldu"
+                default: return "servis \(statusCode) hatası verdi"
+                }
+            }
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                return "internet bağlantısı kurulamadı"
+            case .timedOut:
+                return "servis zaman aşımına uğradı"
+            default:
+                return "ağ bağlantısı başarısız oldu"
+            }
+        }
+        return "beklenmeyen servis hatası oluştu"
     }
 
     private func transcribeTimingPass(

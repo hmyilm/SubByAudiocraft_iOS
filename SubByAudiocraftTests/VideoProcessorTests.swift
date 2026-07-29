@@ -91,6 +91,63 @@ final class VideoProcessorTests: XCTestCase {
         )
     }
 
+    func testCloudQualityUsesBalancedLocalFallback() {
+        XCTAssertTrue(AnalysisQuality.cloud.usesCloudTranscription)
+        XCTAssertEqual(AnalysisQuality.cloud.localFallbackQuality, .balanced)
+        XCTAssertEqual(
+            AnalysisQuality.cloud.modelCandidates(physicalMemory: UInt64.max),
+            AnalysisQuality.balanced.modelCandidates(physicalMemory: UInt64.max)
+        )
+        XCTAssertNil(AnalysisQuality.cloud.qwenModelID(physicalMemory: UInt64.max))
+    }
+
+    func testGroqAPIKeyValidationDoesNotAcceptGoogleOrIncompleteKeys() {
+        XCTAssertTrue(
+            GroqSpeechClient.isPlausibleAPIKey(
+                "  gsk_123456789012345678901234  "
+            )
+        )
+        XCTAssertFalse(
+            GroqSpeechClient.isPlausibleAPIKey(
+                "AIzaSyExampleGoogleKey"
+            )
+        )
+        XCTAssertFalse(GroqSpeechClient.isPlausibleAPIKey("gsk_short"))
+    }
+
+    func testGroqResponseDecodesWordLevelTimestamps() throws {
+        let data = Data(
+            """
+            {
+              "text": "Kara sevda",
+              "words": [
+                {"word": " Kara", "start": 0.12, "end": 0.48},
+                {"word": "sevda", "start": 0.52, "end": 1.04}
+              ]
+            }
+            """.utf8
+        )
+
+        let words = try GroqSpeechClient.shared.decodeWordTimestamps(from: data)
+
+        XCTAssertEqual(words.map(\.text), ["Kara", "sevda"])
+        XCTAssertEqual(words[0].start, 0.12, accuracy: 0.0001)
+        XCTAssertEqual(words[1].end, 1.04, accuracy: 0.0001)
+    }
+
+    func testGroqResponseWithoutWordTimestampsIsRejected() {
+        let data = Data(#"{"text":"Kara sevda"}"#.utf8)
+
+        XCTAssertThrowsError(
+            try GroqSpeechClient.shared.decodeWordTimestamps(from: data)
+        ) { error in
+            guard let clientError = error as? GroqSpeechClient.ClientError,
+                  case .missingWordTimestamps = clientError else {
+                return XCTFail("Beklenmeyen hata: \(error)")
+            }
+        }
+    }
+
     func testRecognitionNormalizationMergesOnlyOverlappingDuplicates() {
         let duplicateA = VideoProcessor.WordTimestamp(text: "Sevda", start: 0.0, end: 0.5)
         let duplicateB = VideoProcessor.WordTimestamp(text: "sevda", start: 0.05, end: 0.55)
