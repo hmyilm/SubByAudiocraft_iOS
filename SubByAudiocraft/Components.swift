@@ -872,7 +872,13 @@ struct SubtitlePreviewPlayer: View {
 
     var body: some View {
         GeometryReader { geo in
-            ZStack(alignment: .bottom) {
+            let viewport = VideoProcessor.shared.aspectFitRect(
+                contentSize: player?.currentItem?.presentationSize ?? .zero,
+                in: geo.size
+            )
+            let previewScale = viewport.height / 1080.0
+
+            ZStack {
                 if let player = player {
                     VideoPlayer(player: player)
                         .onAppear {
@@ -935,7 +941,7 @@ struct SubtitlePreviewPlayer: View {
                                 playbackTime: karaokeWords.isEmpty
                                     ? samplePlaybackTime(words: previewWords, plan: plan)
                                     : playbackTime,
-                                previewHeight: geo.size.height,
+                                previewHeight: viewport.height,
                                 accent: kineticAccent,
                                 customColorHex: kineticCustomColorHex,
                                 intensity: kineticIntensity,
@@ -948,12 +954,12 @@ struct SubtitlePreviewPlayer: View {
                             Text(sampleText)
                                 .foregroundColor(.white)
                         } else {
-                            VStack(spacing: max(2, geo.size.height / 120)) {
+                            VStack(spacing: max(1, viewport.height / 120)) {
                                 ForEach(
                                     Array(classicPreviewRows.enumerated()),
                                     id: \.offset
                                 ) { row in
-                                    HStack(spacing: max(2, geo.size.height / 100)) {
+                                    HStack(spacing: max(1, viewport.height / 100)) {
                                         ForEach(row.element) { word in
                                     let isActive = lyricTrackingMode == .karaoke
                                         && playbackTime >= word.start
@@ -1000,20 +1006,30 @@ struct SubtitlePreviewPlayer: View {
                         }
                         }
                     }
-                        .font(.custom(fontName, size: CGFloat(fontSize) * (geo.size.height / 1080.0)))
+                        .font(.custom(fontName, size: CGFloat(fontSize) * previewScale))
                         .lineLimit(1)
                         .minimumScaleFactor(0.45)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.horizontal, max(1, 20 * previewScale))
+                        .padding(.vertical, max(0.5, 5 * previewScale))
                         .background(
                             karaokeWords.isEmpty && karaokeMode == .classic
                                 ? Color.black.opacity(0.6)
                                 : Color.clear
                         )
-                        .shadow(color: karaokeWords.isEmpty ? .clear : .black.opacity(0.9), radius: 2)
-                        .cornerRadius(6)
-                        .padding(.bottom, CGFloat(marginV) * (geo.size.height / 1080.0))
+                        .shadow(
+                            color: karaokeWords.isEmpty ? .clear : .black.opacity(0.9),
+                            radius: max(0.3, 1.5 * previewScale)
+                        )
+                        .cornerRadius(max(1, 6 * previewScale))
+                        .padding(.bottom, CGFloat(marginV) * previewScale)
+                        .frame(
+                            width: viewport.width,
+                            height: viewport.height,
+                            alignment: .bottom
+                        )
+                        .clipped()
+                        .position(x: viewport.midX, y: viewport.midY)
                 }
             }
         }
@@ -1258,7 +1274,9 @@ private struct KineticPreviewLockup: View {
                                 text: word.text,
                                 wordIndex: index,
                                 plan: plan,
-                                letterStyle: letterStyle
+                                letterStyle: FontCatalog.secenek(fontName)?.bitisik == true
+                                    ? .clean
+                                    : letterStyle
                             )
                             let previewFontSize = scaledFontSize(
                                 wordIndex: index,
@@ -1266,7 +1284,7 @@ private struct KineticPreviewLockup: View {
                                 row: rowItem.element,
                                 treatment: glyphDesign.treatment
                             )
-                            KineticGlyphRun(
+                            KineticPreviewWordRun(
                                 design: glyphDesign,
                                 fontName: fontName,
                                 baseFontSize: previewFontSize
@@ -1286,7 +1304,7 @@ private struct KineticPreviewLockup: View {
                                 )
                                 .overlay {
                                     if isBoldActive {
-                                        KineticGlyphRun(
+                                        KineticPreviewWordRun(
                                             design: glyphDesign,
                                             fontName: fontName,
                                             baseFontSize: previewFontSize,
@@ -1611,6 +1629,43 @@ private struct KineticGlyphRun: View {
             }
         }
         .fixedSize(horizontal: true, vertical: true)
+    }
+}
+
+private struct KineticPreviewWordRun: View {
+    let design: KineticGlyphDesign
+    let fontName: String
+    let baseFontSize: CGFloat
+    let fontWeight: Font.Weight?
+
+    init(
+        design: KineticGlyphDesign,
+        fontName: String,
+        baseFontSize: CGFloat,
+        fontWeight: Font.Weight? = nil
+    ) {
+        self.design = design
+        self.fontName = fontName
+        self.baseFontSize = baseFontSize
+        self.fontWeight = fontWeight
+    }
+
+    @ViewBuilder
+    var body: some View {
+        if FontCatalog.secenek(fontName)?.bitisik == true {
+            Text(String(design.characters))
+                .font(.custom(fontName, size: baseFontSize))
+                .fontWeight(fontWeight)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: true)
+        } else {
+            KineticGlyphRun(
+                design: design,
+                fontName: fontName,
+                baseFontSize: baseFontSize,
+                fontWeight: fontWeight
+            )
+        }
     }
 }
 

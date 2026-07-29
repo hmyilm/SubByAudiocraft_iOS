@@ -119,7 +119,7 @@ enum KaraokeMode: String, CaseIterable, Identifiable, Codable {
     var detail: String {
         switch self {
         case .classic:
-            return "Okunaklı satır düzeni ve harf harf karaoke takibi."
+            return "Okunaklı sabit satır düzeni ve aktif kelime karaoke takibi."
         case .kinetic:
             return "Vokal temposu ve anlam vurgusuna göre boyut, kompozisyon ve hareket üretir."
         }
@@ -719,6 +719,16 @@ struct KineticTypographyPlan: Equatable {
     }
 }
 
+enum SubtitleRenderPath: Equatable {
+    case centeredCharacterReveal
+    case centeredWordReveal
+    case kinetic
+    case connectedKinetic
+    case boldWord
+    case staticLine
+    case classicKaraoke
+}
+
 class VideoProcessor: ObservableObject {
     static let shared = VideoProcessor()
     
@@ -757,6 +767,68 @@ class VideoProcessor: ObservableObject {
                 return left.offset < right.offset
             }
             .map(\.element)
+    }
+
+    // AVPlayer videoyu aspect-fit ile gösterir. Ön izleme katmanı da aynı gerçek
+    // görüntü dikdörtgenini kullanmazsa özellikle 9:16 videoda yazılar siyah
+    // kenarlara taşar ve dışa aktarımda bambaşka bir düzene dönüşür.
+    func aspectFitRect(contentSize: CGSize, in containerSize: CGSize) -> CGRect {
+        guard contentSize.width.isFinite,
+              contentSize.height.isFinite,
+              containerSize.width.isFinite,
+              containerSize.height.isFinite,
+              contentSize.width > 0,
+              contentSize.height > 0,
+              containerSize.width > 0,
+              containerSize.height > 0 else {
+            return CGRect(origin: .zero, size: containerSize)
+        }
+
+        let scale = min(
+            containerSize.width / contentSize.width,
+            containerSize.height / contentSize.height
+        )
+        let fittedSize = CGSize(
+            width: contentSize.width * scale,
+            height: contentSize.height * scale
+        )
+        return CGRect(
+            x: (containerSize.width - fittedSize.width) / 2,
+            y: (containerSize.height - fittedSize.height) / 2,
+            width: fittedSize.width,
+            height: fittedSize.height
+        )
+    }
+
+    func subtitleRenderPath(
+        karaokeMode: KaraokeMode,
+        lyricTrackingMode: LyricTrackingMode,
+        usesConnectedFont: Bool
+    ) -> SubtitleRenderPath {
+        switch lyricTrackingMode {
+        case .centeredReveal:
+            return .centeredCharacterReveal
+        case .centeredWordReveal:
+            return .centeredWordReveal
+        case .off, .karaoke, .boldWord:
+            break
+        }
+
+        if karaokeMode == .kinetic {
+            return usesConnectedFont ? .connectedKinetic : .kinetic
+        }
+        switch lyricTrackingMode {
+        case .boldWord:
+            return .boldWord
+        case .off:
+            return .staticLine
+        case .karaoke:
+            return .classicKaraoke
+        case .centeredReveal:
+            return .centeredCharacterReveal
+        case .centeredWordReveal:
+            return .centeredWordReveal
+        }
     }
 
     struct LyricRecognitionWindow: Equatable {
@@ -3258,7 +3330,10 @@ class VideoProcessor: ObservableObject {
             rowGapMultiplier = 0.94
         }
         let rowGap = max(46, Double(baseSize) * rowGapMultiplier)
-        let firstY = targetY - (Double(max(0, layoutRows.count - 1)) * rowGap / 2)
+        // SwiftUI ön izlemesi gibi son satırı kullanıcının seçtiği alt marja kilitle.
+        // Önceki merkezleme çok satırlı düzenin yarısını marjın altına indiriyor,
+        // dolayısıyla dışa aktarım ön izlemeden belirgin biçimde aşağıda görünüyordu.
+        let firstY = targetY - (Double(max(0, layoutRows.count - 1)) * rowGap)
         var placements: [KineticWordPlacement] = []
 
         for (rowIndex, row) in layoutRows.enumerated() where !row.isEmpty {
@@ -3922,7 +3997,8 @@ class VideoProcessor: ObservableObject {
         lyricTrackingMode: LyricTrackingMode = .karaoke,
         inlineLineBreaks: Set<UUID> = [],
         repeatCount: Int = 1,
-        scenePlan: KineticTypographyPlan? = nil
+        scenePlan: KineticTypographyPlan? = nil,
+        preserveConnectedGlyphs: Bool = false
     ) -> String {
         let cleaned: [(word: WordTimestamp, text: String)] = group.compactMap { word in
             let text = cleanASSWord(word.text)
@@ -3947,6 +4023,9 @@ class VideoProcessor: ObservableObject {
         }
         if !requestedRow.isEmpty { requestedRows.append(requestedRow) }
         let manualRows = requestedRows.count > 1 ? requestedRows : nil
+        let layoutLetterStyle: KineticLetterStyle = preserveConnectedGlyphs
+            ? .clean
+            : letterStyle
         let placements: [KineticWordPlacement]
         if let manualRows {
             placements = kineticPlacements(
@@ -3957,7 +4036,7 @@ class VideoProcessor: ObservableObject {
                 marginV: marginV,
                 virtualWidth: virtualWidth,
                 virtualHeight: virtualHeight,
-                letterStyle: letterStyle,
+                letterStyle: layoutLetterStyle,
                 rowsOverride: manualRows
             )
         } else if plan.scene == .captionWindow {
@@ -3970,7 +4049,7 @@ class VideoProcessor: ObservableObject {
                     marginV: marginV,
                     virtualWidth: virtualWidth,
                     virtualHeight: virtualHeight,
-                    letterStyle: letterStyle,
+                    letterStyle: layoutLetterStyle,
                     rowsOverride: [page]
                 )
             }.sorted { $0.index < $1.index }
@@ -3983,7 +4062,7 @@ class VideoProcessor: ObservableObject {
                 marginV: marginV,
                 virtualWidth: virtualWidth,
                 virtualHeight: virtualHeight,
-                letterStyle: letterStyle
+                letterStyle: layoutLetterStyle
             )
         }
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
@@ -4063,27 +4142,44 @@ class VideoProcessor: ObservableObject {
                 max(wordStartMs + 30, Int((item.word.end - eventStart) * 1000))
             )
 
-            var text = ""
-            let characters = placement.glyphDesign.characters
-            let letterDuration = max(0.01, (item.word.end - item.word.start) / Double(max(1, characters.count)))
-            for (characterIndex, character) in characters.enumerated() {
-                let characterStart = item.word.start + (Double(characterIndex) * letterDuration)
-                let characterEnd = item.word.start + (Double(characterIndex + 1) * letterDuration)
-                let startMs = min(eventDurationMs, max(0, Int((characterStart - eventStart) * 1000)))
-                let rawEndMs = min(eventDurationMs, max(startMs + 20, Int((characterEnd - eventStart) * 1000)))
-                let fadeEnd = min(eventDurationMs, max(startMs + 20, min(rawEndMs, startMs + 100)))
-                let glyphScale = placement.glyphDesign.scaleFactors.indices.contains(characterIndex)
-                    ? placement.glyphDesign.scaleFactors[characterIndex]
-                    : 1
-                let glyphSize = max(
-                    1,
-                    Int((Double(placement.fontSize) * glyphScale).rounded())
+            var text = item.text
+            if !preserveConnectedGlyphs {
+                text = ""
+                let characters = placement.glyphDesign.characters
+                let letterDuration = max(
+                    0.01,
+                    (item.word.end - item.word.start) / Double(max(1, characters.count))
                 )
-                if karaokeTrackingEnabled {
-                    text += "{\\fs\(glyphSize)\\alpha&H00&" +
-                        "\\t(\(startMs),\(fadeEnd),\\alpha&HA0&)}\(character)"
-                } else {
-                    text += "{\\fs\(glyphSize)}\(character)"
+                for (characterIndex, character) in characters.enumerated() {
+                    let characterStart = item.word.start
+                        + (Double(characterIndex) * letterDuration)
+                    let characterEnd = item.word.start
+                        + (Double(characterIndex + 1) * letterDuration)
+                    let startMs = min(
+                        eventDurationMs,
+                        max(0, Int((characterStart - eventStart) * 1000))
+                    )
+                    let rawEndMs = min(
+                        eventDurationMs,
+                        max(startMs + 20, Int((characterEnd - eventStart) * 1000))
+                    )
+                    let fadeEnd = min(
+                        eventDurationMs,
+                        max(startMs + 20, min(rawEndMs, startMs + 100))
+                    )
+                    let glyphScale = placement.glyphDesign.scaleFactors.indices.contains(characterIndex)
+                        ? placement.glyphDesign.scaleFactors[characterIndex]
+                        : 1
+                    let glyphSize = max(
+                        1,
+                        Int((Double(placement.fontSize) * glyphScale).rounded())
+                    )
+                    if karaokeTrackingEnabled {
+                        text += "{\\fs\(glyphSize)\\alpha&H00&" +
+                            "\\t(\(startMs),\(fadeEnd),\\alpha&HA0&)}\(character)"
+                    } else {
+                        text += "{\\fs\(glyphSize)}\(character)"
+                    }
                 }
             }
 
@@ -4158,6 +4254,9 @@ class VideoProcessor: ObservableObject {
             let fadeIn = isolatedWord ? 70 : (pagedWords ? 75 : 110)
             let fadeOut = isolatedWord ? 100 : (pagedWords ? 95 : 140)
             tags += "\\fs\(placement.fontSize)\\c&HFFFFFF&\\fad(\(fadeIn),\(fadeOut))"
+            if karaokeTrackingEnabled && preserveConnectedGlyphs {
+                tags += "\\alpha&H00&"
+            }
             let tracking = Int((
                 Double(placement.fontSize) * placement.glyphDesign.trackingFactor
             ).rounded())
@@ -4205,12 +4304,18 @@ class VideoProcessor: ObservableObject {
                     ? "\\fscx\(highlightScale)\\fscy\(highlightScale)"
                     : ""
                 let restingScaleTags = shouldPulse ? "\\fscx100\\fscy100" : ""
+                let activeAlphaTags = preserveConnectedGlyphs ? "\\alpha&H00&" : ""
+                let pastAlphaTags = preserveConnectedGlyphs ? "\\alpha&HA6&" : ""
                 if plan.highlight == .pill {
-                    tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&\\3a&HFF&\\4a&HFF&\(activeScaleTags))"
-                    tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&\\3a&H00&\\4a&H00&\(restingScaleTags))"
+                    tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&" +
+                        "\\3a&HFF&\\4a&HFF&\(activeScaleTags)\(activeAlphaTags))"
+                    tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&" +
+                        "\\3a&H00&\\4a&H00&\(restingScaleTags)\(pastAlphaTags))"
                 } else {
-                    tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&\(activeScaleTags))"
-                    tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&\(restingScaleTags))"
+                    tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&" +
+                        "\(activeScaleTags)\(activeAlphaTags))"
+                    tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&" +
+                        "\(restingScaleTags)\(pastAlphaTags))"
                 }
             }
             if plan.highlight == .glow {
@@ -4373,6 +4478,125 @@ class VideoProcessor: ObservableObject {
                     "\\t(\(wordStartMs),\(boldInEnd),\\alpha&H00&)" +
                     "\\t(\(wordEndMs),\(boldOutEnd),\\alpha&HFF&)}"
                 result += "Dialogue: 2,\(t0),\(t1),Default,,0,0,0,,\(tags)\(item.text)\n"
+            }
+        }
+        return result
+    }
+
+    // Klasik Karaoke: SwiftUI ön izlemesindeki davranışın ASS karşılığıdır.
+    // Kelimeler sabit merkezlerinde kalır; aktif kelime altın renge geçip %8 büyür,
+    // okunan kelime ise beyazın %35 opaklığına iner. Her kelime bağımsız katman
+    // olduğundan renk/ağırlık değişimi satırı yeniden ölçmez ve yazı zıplamaz.
+    func makeClassicWordTrackingDialogues(
+        group: [WordTimestamp],
+        segStart: Double,
+        segEnd: Double,
+        fontName: String,
+        fontSize: Int,
+        marginV: Int,
+        virtualWidth: Int,
+        virtualHeight: Int,
+        inlineLineBreaks: Set<UUID> = []
+    ) -> String {
+        struct TrackingWordItem {
+            let word: WordTimestamp
+            let text: String
+            let startUTF16: Int
+            let endUTF16: Int
+        }
+
+        let itemsByRow: [[TrackingWordItem]] = visualLineGroups(
+            for: group,
+            inlineLineBreaks: inlineLineBreaks
+        ).compactMap { row in
+            var items: [TrackingWordItem] = []
+            var utf16Cursor = 0
+            for word in row {
+                let text = cleanASSWord(word.text)
+                guard !text.isEmpty else { continue }
+                if !items.isEmpty { utf16Cursor += 1 }
+                let startUTF16 = utf16Cursor
+                utf16Cursor += text.utf16.count
+                items.append(
+                    TrackingWordItem(
+                        word: word,
+                        text: text,
+                        startUTF16: startUTF16,
+                        endUTF16: utf16Cursor
+                    )
+                )
+            }
+            return items.isEmpty ? nil : items
+        }
+        guard !itemsByRow.isEmpty, segEnd > segStart else { return "" }
+
+        let rowTexts = itemsByRow.map { $0.map(\.text).joined(separator: " ") }
+        let maximumWidth = max(24.0, Double(virtualWidth - 20))
+        let eventDurationMs = max(20, Int(((segEnd - segStart) * 1000).rounded()))
+        let t0 = formatASSTime(segStart)
+        let t1 = formatASSTime(segEnd)
+        let baselineY = max(0, virtualHeight - marginV)
+        let rowGap = max(1, fontSize)
+        let accent = KineticAccent.gold.assColor
+        var result = ""
+
+        for (rowIndex, items) in itemsByRow.enumerated() {
+            let rowText = rowTexts[rowIndex]
+            let measurement = harfSinirlariniOlc(
+                metin: rowText,
+                fontName: fontName,
+                assFontSize: fontSize
+            )
+            let estimatedWidth = min(
+                maximumWidth,
+                max(24.0, Double(max(1, rowText.utf16.count)) * Double(fontSize) * 0.56)
+            )
+            let lineWidth = measurement?.genislik ?? estimatedWidth
+            let lineLeft = (Double(virtualWidth) - lineWidth) / 2
+            let rowY = baselineY - ((itemsByRow.count - rowIndex - 1) * rowGap)
+
+            for item in items {
+                let wordStart = min(segEnd, max(segStart, item.word.start))
+                let wordEnd = min(segEnd, max(wordStart + 0.05, item.word.end))
+                guard wordEnd > wordStart else { continue }
+
+                let leftOffset: Double
+                let rightOffset: Double
+                if let measurement,
+                   item.endUTF16 > 0,
+                   item.endUTF16 <= measurement.sinirlar.count {
+                    leftOffset = item.startUTF16 == 0
+                        ? 0
+                        : measurement.sinirlar[item.startUTF16 - 1]
+                    rightOffset = measurement.sinirlar[item.endUTF16 - 1]
+                } else {
+                    let denominator = Double(max(1, rowText.utf16.count))
+                    leftOffset = lineWidth * Double(item.startUTF16) / denominator
+                    rightOffset = lineWidth * Double(item.endUTF16) / denominator
+                }
+
+                let wordCenterX = min(
+                    virtualWidth,
+                    max(0, Int((lineLeft + ((leftOffset + rightOffset) / 2)).rounded()))
+                )
+                let wordStartMs = min(
+                    eventDurationMs,
+                    max(0, Int(((wordStart - segStart) * 1000).rounded()))
+                )
+                let wordEndMs = min(
+                    eventDurationMs,
+                    max(wordStartMs + 10, Int(((wordEnd - segStart) * 1000).rounded()))
+                )
+                let colorInEnd = min(eventDurationMs, wordStartMs + 55)
+                let colorOutEnd = min(eventDurationMs, wordEndMs + 75)
+                let tags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
+                    "\\fs\(fontSize)\\b0\\c&HFFFFFF&\\alpha&H00&" +
+                    "\\fscx100\\fscy100\\4c&H\(accent)&\\4a&HFF&" +
+                    "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(accent)&" +
+                    "\\fscx108\\fscy108\\4a&H82&)" +
+                    "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&\\alpha&HA6&" +
+                    "\\fscx100\\fscy100\\4a&HFF&)}"
+                result += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,\(tags)\(item.text)\n"
             }
         }
         return result
@@ -4746,6 +4970,11 @@ class VideoProcessor: ObservableObject {
         // altta etiketsiz BİTİŞİK soluk kopya (hiç bozulmaz), üstte harf harf tam saydama
         // ERİYEN opak kopya. Harf harf soluklaşma hissi korunur, yazı hep bitişik görünür.
         let bitisikFont = FontCatalog.secenek(fontName)?.bitisik ?? false
+        let renderPath = subtitleRenderPath(
+            karaokeMode: karaokeMode,
+            lyricTrackingMode: lyricTrackingMode,
+            usesConnectedFont: bitisikFont
+        )
 
         var assContent = """
         [Script Info]
@@ -4850,41 +5079,42 @@ class VideoProcessor: ObservableObject {
                 maximumWidth: maximumLineWidth
             )
 
-            if lyricTrackingMode.isProgressiveReveal {
-                if lyricTrackingMode == .centeredWordReveal {
-                    assContent += makeCenteredWordRevealDialogues(
-                        group: seg.group,
-                        segStart: segStart,
-                        segEnd: segEnd,
-                        fontSize: lineFontSize,
-                        marginV: marginV,
-                        virtualWidth: virtualWidth,
-                        virtualHeight: virtualHeight,
-                        accent: kineticAccent,
-                        customColorHex: kineticCustomColorHex,
-                        inlineLineBreaks: inlineLineBreaks
-                    )
-                } else {
-                    assContent += makeCenteredRevealDialogues(
-                        group: seg.group,
-                        segStart: segStart,
-                        segEnd: segEnd,
-                        fontSize: lineFontSize,
-                        marginV: marginV,
-                        virtualWidth: virtualWidth,
-                        virtualHeight: virtualHeight,
-                        accent: kineticAccent,
-                        customColorHex: kineticCustomColorHex,
-                        inlineLineBreaks: inlineLineBreaks
-                    )
-                }
+            if renderPath == .centeredWordReveal {
+                assContent += makeCenteredWordRevealDialogues(
+                    group: seg.group,
+                    segStart: segStart,
+                    segEnd: segEnd,
+                    fontSize: lineFontSize,
+                    marginV: marginV,
+                    virtualWidth: virtualWidth,
+                    virtualHeight: virtualHeight,
+                    accent: kineticAccent,
+                    customColorHex: kineticCustomColorHex,
+                    inlineLineBreaks: inlineLineBreaks
+                )
                 continue
             }
 
-            // Normal fontlarda Kinetik mod her kelimeyi bağımsız bir tipografi katmanı
-            // olarak yerleştirir. Böylece yalnız font boyutu değil, satır hiyerarşisi,
-            // vurgu, mikro hareket ve ritim de kelime zamanına bağlanır.
-            if karaokeMode == .kinetic && !bitisikFont {
+            if renderPath == .centeredCharacterReveal {
+                assContent += makeCenteredRevealDialogues(
+                    group: seg.group,
+                    segStart: segStart,
+                    segEnd: segEnd,
+                    fontSize: lineFontSize,
+                    marginV: marginV,
+                    virtualWidth: virtualWidth,
+                    virtualHeight: virtualHeight,
+                    accent: kineticAccent,
+                    customColorHex: kineticCustomColorHex,
+                    inlineLineBreaks: inlineLineBreaks
+                )
+                continue
+            }
+
+            // Kinetik seçim her fontta aynı sahne motoruna gider. Bitişik fontlarda
+            // harfler parçalanmadan kelime tek glif koşusu olarak korunur; standart
+            // karaoke yoluna geri düşülmez.
+            if renderPath == .kinetic || renderPath == .connectedKinetic {
                 assContent += makeKineticDialogues(
                     group: seg.group,
                     lineIndex: index,
@@ -4904,7 +5134,8 @@ class VideoProcessor: ObservableObject {
                     lyricTrackingMode: lyricTrackingMode,
                     inlineLineBreaks: inlineLineBreaks,
                     repeatCount: kineticPlans[index].repeatCount,
-                    scenePlan: kineticPlans[index]
+                    scenePlan: kineticPlans[index],
+                    preserveConnectedGlyphs: renderPath == .connectedKinetic
                 )
                 continue
             }
@@ -4945,7 +5176,7 @@ class VideoProcessor: ObservableObject {
                 lineMotionTags = ""
             }
 
-            if lyricTrackingMode == .boldWord {
+            if renderPath == .boldWord {
                 assContent += makeBoldWordDialogues(
                     group: seg.group,
                     segStart: segStart,
@@ -4960,11 +5191,26 @@ class VideoProcessor: ObservableObject {
                 continue
             }
 
-            if lyricTrackingMode == .off {
+            if renderPath == .staticLine {
                 let t0 = formatASSTime(segStart)
                 let t1 = formatASSTime(segEnd)
                 assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,," +
                     "{\\fs\(lineFontSize)\(lineMotionTags)}\(lineText)\n"
+                continue
+            }
+
+            if renderPath == .classicKaraoke {
+                assContent += makeClassicWordTrackingDialogues(
+                    group: seg.group,
+                    segStart: segStart,
+                    segEnd: segEnd,
+                    fontName: fontName,
+                    fontSize: lineFontSize,
+                    marginV: marginV,
+                    virtualWidth: virtualWidth,
+                    virtualHeight: virtualHeight,
+                    inlineLineBreaks: inlineLineBreaks
+                )
                 continue
             }
 

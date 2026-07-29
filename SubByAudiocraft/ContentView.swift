@@ -784,28 +784,47 @@ struct ContentView: View {
         // Video oynatıcıyı durdur
         player?.pause()
 
+        // Dışa aktarım başladığı anda ekrandaki seçimi tek bir anlık görüntüye
+        // kilitle. Asenkron ASS hazırlığı sırasında AppStorage/proje yenilenirse
+        // render'ın varsayılan Klasik + Karaoke değerine geri düşmesini önler.
+        let renderWords = words
+        let renderLineBreaks = lineBreaks
+        let renderInlineLineBreaks = inlineLineBreaks
+        let renderFontName = fontName
+        let renderFontSize = Int(fontSize)
+        let renderMarginV = Int(marginV)
+        let renderKaraokeMode = KaraokeMode.resolved(karaokeModeRaw)
+        let renderTrackingMode = LyricTrackingMode.resolved(lyricTrackingModeRaw)
+        let renderKineticStyle = KineticStyle.resolved(kineticStyleRaw)
+        let renderKineticAccent = KineticAccent.resolved(kineticAccentRaw)
+        let renderCustomColorHex = kineticCustomColorHex
+        let renderIntensity = KineticIntensity.resolved(kineticIntensityRaw)
+        let renderLetterStyle = KineticLetterStyle(
+            rawValue: kineticLetterStyleRaw
+        ) ?? .automatic
+        let renderOverlayStyle = KineticOverlayStyle(
+            rawValue: kineticOverlayStyleRaw
+        ) ?? .automatic
+        let renderEmphasisWordIDs = kineticEmphasisWordIDs
+        statusMessage = "\(renderKaraokeMode.title) · \(renderTrackingMode.title) hazırlanıyor..."
+
         Task {
-            let actualFontName = fontName
             let assURL = await VideoProcessor.shared.generateASS(
-                words: words,
-                lineBreaks: lineBreaks,
-                inlineLineBreaks: inlineLineBreaks,
-                fontName: actualFontName,
-                fontSize: Int(fontSize),
-                marginV: Int(marginV),
-                karaokeMode: KaraokeMode.resolved(karaokeModeRaw),
-                lyricTrackingMode: LyricTrackingMode.resolved(lyricTrackingModeRaw),
-                kineticStyle: KineticStyle.resolved(kineticStyleRaw),
-                kineticAccent: KineticAccent.resolved(kineticAccentRaw),
-                kineticCustomColorHex: kineticCustomColorHex,
-                kineticIntensity: KineticIntensity.resolved(kineticIntensityRaw),
-                kineticLetterStyle: KineticLetterStyle(
-                    rawValue: kineticLetterStyleRaw
-                ) ?? .automatic,
-                kineticOverlayStyle: KineticOverlayStyle(
-                    rawValue: kineticOverlayStyleRaw
-                ) ?? .automatic,
-                kineticEmphasisWordIDs: kineticEmphasisWordIDs,
+                words: renderWords,
+                lineBreaks: renderLineBreaks,
+                inlineLineBreaks: renderInlineLineBreaks,
+                fontName: renderFontName,
+                fontSize: renderFontSize,
+                marginV: renderMarginV,
+                karaokeMode: renderKaraokeMode,
+                lyricTrackingMode: renderTrackingMode,
+                kineticStyle: renderKineticStyle,
+                kineticAccent: renderKineticAccent,
+                kineticCustomColorHex: renderCustomColorHex,
+                kineticIntensity: renderIntensity,
+                kineticLetterStyle: renderLetterStyle,
+                kineticOverlayStyle: renderOverlayStyle,
+                kineticEmphasisWordIDs: renderEmphasisWordIDs,
                 videoURL: url
             )
 
@@ -823,7 +842,11 @@ struct ContentView: View {
 
             self.statusMessage = "Altyazılar videoya gömülüyor. Bu işlem video süresine ve cihaz hızına göre biraz sürebilir..."
 
-            VideoProcessor.shared.burnSubtitles(videoURL: url, assURL: assURL, fontName: actualFontName) { outputURL, errorMessage in
+            VideoProcessor.shared.burnSubtitles(
+                videoURL: url,
+                assURL: assURL,
+                fontName: renderFontName
+            ) { outputURL, errorMessage in
                 VideoProcessor.shared.deleteFile(at: assURL)
 
                 guard self.activeOperationID == operationID else {

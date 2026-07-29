@@ -2,6 +2,84 @@ import XCTest
 @testable import SubByAudiocraft
 
 final class VideoProcessorTests: XCTestCase {
+    func testPortraitPreviewUsesOnlyTheAspectFitVideoViewport() {
+        let rect = VideoProcessor.shared.aspectFitRect(
+            contentSize: CGSize(width: 1080, height: 1920),
+            in: CGSize(width: 360, height: 200)
+        )
+
+        XCTAssertEqual(rect.width, 112.5, accuracy: 0.001)
+        XCTAssertEqual(rect.height, 200, accuracy: 0.001)
+        XCTAssertEqual(rect.minX, 123.75, accuracy: 0.001)
+        XCTAssertEqual(rect.minY, 0, accuracy: 0.001)
+    }
+
+    func testLandscapePreviewUsesTheCenteredAspectFitVideoViewport() {
+        let rect = VideoProcessor.shared.aspectFitRect(
+            contentSize: CGSize(width: 1920, height: 1080),
+            in: CGSize(width: 360, height: 240)
+        )
+
+        XCTAssertEqual(rect.width, 360, accuracy: 0.001)
+        XCTAssertEqual(rect.height, 202.5, accuracy: 0.001)
+        XCTAssertEqual(rect.minX, 0, accuracy: 0.001)
+        XCTAssertEqual(rect.minY, 18.75, accuracy: 0.001)
+    }
+
+    func testInvalidPresentationSizeFallsBackToTheWholePreview() {
+        let rect = VideoProcessor.shared.aspectFitRect(
+            contentSize: .zero,
+            in: CGSize(width: 360, height: 200)
+        )
+
+        XCTAssertEqual(rect, CGRect(x: 0, y: 0, width: 360, height: 200))
+    }
+
+    func testSelectedModesResolveToDedicatedExportPaths() {
+        let processor = VideoProcessor.shared
+
+        XCTAssertEqual(
+            processor.subtitleRenderPath(
+                karaokeMode: .kinetic,
+                lyricTrackingMode: .karaoke,
+                usesConnectedFont: false
+            ),
+            .kinetic
+        )
+        XCTAssertEqual(
+            processor.subtitleRenderPath(
+                karaokeMode: .kinetic,
+                lyricTrackingMode: .karaoke,
+                usesConnectedFont: true
+            ),
+            .connectedKinetic
+        )
+        XCTAssertEqual(
+            processor.subtitleRenderPath(
+                karaokeMode: .classic,
+                lyricTrackingMode: .boldWord,
+                usesConnectedFont: false
+            ),
+            .boldWord
+        )
+        XCTAssertEqual(
+            processor.subtitleRenderPath(
+                karaokeMode: .kinetic,
+                lyricTrackingMode: .centeredWordReveal,
+                usesConnectedFont: true
+            ),
+            .centeredWordReveal
+        )
+        XCTAssertEqual(
+            processor.subtitleRenderPath(
+                karaokeMode: .classic,
+                lyricTrackingMode: .karaoke,
+                usesConnectedFont: false
+            ),
+            .classicKaraoke
+        )
+    }
+
     func testChronologicalWordSortPlacesNewWordAtItsTimestamp() {
         var words = makeWords(["bir", "iki", "üç"])
         let inserted = VideoProcessor.WordTimestamp(
@@ -1160,6 +1238,46 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(ass.filter { $0 == "{" }.count, ass.filter { $0 == "}" }.count)
     }
 
+    func testKineticTwoRowExportKeepsTheLastRowOnThePreviewBaseline() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 0.2, end: 0.55),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 0.6, end: 1.0)
+        ]
+        let plan = KineticTypographyPlan(
+            scene: .phraseBuild,
+            motion: .lockedReveal,
+            highlight: .color,
+            energy: .steady,
+            creativeDirection: .cinematicFlow,
+            emphasisIndex: 0,
+            rows: [[0], [1]],
+            pages: [[0, 1]],
+            repeatCount: 1
+        )
+
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.2,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            lyricTrackingMode: .off,
+            inlineLineBreaks: [words[0].id],
+            scenePlan: plan
+        )
+        let wordDialogues = ass.split(separator: "\n").filter {
+            $0.hasPrefix("Dialogue: 2,") || $0.hasPrefix("Dialogue: 3,")
+        }
+
+        XCTAssertEqual(wordDialogues.count, 2)
+        XCTAssertTrue(wordDialogues[0].contains(",868)"))
+        XCTAssertTrue(wordDialogues[1].contains(",933)"))
+    }
+
     func testKineticTrackingCanBeDisabledWithoutDisablingTypographyMotion() {
         let words = makeWords(["kara", "sevda", "içimde"])
 
@@ -1183,6 +1301,30 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertFalse(ass.contains("\\alpha&HA0&"))
         XCTAssertFalse(ass.contains("\\c&H2FCCFE&"))
         XCTAssertTrue(ass.contains("\\move("))
+    }
+
+    func testConnectedFontKeepsSelectedKineticModeDuringExport() {
+        let words = makeWords(["kara", "sevda", "içimde"])
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.4,
+            fontName: "PetitFormalScript-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            style: .cinematic,
+            lyricTrackingMode: .karaoke,
+            preserveConnectedGlyphs: true
+        )
+
+        XCTAssertTrue(ass.contains("\\move("))
+        XCTAssertTrue(ass.contains("\\alpha&HA6&"))
+        XCTAssertTrue(ass.contains("}kara"))
+        XCTAssertTrue(ass.contains("}sevda"))
+        XCTAssertFalse(ass.contains("}k{\\fs"))
     }
 
     func testCenteredRevealGrowsPrefixAndKeepsEveryEventAtSameCenter() {
@@ -1421,6 +1563,32 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertTrue(kinetic.contains("\\b0}"))
         XCTAssertTrue(kinetic.contains("\\b1\\alpha&HFF&"))
         XCTAssertFalse(kinetic.contains("\\alpha&HA0&"))
+    }
+
+    func testClassicKaraokeExportMatchesPreviewColorScaleAndPastOpacity() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 0.10, end: 0.55),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 0.65, end: 1.15)
+        ]
+
+        let ass = VideoProcessor.shared.makeClassicWordTrackingDialogues(
+            group: words,
+            segStart: 0,
+            segEnd: 1.4,
+            fontName: "Anton-Regular",
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080
+        )
+        let dialogues = ass.split(separator: "\n")
+
+        XCTAssertEqual(dialogues.count, words.count)
+        XCTAssertTrue(ass.contains("\\c&H2FCCFE&"))
+        XCTAssertTrue(ass.contains("\\fscx108\\fscy108"))
+        XCTAssertTrue(ass.contains("\\alpha&HA6&"))
+        XCTAssertTrue(ass.contains("\\pos("))
+        XCTAssertFalse(ass.contains("\\alpha&HA0&"))
     }
 
     func testEditorialASSUsesAnimatedUnderlineInsteadOfRandomScaling() {
