@@ -1017,17 +1017,9 @@ struct SubtitlePreviewPlayer: View {
                                                                 .foregroundColor(
                                                                     resolvedPreviewAccent
                                                                 )
-                                                                .shadow(
-                                                                    color: hasRealBoldPreviewFace
-                                                                        ? .clear
-                                                                        : resolvedPreviewAccent
-                                                                            .opacity(0.9),
-                                                                    radius: hasRealBoldPreviewFace
-                                                                        ? 0
-                                                                        : 0.55
-                                                                )
                                                         }
                                                     }
+                                                    .scaleEffect(isBoldActive ? 1.04 : 1)
                                             }
                                         }
                                     }
@@ -1053,10 +1045,6 @@ struct SubtitlePreviewPlayer: View {
                             karaokeWords.isEmpty && karaokeMode == .classic
                                 ? Color.black.opacity(0.6)
                                 : Color.clear
-                        )
-                        .shadow(
-                            color: karaokeWords.isEmpty ? .clear : .black.opacity(0.9),
-                            radius: max(0.3, 1.5 * previewScale)
                         )
                         .cornerRadius(max(1, 6 * previewScale))
                         .padding(.bottom, CGFloat(marginV) * previewScale)
@@ -1356,8 +1344,6 @@ private struct KineticPreviewLockup: View {
                             let isBoldActive = trackingMode == .boldWord
                                 && playbackTime >= word.start
                                 && playbackTime < word.end
-                            let needsSyntheticWeight =
-                                FontCatalog.boldPSName(for: fontName) == nil
                             let glyphDesign = VideoProcessor.shared.kineticGlyphDesign(
                                 text: word.text,
                                 wordIndex: index,
@@ -1399,12 +1385,6 @@ private struct KineticPreviewLockup: View {
                                             fontWeight: .bold
                                         )
                                         .foregroundColor(resolvedAccent.previewColor)
-                                        .shadow(
-                                            color: needsSyntheticWeight
-                                                ? resolvedAccent.previewColor.opacity(0.9)
-                                                : .clear,
-                                            radius: needsSyntheticWeight ? 0.55 : 0
-                                        )
                                     }
                                 }
                                 .padding(
@@ -1435,11 +1415,28 @@ private struct KineticPreviewLockup: View {
                                 }
                                 .scaleEffect(isActive ? previewActiveScale : 1)
                                 .shadow(
-                                    color: isActive && plan.highlight == .glow
+                                    color: isActive
+                                        && plan.highlight == .glow
+                                        && resolvedOverlay != .none
                                         ? resolvedAccent.previewColor.opacity(0.55)
-                                        : .black.opacity(0.8),
-                                    radius: isActive ? 4 : 2,
-                                    y: isActive && resolvedOverlay == .underShadow ? 4 : 0
+                                        : (
+                                            isActive && resolvedOverlay == .underShadow
+                                                ? .black.opacity(0.8)
+                                                : .clear
+                                        ),
+                                    radius: isActive
+                                        && (
+                                            (
+                                                plan.highlight == .glow
+                                                    && resolvedOverlay != .none
+                                            )
+                                                || resolvedOverlay == .underShadow
+                                        )
+                                        ? 4
+                                        : 0,
+                                    y: isActive && resolvedOverlay == .underShadow
+                                        ? 4
+                                        : 0
                                 )
                                 .transition(.asymmetric(
                                     insertion: .scale(scale: previewEntranceScale).combined(with: .opacity),
@@ -1475,11 +1472,11 @@ private struct KineticPreviewLockup: View {
     }
 
     private var resolvedOverlay: KineticOverlayStyle {
-        let resolved = overlayStyle.resolved(for: plan)
-        if trackingMode != .karaoke, resolved.requiresKaraokeTracking {
-            return .none
-        }
-        return resolved
+        VideoProcessor.shared.resolvedKineticOverlayStyle(
+            requested: overlayStyle,
+            plan: plan,
+            trackingMode: trackingMode
+        )
     }
 
     private var groupOverlayHorizontalPadding: CGFloat {

@@ -35,6 +35,7 @@ private enum StudioPreset: String, CaseIterable, Identifiable {
 }
 
 struct StudioTypographyControls: View {
+    let fontName: String
     @Binding var karaokeMode: KaraokeMode
     @Binding var lyricTrackingMode: LyricTrackingMode
     @Binding var kineticStyle: KineticStyle
@@ -53,15 +54,15 @@ struct StudioTypographyControls: View {
             movementModeControls
             trackingControls
 
-            if karaokeMode == .kinetic && !lyricTrackingMode.isProgressiveReveal {
+            if usesKineticDirectorControls {
                 kineticStyleControls
             }
 
-            if karaokeMode == .kinetic || lyricTrackingMode.isProgressiveReveal {
+            if showsAccentControls {
                 accentControls
             }
 
-            if karaokeMode == .kinetic && !lyricTrackingMode.isProgressiveReveal {
+            if usesKineticDirectorControls {
                 advancedControls
             }
         }
@@ -115,17 +116,37 @@ struct StudioTypographyControls: View {
         VStack(alignment: .leading, spacing: 8) {
             settingTitle("Yazı Stili", icon: "textformat.alt")
 
-            Picker("Yazı Stili", selection: $karaokeMode) {
-                ForEach(KaraokeMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
+            if usesDedicatedTrackingLayout {
+                Label(
+                    "\(lyricTrackingMode.title), kendi sabit ve test edilmiş yerleşimini kullanır.",
+                    systemImage: "checkmark.shield"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundColor(Theme.yellow)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Theme.yellow.opacity(0.08))
+                )
+            } else {
+                Picker("Yazı Stili", selection: $karaokeMode) {
+                    ForEach(KaraokeMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
                 }
+                .pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
 
             Text(
-                karaokeMode == .classic
-                    ? "Sade, okunaklı ve güvenli altyazı görünümü."
-                    : "Boyut, kompozisyon ve hareketi parçanın ritmine göre yönetir."
+                usesDedicatedTrackingLayout
+                    ? lyricTrackingMode.detail
+                    : (
+                        karaokeMode == .classic
+                            ? "Sade, okunaklı ve güvenli altyazı görünümü."
+                            : "Boyut, kompozisyon ve hareketi parçanın ritmine göre yönetir."
+                    )
             )
             .font(.caption2)
             .foregroundColor(.gray)
@@ -270,14 +291,24 @@ struct StudioTypographyControls: View {
                     .pickerStyle(.segmented)
                 }
 
-                optionScroller(
-                    title: "Harf Stili",
-                    icon: "character.textbox",
-                    values: KineticLetterStyle.allCases,
-                    selection: $kineticLetterStyle,
-                    titleFor: { $0.title },
-                    iconFor: { $0.icon }
-                )
+                if FontCatalog.secenek(fontName)?.bitisik == true {
+                    Label(
+                        "Bitişik el yazısı fontunda harf bağlarını korumak için Harf Stili otomatik olarak Temiz kullanılır.",
+                        systemImage: "pencil.and.scribble"
+                    )
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+                    .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    optionScroller(
+                        title: "Harf Stili",
+                        icon: "character.textbox",
+                        values: KineticLetterStyle.allCases,
+                        selection: $kineticLetterStyle,
+                        titleFor: { $0.title },
+                        iconFor: { $0.icon }
+                    )
+                }
 
                 optionScroller(
                     title: "Arka Vurgu",
@@ -397,6 +428,8 @@ struct StudioTypographyControls: View {
             kineticOverlayStyle = .automatic
         case .clean:
             karaokeMode = .classic
+            kineticLetterStyle = .clean
+            kineticOverlayStyle = .none
         case .cinematic:
             karaokeMode = .kinetic
             kineticStyle = .cinematic
@@ -421,8 +454,8 @@ struct StudioTypographyControls: View {
     private func trackingTitle(_ mode: LyricTrackingMode) -> String {
         switch mode {
         case .off: return "Kapalı"
-        case .karaoke: return "Karaoke"
-        case .boldWord: return "Kalın"
+        case .karaoke: return "Harf Takibi"
+        case .boldWord: return "Cümle + Kalın"
         case .centeredReveal: return "Harf Harf"
         case .centeredWordReveal: return "Kelime Kelime"
         }
@@ -433,9 +466,11 @@ struct StudioTypographyControls: View {
         case .off:
             return "Cümle zamanında görünür; söylenen bölüm ayrıca işaretlenmez."
         case .karaoke:
-            return "Söylenen kelime renk ve hareketle takip edilir."
+            return karaokeMode == .classic
+                ? "Cümle sabit kalır; vokal ilerledikçe harfler soldan sağa takip edilir."
+                : "Kinetik kompozisyon içinde söylenen kelime zamanına göre takip edilir."
         case .boldWord:
-            return "Yalnız o anda söylenen kelime kalınlaşır; satırın yeri ve rengi değişmez."
+            return "Tam cümle sabit kalır; aktif kelime Regular kopyanın yerini alır, Bold ve %4 büyük olarak seçilen renkte görünür."
         case .centeredReveal:
             return "Harfler tek tek gelir; büyüyen cümle sürekli ortada kalır."
         case .centeredWordReveal:
@@ -447,6 +482,24 @@ struct StudioTypographyControls: View {
         KineticOverlayStyle.allCases.filter {
             !$0.requiresKaraokeTracking || lyricTrackingMode == .karaoke
         }
+    }
+
+    private var usesKineticDirectorControls: Bool {
+        karaokeMode == .kinetic
+            && !lyricTrackingMode.isProgressiveReveal
+            && lyricTrackingMode != .boldWord
+    }
+
+    private var usesDedicatedTrackingLayout: Bool {
+        lyricTrackingMode.isProgressiveReveal || lyricTrackingMode == .boldWord
+    }
+
+    private var showsAccentControls: Bool {
+        if lyricTrackingMode.isProgressiveReveal || lyricTrackingMode == .boldWord {
+            return true
+        }
+        guard karaokeMode == .kinetic else { return false }
+        return lyricTrackingMode == .karaoke || kineticOverlayStyle != .none
     }
 
     private var resolvedAccent: KineticResolvedColor {

@@ -362,7 +362,7 @@ enum KineticOverlayStyle: String, CaseIterable, Identifiable, Codable {
     var title: String {
         switch self {
         case .automatic: return "Otomatik"
-        case .none: return "Kapalı"
+        case .none: return "Yok · Temiz"
         case .glass: return "Cam"
         case .cinematicBand: return "Sinema"
         case .accentPanel: return "Panel"
@@ -388,7 +388,7 @@ enum KineticOverlayStyle: String, CaseIterable, Identifiable, Codable {
         case .automatic:
             return "Parçanın görsel kimliğine göre uyumlu iki veya üç katmanı bölüm boyunca yönetir; bağımsız ve rastgele seçim yapmaz."
         case .none:
-            return "Arka katman kullanmaz; yalnız tipografi ve kelime vurguları görünür."
+            return "Kontur, gölge veya arka katman eklemez; tipografi temiz ve düz görünür."
         case .glass:
             return "Yazı grubunu ince konturlu, yarı saydam sinematik bir kartta toplar."
         case .cinematicBand:
@@ -831,6 +831,18 @@ class VideoProcessor: ObservableObject {
         case .centeredWordReveal:
             return .centeredWordReveal
         }
+    }
+
+    func resolvedKineticOverlayStyle(
+        requested: KineticOverlayStyle,
+        plan: KineticTypographyPlan,
+        trackingMode: LyricTrackingMode
+    ) -> KineticOverlayStyle {
+        let resolved = requested.resolved(for: plan)
+        if trackingMode != .karaoke, resolved.requiresKaraokeTracking {
+            return .none
+        }
+        return resolved
     }
 
     struct LyricRecognitionWindow: Equatable {
@@ -2066,6 +2078,18 @@ class VideoProcessor: ObservableObject {
     private func getFontFamilyName(for fontName: String) -> String {
         if let secenek = FontCatalog.secenek(fontName) { return secenek.assFamily }
         return fontName.replacingOccurrences(of: "-Bold", with: "").replacingOccurrences(of: "-Heavy", with: "").replacingOccurrences(of: "-Regular", with: "")
+    }
+
+    func makeDefaultASSStyleLine(
+        familyName: String,
+        fontSize: Int,
+        isBold: Bool,
+        marginV: Int
+    ) -> String {
+        let boldFlag = isBold ? -1 : 0
+        return "Style: Default,\(familyName),\(fontSize)," +
+            "&H00FFFFFF,&H000000FF,&H00000000,&H00000000," +
+            "\(boldFlag),0,0,0,100,100,0,0,1,0,0,2,10,10,\(marginV),1"
     }
     
     // Kelimeler arası boşluk, noktalama ve doğal okuma süresine göre otomatik satır
@@ -4070,12 +4094,11 @@ class VideoProcessor: ObservableObject {
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
         let karaokeTrackingEnabled = lyricTrackingMode == .karaoke
         let boldWordTrackingEnabled = lyricTrackingMode == .boldWord
-        let needsSyntheticWeight = FontCatalog.boldPSName(for: fontName) == nil
-        var effectiveOverlayStyle = overlayStyle
-        if !karaokeTrackingEnabled,
-           overlayStyle.resolved(for: plan).requiresKaraokeTracking {
-            effectiveOverlayStyle = .none
-        }
+        let effectiveOverlayStyle = resolvedKineticOverlayStyle(
+            requested: overlayStyle,
+            plan: plan,
+            trackingMode: lyricTrackingMode
+        )
         var result = kineticOverlayDialogues(
             placements: placements,
             cleaned: cleaned,
@@ -4319,14 +4342,13 @@ class VideoProcessor: ObservableObject {
                         "\(restingScaleTags)\(pastAlphaTags))"
                 }
             }
-            if plan.highlight == .glow {
+            if plan.highlight == .glow && effectiveOverlayStyle != .none {
                 tags += "\\4c&H\(resolvedAccent.assColor)&\\4a&H55&\\shad2.4"
             }
-            if emphasis {
-                tags += "\\3c&H3A2610&\\bord3.4"
-            }
             if boldWordTrackingEnabled {
-                tags += "\\b0"
+                tags += "\\b0\\bord0\\shad0"
+                tags += "\\t(\(wordStartMs),\(min(eventDurationMs, wordStartMs + 10)),\\alpha&HFF&)"
+                tags += "\\t(\(wordEndMs),\(min(eventDurationMs, wordEndMs + 10)),\\alpha&H00&)"
             }
             tags += "}"
 
@@ -4347,10 +4369,8 @@ class VideoProcessor: ObservableObject {
                 let boldInEnd = min(eventDurationMs, wordStartMs + 10)
                 let boldOutEnd = min(eventDurationMs, wordEndMs + 10)
                 var boldTags = String(tags.dropLast())
-                boldTags += "\\b1\\c&H\(resolvedAccent.assColor)&\\alpha&HFF&"
-                if needsSyntheticWeight {
-                    boldTags += "\\3c&H\(resolvedAccent.assColor)&\\bord0.8\\shad0"
-                }
+                boldTags += "\\b1\\c&H\(resolvedAccent.assColor)&\\bord0\\shad0" +
+                    "\\fscx104\\fscy104\\alpha&HFF&"
                 boldTags += "\\t(\(wordStartMs),\(boldInEnd),\\alpha&H00&)"
                 boldTags += "\\t(\(wordEndMs),\(boldOutEnd),\\alpha&HFF&)}"
                 result += "Dialogue: \(layer + 1),\(formatASSTime(eventStart)),\(formatASSTime(safeEventEnd)),Default,,0,0,0,,\(boldTags)\(text)\n"
@@ -4359,11 +4379,10 @@ class VideoProcessor: ObservableObject {
         return result
     }
 
-    // Kalın Kelime: satır tek parça ve normal ağırlıkta sabit kalır. Her kelimenin
-    // kalın kopyası aynı zaman aralığı boyunca görünmez tutulur; yalnız kendi vokal
-    // zamanında ve normal kelimenin ölçülmüş merkezi üzerinde açılır. Böylece font
-    // ağırlığı değişirken satır yeniden ölçülmez, konumu zıplamaz ve bitişik el yazısı
-    // fontlarında kelimenin içindeki harf bağları bölünmez.
+    // Cümle + Kalın: her kelime normal ölçüsüyle sabit bir merkeze yerleştirilir.
+    // Aktif aralıkta Regular olay tamamen biter ve yerine tek bir Bold olay çizilir;
+    // aynı glifin iki ağırlığı hiçbir karede üst üste binmez. Bold kopya merkezinden
+    // %4 büyür, bu nedenle satır yerleşimi değişmeden küçük bir vurgu kazanır.
     func makeBoldWordDialogues(
         group: [WordTimestamp],
         segStart: Double,
@@ -4411,18 +4430,11 @@ class VideoProcessor: ObservableObject {
         guard !itemsByRow.isEmpty, segEnd > segStart else { return "" }
 
         let rowTexts = itemsByRow.map { $0.map(\.text).joined(separator: " ") }
-        let lineText = rowTexts.joined(separator: "\\N")
         let maximumWidth = max(24.0, Double(virtualWidth - 20))
-        let eventDurationMs = max(20, Int(((segEnd - segStart) * 1000).rounded()))
-        let t0 = formatASSTime(segStart)
-        let t1 = formatASSTime(segEnd)
         let baselineY = max(0, virtualHeight - marginV)
         let rowGap = max(1, fontSize)
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
-        let needsSyntheticWeight = FontCatalog.boldPSName(for: fontName) == nil
-
-        var result = "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,," +
-            "{\\q2\\fs\(fontSize)\\b0\(extraTags)}\(lineText)\n"
+        var result = ""
 
         for (rowIndex, items) in itemsByRow.enumerated() {
             let rowText = rowTexts[rowIndex]
@@ -4440,10 +4452,6 @@ class VideoProcessor: ObservableObject {
             let rowY = baselineY - ((itemsByRow.count - rowIndex - 1) * rowGap)
 
             for item in items {
-                let wordStart = min(segEnd, max(segStart, item.word.start))
-                let wordEnd = min(segEnd, max(wordStart + 0.05, item.word.end))
-                guard wordEnd > wordStart else { continue }
-
                 let leftOffset: Double
                 let rightOffset: Double
                 if let measurement,
@@ -4463,25 +4471,40 @@ class VideoProcessor: ObservableObject {
                     virtualWidth,
                     max(0, Int((lineLeft + ((leftOffset + rightOffset) / 2)).rounded()))
                 )
-                let wordStartMs = min(
-                    eventDurationMs,
-                    max(0, Int(((wordStart - segStart) * 1000).rounded()))
-                )
-                let wordEndMs = min(
-                    eventDurationMs,
-                    max(wordStartMs + 10, Int(((wordEnd - segStart) * 1000).rounded()))
-                )
-                let boldInEnd = min(eventDurationMs, wordStartMs + 10)
-                let boldOutEnd = min(eventDurationMs, wordEndMs + 10)
-                let weightContrastTags = needsSyntheticWeight
-                    ? "\\3c&H\(resolvedAccent.assColor)&\\bord0.8\\shad0"
-                    : ""
-                let tags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
+                let wordStart = min(segEnd, max(segStart, item.word.start))
+                let wordEnd = min(segEnd, max(wordStart, item.word.end))
+                let segmentStartText = formatASSTime(segStart)
+                let segmentEndText = formatASSTime(segEnd)
+                let wordStartText = formatASSTime(wordStart)
+                let wordEndText = formatASSTime(wordEnd)
+                let hasActiveInterval = wordStartText != wordEndText
+                let regularTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
+                    "\\fs\(fontSize)\\b0\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
+
+                if !hasActiveInterval {
+                    result += "Dialogue: 1,\(segmentStartText)," +
+                        "\(segmentEndText),Default,,0,0,0,," +
+                        "\(regularTags)\(item.text)\n"
+                    continue
+                }
+
+                if segmentStartText != wordStartText {
+                    result += "Dialogue: 1,\(segmentStartText)," +
+                        "\(wordStartText),Default,,0,0,0,," +
+                        "\(regularTags)\(item.text)\n"
+                }
+                if wordEndText != segmentEndText {
+                    result += "Dialogue: 1,\(wordEndText)," +
+                        "\(segmentEndText),Default,,0,0,0,," +
+                        "\(regularTags)\(item.text)\n"
+                }
+
+                let boldTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
                     "\\fs\(fontSize)\\b1\\c&H\(resolvedAccent.assColor)&" +
-                    "\(weightContrastTags)\(extraTags)\\alpha&HFF&" +
-                    "\\t(\(wordStartMs),\(boldInEnd),\\alpha&H00&)" +
-                    "\\t(\(wordEndMs),\(boldOutEnd),\\alpha&HFF&)}"
-                result += "Dialogue: 2,\(t0),\(t1),Default,,0,0,0,,\(tags)\(item.text)\n"
+                    "\(extraTags)\\bord0\\shad0\\fscx104\\fscy104}"
+                result += "Dialogue: 2,\(wordStartText)," +
+                    "\(wordEndText),Default,,0,0,0,," +
+                    "\(boldTags)\(item.text)\n"
             }
         }
         return result
@@ -4704,7 +4727,7 @@ class VideoProcessor: ObservableObject {
             let durationMs = max(10, Int((eventEnd - eventStart) * 1000))
             let settleMs = min(90, durationMs)
             let baseTags = "{\\an5\\pos(\(centerX),\(centerY))" +
-                "\\fs\(fontSize)\\c&HFFFFFF&\\bord3\\shad1.5}"
+                "\\fs\(fontSize)\\c&HFFFFFF&\\bord0\\shad0}"
             let latestTags = "{\\c&H\(resolvedAccent.assColor)&\\alpha&H38&" +
                 "\\fscx108\\fscy108\\blur0.8" +
                 "\\t(0,\(settleMs),1.6,\\c&HFFFFFF&\\alpha&H00&" +
@@ -4782,7 +4805,7 @@ class VideoProcessor: ObservableObject {
             let durationMs = max(10, Int((eventEnd - eventStart) * 1000))
             let settleMs = min(130, durationMs)
             let baseTags = "{\\an5\\pos(\(centerX),\(centerY))" +
-                "\\fs\(fontSize)\\c&HFFFFFF&\\bord3\\shad1.5}"
+                "\\fs\(fontSize)\\c&HFFFFFF&\\bord0\\shad0}"
             let latestTags = "{\\c&H\(resolvedAccent.assColor)&\\alpha&H18&" +
                 "\\fscx112\\fscy112\\blur0.9" +
                 "\\t(0,\(settleMs),1.5,\\c&HFFFFFF&\\alpha&H00&" +
@@ -4869,7 +4892,12 @@ class VideoProcessor: ObservableObject {
 
         [V4+ Styles]
         Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-        Style: Default,\(familyName),\(fontSize),&H00FFFFFF,&H000000FF,&H00000000,&H00000000,\(boldFlag),0,0,0,100,100,0,0,1,3,1.5,2,10,10,\(marginV),1
+        \(makeDefaultASSStyleLine(
+            familyName: familyName,
+            fontSize: fontSize,
+            isBold: boldFlag == -1,
+            marginV: marginV
+        ))
 
         [Events]
         Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

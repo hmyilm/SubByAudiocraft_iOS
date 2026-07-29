@@ -88,6 +88,59 @@ final class VideoProcessorTests: XCTestCase {
         )
     }
 
+    func testEveryModeCombinationResolvesToOneStableExportPath() {
+        for karaokeMode in KaraokeMode.allCases {
+            for trackingMode in LyricTrackingMode.allCases {
+                for connected in [false, true] {
+                    var expected: SubtitleRenderPath
+                    switch trackingMode {
+                    case .boldWord:
+                        expected = .boldWord
+                    case .centeredReveal:
+                        expected = .centeredCharacterReveal
+                    case .centeredWordReveal:
+                        expected = .centeredWordReveal
+                    case .off:
+                        expected = karaokeMode == .kinetic ? .kinetic : .staticLine
+                        if connected && karaokeMode == .kinetic {
+                            expected = .connectedKinetic
+                        }
+                    case .karaoke:
+                        expected = karaokeMode == .kinetic ? .kinetic : .classicKaraoke
+                        if connected && karaokeMode == .kinetic {
+                            expected = .connectedKinetic
+                        }
+                    }
+
+                    XCTAssertEqual(
+                        VideoProcessor.shared.subtitleRenderPath(
+                            karaokeMode: karaokeMode,
+                            lyricTrackingMode: trackingMode,
+                            usesConnectedFont: connected
+                        ),
+                        expected,
+                        "\(karaokeMode.rawValue)/\(trackingMode.rawValue)/\(connected)"
+                    )
+                }
+            }
+        }
+    }
+
+    func testDefaultASSStyleIsFlatWithoutImplicitOutlineOrShadow() {
+        let style = VideoProcessor.shared.makeDefaultASSStyleLine(
+            familyName: "Montserrat",
+            fontSize: 70,
+            isBold: false,
+            marginV: 120
+        )
+        let fields = style.split(separator: ",", omittingEmptySubsequences: false)
+
+        XCTAssertEqual(fields.count, 23)
+        XCTAssertEqual(fields[16], "0", "Outline varsayılan olarak kapalı olmalı")
+        XCTAssertEqual(fields[17], "0", "Shadow varsayılan olarak kapalı olmalı")
+        XCTAssertEqual(fields[3], "&H00FFFFFF")
+    }
+
     func testChronologicalWordSortPlacesNewWordAtItsTimestamp() {
         var words = makeWords(["bir", "iki", "üç"])
         let inserted = VideoProcessor.WordTimestamp(
@@ -176,7 +229,11 @@ final class VideoProcessorTests: XCTestCase {
             virtualHeight: 1080,
             inlineLineBreaks: inlineBreaks
         )
-        XCTAssertTrue(bold.contains("hep birlikte\\Nburada kalalım"))
+        XCTAssertFalse(bold.contains("hep birlikte\\Nburada kalalım"))
+        XCTAssertTrue(bold.contains("}hep"))
+        XCTAssertTrue(bold.contains("}birlikte"))
+        XCTAssertTrue(bold.contains("}burada"))
+        XCTAssertTrue(bold.contains("}kalalım"))
         XCTAssertTrue(bold.contains("\\pos("))
         XCTAssertTrue(bold.contains(",890)"))
         XCTAssertTrue(bold.contains(",960)"))
@@ -1361,6 +1418,8 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertTrue(dialogues[1].hasSuffix("}B"))
         XCTAssertTrue(dialogues[2].contains("AB {\\c&H"))
         XCTAssertTrue(dialogues[2].hasSuffix("}C"))
+        XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\bord0\\shad0") })
+        XCTAssertFalse(ass.contains("\\bord3"))
     }
 
     func testCenteredWordRevealAddsWholeWordsAndRecentersEveryEvent() {
@@ -1392,6 +1451,8 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertTrue(dialogues[2].contains("Kara Sevda {\\c&H"))
         XCTAssertTrue(dialogues[2].hasSuffix("}İçimde"))
         XCTAssertFalse(dialogues.contains { $0.hasSuffix("}K") || $0.hasSuffix("}Ka") })
+        XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\bord0\\shad0") })
+        XCTAssertFalse(ass.contains("\\shad1.5"))
     }
 
     func testEveryTrackingModeHasAFunctionalRenderingPath() {
@@ -1533,17 +1594,23 @@ final class VideoProcessorTests: XCTestCase {
             $0.hasPrefix("Dialogue:")
         }
 
-        XCTAssertEqual(classicDialogues.count, 4)
-        XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 1,") }.count, 1)
+        XCTAssertEqual(classicDialogues.count, 9)
+        XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 1,") }.count, 6)
         XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 2,") }.count, 3)
         XCTAssertTrue(classic.contains("\\fs70\\b0"))
         XCTAssertTrue(classic.contains("\\fs70\\b1"))
-        XCTAssertTrue(classic.contains("kara sevda içimde"))
         XCTAssertTrue(classicDialogues.contains { $0.hasSuffix("}kara") })
-        XCTAssertTrue(classic.contains("\\t(100,110,\\alpha&H00&)"))
-        XCTAssertTrue(classic.contains("\\t(550,560,\\alpha&HFF&)"))
+        XCTAssertFalse(classic.contains("kara sevda içimde"))
+        XCTAssertTrue(
+            classic.contains("Dialogue: 1,0:00:00.00,0:00:00.10")
+        )
+        XCTAssertTrue(
+            classic.contains("Dialogue: 2,0:00:00.10,0:00:00.55")
+        )
         XCTAssertTrue(classic.contains("\\c&H7A5CFF&"))
-        XCTAssertTrue(classic.contains("\\3c&H7A5CFF&\\bord0.8\\shad0"))
+        XCTAssertTrue(classic.contains("\\bord0\\shad0\\fscx104\\fscy104"))
+        XCTAssertFalse(classic.contains("\\bord0.8"))
+        XCTAssertFalse(classic.contains("\\alpha&"))
 
         let boldFaceClassic = VideoProcessor.shared.makeBoldWordDialogues(
             group: words,
@@ -1572,9 +1639,43 @@ final class VideoProcessorTests: XCTestCase {
             lyricTrackingMode: .boldWord
         )
 
-        XCTAssertTrue(kinetic.contains("\\b0}"))
-        XCTAssertTrue(kinetic.contains("\\b1\\c&H2FCCFE&\\alpha&HFF&"))
+        XCTAssertTrue(kinetic.contains("\\b0\\bord0\\shad0"))
+        XCTAssertTrue(
+            kinetic.contains(
+                "\\b1\\c&H2FCCFE&\\bord0\\shad0\\fscx104\\fscy104\\alpha&HFF&"
+            )
+        )
         XCTAssertFalse(kinetic.contains("\\alpha&HA0&"))
+        XCTAssertFalse(kinetic.contains("3A2610"))
+    }
+
+    func testBoldWordReplacementRemainsCleanForEveryFontOption() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 0.10, end: 0.55),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 0.65, end: 1.15)
+        ]
+
+        for font in FontCatalog.hepsi {
+            let ass = VideoProcessor.shared.makeBoldWordDialogues(
+                group: words,
+                segStart: 0,
+                segEnd: 1.4,
+                fontName: FontCatalog.regularPSName(for: font.psName),
+                fontSize: 70,
+                marginV: 120,
+                virtualWidth: 608,
+                virtualHeight: 1080,
+                accent: .mint
+            )
+            let dialogues = ass.split(separator: "\n")
+
+            XCTAssertEqual(dialogues.count, 6, font.display)
+            XCTAssertTrue(ass.contains("\\b0\\c&HFFFFFF&"), font.display)
+            XCTAssertTrue(ass.contains("\\b1\\c&HA5E654&"), font.display)
+            XCTAssertTrue(ass.contains("\\fscx104\\fscy104"), font.display)
+            XCTAssertFalse(ass.contains("\\bord0.8"), font.display)
+            XCTAssertFalse(ass.contains("kara sevda"), font.display)
+        }
     }
 
     func testEditorialASSUsesAnimatedUnderlineInsteadOfRandomScaling() {
@@ -1618,6 +1719,8 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertFalse(ass.contains("\\p1"))
         XCTAssertTrue(ass.contains("\\move("))
         XCTAssertTrue(ass.contains("\\c&H2FCCFE&"))
+        XCTAssertFalse(ass.contains("\\shad2.4"))
+        XCTAssertFalse(ass.contains("3A2610"))
     }
 
     func testKineticAccentChangesASSWithoutChangingAnimationPlan() {
@@ -1772,6 +1875,36 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(KineticOverlayStyle.resolved("bilinmeyen"), .none)
     }
 
+    func testOverlayResolverKeepsEffectsOffUnlessTheModeCanUseThem() {
+        let words = makeWords(["kara", "sevda", "içimde"])
+        let plan = VideoProcessor.shared.kineticTypographyPlan(
+            for: words,
+            lineIndex: 0,
+            style: .automatic
+        )
+
+        for trackingMode in LyricTrackingMode.allCases {
+            XCTAssertEqual(
+                VideoProcessor.shared.resolvedKineticOverlayStyle(
+                    requested: .none,
+                    plan: plan,
+                    trackingMode: trackingMode
+                ),
+                .none
+            )
+
+            let underShadow = VideoProcessor.shared.resolvedKineticOverlayStyle(
+                requested: .underShadow,
+                plan: plan,
+                trackingMode: trackingMode
+            )
+            XCTAssertEqual(
+                underShadow,
+                trackingMode == .karaoke ? .underShadow : .none
+            )
+        }
+    }
+
     func testGlassOverlayAndCustomAccentAreWrittenToASSBelowWords() {
         let words = makeWords(["gece", "sana", "dönerim"])
         let ass = VideoProcessor.shared.makeKineticDialogues(
@@ -1920,6 +2053,7 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertNil(project.kinetikVurgular)
         XCTAssertNil(project.kinetikHarfStili)
         XCTAssertNil(project.kinetikOverlay)
+        XCTAssertNil(project.stilSurumu)
         XCTAssertNil(project.icSatirSonlari)
         XCTAssertEqual(project.karaokeMode, .classic)
         XCTAssertEqual(project.lyricTrackingMode, .karaoke)
@@ -1931,6 +2065,39 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertTrue(project.inlineLineBreakIDs.isEmpty)
         XCTAssertEqual(project.kineticLetterStyle, .clean)
         XCTAssertEqual(project.kineticOverlayStyle, .none)
+    }
+
+    func testLegacyAutomaticOverlayMigratesToCleanWhileNewExplicitChoiceIsKept() throws {
+        let base = """
+        {
+          "id": "\(UUID().uuidString)",
+          "olusturma": 0,
+          "guncelleme": 0,
+          "baslik": "Overlay Projesi",
+          "kelimeler": [],
+          "satirSonlari": [],
+          "fontAdi": "Anton-Regular",
+          "fontBoyu": 70,
+          "dikeyKonum": 120,
+          "kinetikOverlay": "automatic",
+          "videoDosyasi": "video.mp4",
+          "disaAktarimSayisi": 0
+        }
+        """
+        let legacy = try JSONDecoder().decode(SavedProject.self, from: Data(base.utf8))
+        XCTAssertNil(legacy.stilSurumu)
+        XCTAssertEqual(legacy.kineticOverlayStyle, .none)
+
+        let currentJSON = base.replacingOccurrences(
+            of: "\"kinetikOverlay\": \"automatic\",",
+            with: "\"kinetikOverlay\": \"automatic\", \"stilSurumu\": 2,"
+        )
+        let current = try JSONDecoder().decode(
+            SavedProject.self,
+            from: Data(currentJSON.utf8)
+        )
+        XCTAssertEqual(current.stilSurumu, SavedProject.currentStyleVersion)
+        XCTAssertEqual(current.kineticOverlayStyle, .automatic)
     }
 
     private func makeWords(_ texts: [String]) -> [VideoProcessor.WordTimestamp] {

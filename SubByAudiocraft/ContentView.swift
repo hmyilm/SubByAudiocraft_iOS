@@ -92,7 +92,8 @@ struct ContentView: View {
     @AppStorage("subtitle.kineticCustomColorHex") private var kineticCustomColorHex: String = KineticAccent.defaultCustomHex
     @AppStorage("subtitle.kineticIntensity") private var kineticIntensityRaw: String = KineticIntensity.balanced.rawValue
     @AppStorage("subtitle.kineticLetterStyle") private var kineticLetterStyleRaw: String = KineticLetterStyle.automatic.rawValue
-    @AppStorage("subtitle.kineticOverlayStyle") private var kineticOverlayStyleRaw: String = KineticOverlayStyle.automatic.rawValue
+    @AppStorage("subtitle.kineticOverlayStyle") private var kineticOverlayStyleRaw: String = KineticOverlayStyle.none.rawValue
+    @AppStorage("subtitle.cleanTextStyleMigrationV1") private var didMigrateCleanTextStyle = false
     @AppStorage("analysis.quality") private var analysisQualityRaw: String = AnalysisQuality.balanced.rawValue
     @AppStorage("analysis.vocalIsolation") private var vocalIsolationRaw: String = VocalIsolationMode.automatic.rawValue
     @State private var groqAPIKey: String = SecureAPIKeyStore.loadGroqAPIKey()
@@ -264,6 +265,15 @@ struct ContentView: View {
     }
 
     private func prepareInitialState() {
+        // Önceki sürümlerde "Otomatik" overlay varsayılan olarak kaydediliyordu.
+        // Kullanıcı seçmeden gelen siyah plaka/gölgeyi bir kez temizle; bundan sonra
+        // kullanıcı Otomatik veya Alt Gölge'yi seçerse tercihi aynen korunur.
+        if !didMigrateCleanTextStyle {
+            if kineticOverlayStyleRaw == KineticOverlayStyle.automatic.rawValue {
+                kineticOverlayStyleRaw = KineticOverlayStyle.none.rawValue
+            }
+            didMigrateCleanTextStyle = true
+        }
         if FontCatalog.secenek(fontName) == nil { fontName = "Anton-Regular" }
         fontSize = min(max(fontSize, 30), 150)
         marginV = min(max(marginV, 30), 950)
@@ -278,7 +288,7 @@ struct ContentView: View {
             ?? KineticLetterStyle.automatic.rawValue
         kineticOverlayStyleRaw = KineticOverlayStyle(
             rawValue: kineticOverlayStyleRaw
-        )?.rawValue ?? KineticOverlayStyle.automatic.rawValue
+        )?.rawValue ?? KineticOverlayStyle.none.rawValue
         VideoProcessor.shared.cleanupStaleTemporaryFiles()
     }
 
@@ -549,7 +559,7 @@ struct ContentView: View {
     private var kineticOverlayStyleBinding: Binding<KineticOverlayStyle> {
         Binding(
             get: {
-                KineticOverlayStyle(rawValue: kineticOverlayStyleRaw) ?? .automatic
+                KineticOverlayStyle(rawValue: kineticOverlayStyleRaw) ?? .none
             },
             set: { kineticOverlayStyleRaw = $0.rawValue }
         )
@@ -730,7 +740,7 @@ struct ContentView: View {
                         ) ?? .automatic,
                         kinetikOverlay: KineticOverlayStyle(
                             rawValue: self.kineticOverlayStyleRaw
-                        ) ?? .automatic
+                        ) ?? .none
                    ) {
                     self.currentProjectID = proje.id
                     let yeniURL = self.store.videoURL(proje)
@@ -805,7 +815,7 @@ struct ContentView: View {
         ) ?? .automatic
         let renderOverlayStyle = KineticOverlayStyle(
             rawValue: kineticOverlayStyleRaw
-        ) ?? .automatic
+        ) ?? .none
         let renderEmphasisWordIDs = kineticEmphasisWordIDs
         statusMessage = "\(renderKaraokeMode.title) · \(renderTrackingMode.title) hazırlanıyor..."
 
@@ -991,7 +1001,7 @@ struct ContentView: View {
             ) ?? .automatic,
             kinetikOverlay: KineticOverlayStyle(
                 rawValue: kineticOverlayStyleRaw
-            ) ?? .automatic,
+            ) ?? .none,
             disaAktarildi: exported
         )
     }

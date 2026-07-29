@@ -131,6 +131,7 @@ struct EditWordsView: View {
                         SectionHeader(icon: "paintbrush.fill", title: "Tasarım Ayarları")
 
                         StudioTypographyControls(
+                            fontName: fontName,
                             karaokeMode: $karaokeMode,
                             lyricTrackingMode: $lyricTrackingMode,
                             kineticStyle: $kineticStyle,

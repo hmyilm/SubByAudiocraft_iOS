@@ -6,6 +6,8 @@ import UIKit
 // Geçmiş ekranından yeniden açılıp düzenlenebilir ve tekrar dışa aktarılabilir;
 // böylece dışa aktarılan video beğenilmezse analiz baştan yapılmak zorunda kalmaz.
 struct SavedProject: Identifiable, Codable {
+    static let currentStyleVersion = 2
+
     var id: UUID
     var olusturma: Date
     var guncelleme: Date
@@ -36,6 +38,8 @@ struct SavedProject: Identifiable, Codable {
     var kinetikHarfStili: String?
     // Optional tutulur: eski projelere kendiliğinden yeni arka katman eklenmez.
     var kinetikOverlay: String?
+    // v2: kullanıcı seçmeden gelen otomatik kontur/gölge ve overlay varsayılanı kaldırıldı.
+    var stilSurumu: Int?
     var videoDosyasi: String
     var disaAktarimSayisi: Int
 
@@ -77,7 +81,11 @@ struct SavedProject: Identifiable, Codable {
     }
 
     var kineticOverlayStyle: KineticOverlayStyle {
-        KineticOverlayStyle.resolved(kinetikOverlay)
+        if (stilSurumu ?? 0) < Self.currentStyleVersion,
+           kinetikOverlay == KineticOverlayStyle.automatic.rawValue {
+            return .none
+        }
+        return KineticOverlayStyle.resolved(kinetikOverlay)
     }
 }
 
@@ -220,6 +228,7 @@ final class ProjectStore: ObservableObject {
             },
             kinetikHarfStili: kinetikHarfStili.rawValue,
             kinetikOverlay: kinetikOverlay.rawValue,
+            stilSurumu: SavedProject.currentStyleVersion,
             videoDosyasi: dosyaAdi,
             disaAktarimSayisi: 0
         )
@@ -283,6 +292,7 @@ final class ProjectStore: ObservableObject {
         }
         proje.kinetikHarfStili = kinetikHarfStili.rawValue
         proje.kinetikOverlay = kinetikOverlay.rawValue
+        proje.stilSurumu = SavedProject.currentStyleVersion
         proje.baslik = Self.baslikUret(kelimeler)
         proje.guncelleme = Date()
         if disaAktarildi { proje.disaAktarimSayisi += 1 }
