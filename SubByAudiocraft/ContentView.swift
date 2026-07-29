@@ -92,6 +92,7 @@ struct ContentView: View {
     @AppStorage("subtitle.kineticLetterStyle") private var kineticLetterStyleRaw: String = KineticLetterStyle.automatic.rawValue
     @AppStorage("subtitle.kineticOverlayStyle") private var kineticOverlayStyleRaw: String = KineticOverlayStyle.automatic.rawValue
     @AppStorage("analysis.quality") private var analysisQualityRaw: String = AnalysisQuality.balanced.rawValue
+    @AppStorage("analysis.vocalIsolation") private var vocalIsolationRaw: String = VocalIsolationMode.automatic.rawValue
     @State private var groqAPIKey: String = SecureAPIKeyStore.loadGroqAPIKey()
 
     // Geçmiş (kaydedilmiş projeler): analizden sonra proje otomatik kaydedilir,
@@ -204,6 +205,7 @@ struct ContentView: View {
             selectedItem: $selectedItem,
             player: player,
             analysisQuality: analysisQualityBinding,
+            vocalIsolationMode: vocalIsolationBinding,
             groqAPIKey: $groqAPIKey,
             isLoadingVideo: isLoadingVideo
         )
@@ -475,12 +477,20 @@ struct ContentView: View {
         return statusMessage.hasPrefix("Hata:")
             || statusMessage.contains("başarıyla")
             || statusMessage.hasPrefix("Bulut kullanılamadı")
+            || statusMessage.hasPrefix("Analiz notu:")
     }
 
     private var analysisQualityBinding: Binding<AnalysisQuality> {
         Binding(
             get: { AnalysisQuality(rawValue: analysisQualityRaw) ?? .balanced },
             set: { analysisQualityRaw = $0.rawValue }
+        )
+    }
+
+    private var vocalIsolationBinding: Binding<VocalIsolationMode> {
+        Binding(
+            get: { VocalIsolationMode.resolved(vocalIsolationRaw) },
+            set: { vocalIsolationRaw = $0.rawValue }
         )
     }
 
@@ -600,6 +610,7 @@ struct ContentView: View {
         }
 
         let quality = AnalysisQuality(rawValue: analysisQualityRaw) ?? .balanced
+        let vocalIsolationMode = VocalIsolationMode.resolved(vocalIsolationRaw)
         if quality.usesCloudTranscription,
            !GroqSpeechClient.isPlausibleAPIKey(groqAPIKey) {
             statusMessage = "Hata: Bulut Hassas için geçerli bir Groq API anahtarı girin."
@@ -612,7 +623,10 @@ struct ContentView: View {
         processingStage = .extractingAudio
         currentStep = .processing
 
-        VideoProcessor.shared.extractAudio(from: url) { audioURL in
+        VideoProcessor.shared.extractAudio(
+            from: url,
+            forVocalIsolation: vocalIsolationMode.usesVocalIsolation
+        ) { audioURL in
             guard self.activeOperationID == operationID else {
                 if let audioURL { VideoProcessor.shared.deleteFile(at: audioURL) }
                 return
@@ -638,6 +652,7 @@ struct ContentView: View {
             VideoProcessor.shared.runSpeechRecognition(
                 audioURL: audioURL,
                 quality: quality,
+                vocalIsolationMode: vocalIsolationMode,
                 cloudAPIKey: quality.usesCloudTranscription ? self.groqAPIKey : nil,
                 statusUpdate: { message in
                     DispatchQueue.main.async {
@@ -650,7 +665,7 @@ struct ContentView: View {
                     guard self.activeOperationID == operationID else { return }
                     self.modelDownloadProgress = fraction >= 1.0 ? nil : fraction
                 }
-            }) { words, speechError, cloudFallbackReason in
+            }) { words, speechError, analysisNotice in
                 VideoProcessor.shared.deleteFile(at: audioURL)
                 if self.audioURL == audioURL { self.audioURL = nil }
 
@@ -718,9 +733,9 @@ struct ContentView: View {
                 self.isProcessing = false
                 self.currentStep = .editLines
                 if projectWasSaved {
-                    if let cloudFallbackReason {
-                        self.statusMessage = "Bulut kullanılamadı: \(cloudFallbackReason). "
-                            + "Sözler Dengeli yerel motorla çıkarıldı; satır düzenini kontrol edin."
+                    if let analysisNotice {
+                        self.statusMessage = "Analiz notu: \(analysisNotice) "
+                            + "Sözler çıkarıldı; satır düzenini kontrol edin."
                     } else {
                         self.statusMessage = "Sözler çıkarıldı. Satır düzenini kontrol edip onaylayın."
                     }

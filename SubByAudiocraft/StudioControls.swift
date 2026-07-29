@@ -9,6 +9,7 @@ private enum StudioPreset: String, CaseIterable, Identifiable {
     case clean
     case cinematic
     case energetic
+    case shadow
 
     var id: String { rawValue }
 
@@ -18,6 +19,7 @@ private enum StudioPreset: String, CaseIterable, Identifiable {
         case .clean: return "Temiz"
         case .cinematic: return "Sinematik"
         case .energetic: return "Enerjik"
+        case .shadow: return "Alt Gölge"
         }
     }
 
@@ -27,6 +29,7 @@ private enum StudioPreset: String, CaseIterable, Identifiable {
         case .clean: return "captions.bubble"
         case .cinematic: return "film"
         case .energetic: return "bolt.fill"
+        case .shadow: return "shadow"
         }
     }
 }
@@ -63,7 +66,7 @@ struct StudioTypographyControls: View {
             }
         }
         .onChange(of: lyricTrackingMode) { mode in
-            if mode != .karaoke, kineticOverlayStyle == .spotlight {
+            if mode != .karaoke, kineticOverlayStyle.requiresKaraokeTracking {
                 kineticOverlayStyle = .none
             }
         }
@@ -374,6 +377,12 @@ struct StudioTypographyControls: View {
             kineticOverlayStyle == .spotlight {
             return .energetic
         }
+        if kineticStyle == .cinematic &&
+            kineticIntensity == .subtle &&
+            kineticLetterStyle == .clean &&
+            kineticOverlayStyle == .underShadow {
+            return .shadow
+        }
         return nil
     }
 
@@ -400,6 +409,12 @@ struct StudioTypographyControls: View {
             kineticIntensity = .energetic
             kineticLetterStyle = .rhythm
             kineticOverlayStyle = .spotlight
+        case .shadow:
+            karaokeMode = .kinetic
+            kineticStyle = .cinematic
+            kineticIntensity = .subtle
+            kineticLetterStyle = .clean
+            kineticOverlayStyle = .underShadow
         }
     }
 
@@ -427,7 +442,7 @@ struct StudioTypographyControls: View {
 
     private var availableOverlays: [KineticOverlayStyle] {
         KineticOverlayStyle.allCases.filter {
-            $0 != .spotlight || lyricTrackingMode == .karaoke
+            !$0.requiresKaraokeTracking || lyricTrackingMode == .karaoke
         }
     }
 

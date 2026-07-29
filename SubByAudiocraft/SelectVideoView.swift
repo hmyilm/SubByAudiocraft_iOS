@@ -8,6 +8,7 @@ struct SelectVideoView: View {
     @Binding var selectedItem: PhotosPickerItem?
     let player: AVPlayer?
     @Binding var analysisQuality: AnalysisQuality
+    @Binding var vocalIsolationMode: VocalIsolationMode
     @Binding var groqAPIKey: String
     let isLoadingVideo: Bool
 
@@ -156,6 +157,42 @@ struct SelectVideoView: View {
                             : (analysisQuality == .cloud ? Theme.yellow : .gray)
                     )
                     .fixedSize(horizontal: false, vertical: true)
+
+                Divider()
+                    .overlay(Theme.cardStroke)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Label("Vokal Temizleme", systemImage: "music.note.list")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text("Final ses korunur")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(.green)
+                    }
+
+                    Picker("Vokal Temizleme", selection: $vocalIsolationMode) {
+                        ForEach(VocalIsolationMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(vocalIsolationMode.detail)
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if vocalIsolationMode.usesVocalIsolation {
+                        Label(
+                            "İlk kullanımda yalnız vokal modeli yaklaşık \(VocalIsolationService.approximateDownloadMegabytes) MB indirilir.",
+                            systemImage: "arrow.down.circle"
+                        )
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                    }
+                }
 
                 if analysisQuality == .cloud {
                     cloudAPIKeyEditor

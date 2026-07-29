@@ -350,6 +350,7 @@ enum KineticOverlayStyle: String, CaseIterable, Identifiable, Codable {
     case cinematicBand
     case accentPanel
     case spotlight
+    case underShadow
 
     var id: String { rawValue }
 
@@ -361,6 +362,7 @@ enum KineticOverlayStyle: String, CaseIterable, Identifiable, Codable {
         case .cinematicBand: return "Sinema"
         case .accentPanel: return "Panel"
         case .spotlight: return "Spot"
+        case .underShadow: return "Alt Gölge"
         }
     }
 
@@ -372,6 +374,7 @@ enum KineticOverlayStyle: String, CaseIterable, Identifiable, Codable {
         case .cinematicBand: return "rectangle.split.3x1.fill"
         case .accentPanel: return "rectangle.split.2x1.fill"
         case .spotlight: return "scope"
+        case .underShadow: return "shadow"
         }
     }
 
@@ -389,7 +392,13 @@ enum KineticOverlayStyle: String, CaseIterable, Identifiable, Codable {
             return "Editoryal kompozisyona koyu bir plaka ve renkli kenar imzası ekler."
         case .spotlight:
             return "Söylenen kelimenin arkasında ritimle değişen kontrollü bir odak plakası kullanır."
+        case .underShadow:
+            return "Okunan kelimenin hemen altında hafif koyu, yumuşak bir derinlik oluşturur; renk vurgusunu boğmaz."
         }
+    }
+
+    var requiresKaraokeTracking: Bool {
+        self == .spotlight || self == .underShadow
     }
 
     func resolved(for scene: KineticScene) -> KineticOverlayStyle {
@@ -728,8 +737,13 @@ class VideoProcessor: ObservableObject {
         case insertion
     }
     
-    // 1. Sesi Videodan 16kHz Mono WAV (PCM) olarak çıkarma
-    func extractAudio(from videoURL: URL, completion: @escaping (URL?) -> Void) {
+    // 1. Sesi videodan çıkarma. Vokal ayrılacaksa modelin doğal girişi olan
+    // 44.1 kHz stereo korunur; doğrudan tanımada 16 kHz mono hazırlanır.
+    func extractAudio(
+        from videoURL: URL,
+        forVocalIsolation: Bool = false,
+        completion: @escaping (URL?) -> Void
+    ) {
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("subby_audio_" + UUID().uuidString)
             .appendingPathExtension("wav")
@@ -737,7 +751,10 @@ class VideoProcessor: ObservableObject {
         let inPath = videoURL.path
         let outPath = outputURL.path
 
-        // Whisper için ideal format: 16kHz, Tek Kanal (Mono), 16-bit PCM WAV
+        let sampleRate = forVocalIsolation ? "44100" : "16000"
+        let channelCount = forVocalIsolation ? "2" : "1"
+
+        // Whisper için ideal format 16 kHz mono; Open-Unmix için 44.1 kHz stereo.
         // Not: Bandpass filtresi kullanılmıyor; Whisper tam bant ses ile eğitildiği için
         // 3kHz üstünü kesmek ünsüz seslerini silip transkripsiyon kalitesini düşürür.
         let args = [
@@ -747,8 +764,8 @@ class VideoProcessor: ObservableObject {
             "-i", inPath,
             "-vn",
             "-acodec", "pcm_s16le",
-            "-ar", "16000",
-            "-ac", "1",
+            "-ar", sampleRate,
+            "-ac", channelCount,
             outPath
         ]
         
@@ -823,6 +840,7 @@ class VideoProcessor: ObservableObject {
     func runSpeechRecognition(
         audioURL: URL,
         quality: AnalysisQuality,
+        vocalIsolationMode: VocalIsolationMode,
         cloudAPIKey: String?,
         statusUpdate: @escaping (String) -> Void,
         downloadProgress: @escaping (Double) -> Void,
@@ -837,8 +855,43 @@ class VideoProcessor: ObservableObject {
         let task = Task(priority: .userInitiated) {
             var whisperKit: WhisperKit?
             var qwenModel: Qwen3ASRModel?
-            var cloudFallbackReason: String?
+            var analysisAudioURL = audioURL
+            var fallbackAudioURL: URL?
+            var generatedAnalysisURLs: [URL] = []
+            var analysisNotices: [String] = []
+            var recognitionProgressBase = 0.0
+            defer {
+                generatedAnalysisURLs.forEach { self.deleteFile(at: $0) }
+            }
             do {
+                if vocalIsolationMode.usesVocalIsolation {
+                    let prepared = try await VocalIsolationService.shared.prepare(
+                        sourceURL: audioURL,
+                        statusUpdate: statusUpdate,
+                        progressUpdate: { fraction in
+                            downloadProgress(min(max(fraction, 0), 1) * 0.18)
+                        }
+                    )
+                    analysisAudioURL = prepared.primaryURL
+                    fallbackAudioURL = prepared.fallbackURL
+                    generatedAnalysisURLs = prepared.generatedURLs
+                    recognitionProgressBase = 0.18
+                    if let notice = prepared.notice {
+                        analysisNotices.append(notice)
+                    } else if prepared.usedVocalIsolation {
+                        statusUpdate("Vokal ayrıldı. Şimdi sözler ve kelime saniyeleri çözümleniyor.")
+                    }
+                }
+
+                let progressBase = recognitionProgressBase
+                let recognitionProgress: (Double) -> Void = { fraction in
+                    let safeFraction = min(max(fraction, 0), 1)
+                    downloadProgress(
+                        progressBase
+                            + ((1 - progressBase) * safeFraction)
+                    )
+                }
+
                 if quality.usesCloudTranscription {
                     do {
                         statusUpdate(
@@ -846,33 +899,39 @@ class VideoProcessor: ObservableObject {
                             + "Whisper Large V3 sözleri ve kelime saniyelerini birlikte çözüyor."
                         )
                         let cloudWords = try await GroqSpeechClient.shared.transcribe(
-                            audioURL: audioURL,
+                            audioURL: analysisAudioURL,
                             apiKey: cloudAPIKey ?? ""
                         )
                         let normalizedCloudWords = self.normalizeRecognizedWords(cloudWords)
                         guard !normalizedCloudWords.isEmpty else {
                             throw GroqSpeechClient.ClientError.missingWordTimestamps
                         }
-                        downloadProgress(1.0)
+                        recognitionProgress(1.0)
                         try Task.checkCancellation()
                         guard self.finishRecognitionIfActive(recognitionID) else { return }
                         self.completeOnMain {
-                            completion(normalizedCloudWords, nil, nil)
+                            let notice = analysisNotices.isEmpty
+                                ? nil
+                                : analysisNotices.joined(separator: " ")
+                            completion(normalizedCloudWords, nil, notice)
                         }
                         return
                     } catch is CancellationError {
                         throw CancellationError()
                     } catch {
-                        cloudFallbackReason = self.friendlyCloudFallbackReason(error)
+                        let cloudFallbackReason = self.friendlyCloudFallbackReason(error)
+                        analysisNotices.append(
+                            "Bulut kullanılamadı: \(cloudFallbackReason); Dengeli yerel motora geçildi."
+                        )
                         print(
                             "Bulut Hassas kullanılamadı; yerel motora geçiliyor: "
                             + error.localizedDescription
                         )
                         statusUpdate(
-                            "Bulut kullanılamadı: \(cloudFallbackReason ?? "servis hatası"). "
+                            "Bulut kullanılamadı: \(cloudFallbackReason). "
                             + "Analiz kaybolmadan Dengeli yerel motorla sürdürülüyor."
                         )
-                        downloadProgress(0)
+                        recognitionProgress(0)
                     }
                 }
 
@@ -885,14 +944,14 @@ class VideoProcessor: ObservableObject {
                 let loadedModel = try await self.loadModel(
                     quality: effectiveQuality,
                     progressRange: whisperProgressRange,
-                    downloadProgress: downloadProgress
+                    downloadProgress: recognitionProgress
                 )
                 whisperKit = loadedModel
                 try Task.checkCancellation()
 
                 let vadWords = try await self.transcribeTimingPass(
                     model: loadedModel,
-                    audioURL: audioURL,
+                    audioURL: analysisAudioURL,
                     chunkingStrategy: .vad,
                     recognitionID: recognitionID
                 )
@@ -906,13 +965,42 @@ class VideoProcessor: ObservableObject {
                     // birleştirilir.
                     let continuousWords = try await self.transcribeTimingPass(
                         model: loadedModel,
-                        audioURL: audioURL,
+                        audioURL: analysisAudioURL,
                         chunkingStrategy: .none,
                         recognitionID: recognitionID
                     )
                     normalizedWords = self.mergeTimingPasses(
                         primary: vadWords,
                         secondary: continuousWords
+                    )
+                }
+
+                if normalizedWords.isEmpty, let fallbackAudioURL {
+                    statusUpdate(
+                        "Ayrılmış vokalde yeterli söz bulunamadı. Zaman kaybetmeden orijinal karışımla yeniden deneniyor."
+                    )
+                    analysisAudioURL = fallbackAudioURL
+                    let fallbackVADWords = try await self.transcribeTimingPass(
+                        model: loadedModel,
+                        audioURL: fallbackAudioURL,
+                        chunkingStrategy: .vad,
+                        recognitionID: recognitionID
+                    )
+                    normalizedWords = fallbackVADWords
+                    if effectiveQuality.usesSecondTimingPass {
+                        let fallbackContinuousWords = try await self.transcribeTimingPass(
+                            model: loadedModel,
+                            audioURL: fallbackAudioURL,
+                            chunkingStrategy: .none,
+                            recognitionID: recognitionID
+                        )
+                        normalizedWords = self.mergeTimingPasses(
+                            primary: fallbackVADWords,
+                            secondary: fallbackContinuousWords
+                        )
+                    }
+                    analysisNotices.append(
+                        "Ayrılmış vokal yeterli sonuç vermedi; orijinal karışım otomatik yedek olarak kullanıldı."
                     )
                 }
 
@@ -929,7 +1017,7 @@ class VideoProcessor: ObservableObject {
                             modelId: qwenModelID,
                             progressHandler: { fraction, _ in
                                 let safeFraction = min(max(fraction, 0), 1)
-                                downloadProgress(0.4 + (safeFraction * 0.6))
+                                recognitionProgress(0.4 + (safeFraction * 0.6))
                             }
                         )
                         qwenModel = loadedQwenModel
@@ -937,7 +1025,7 @@ class VideoProcessor: ObservableObject {
 
                         if let enhancedWords = try self.enhanceLyricsWithQwen(
                             model: loadedQwenModel,
-                            audioURL: audioURL,
+                            audioURL: analysisAudioURL,
                             timedWords: normalizedWords
                         ), !enhancedWords.isEmpty {
                             normalizedWords = enhancedWords
@@ -945,7 +1033,7 @@ class VideoProcessor: ObservableObject {
 
                         loadedQwenModel.unload()
                         qwenModel = nil
-                        downloadProgress(1.0)
+                        recognitionProgress(1.0)
                     } catch is CancellationError {
                         qwenModel?.unload()
                         qwenModel = nil
@@ -955,24 +1043,27 @@ class VideoProcessor: ObservableObject {
                         // güvenilir zamanlı Whisper sonucu kaybolmaz.
                         qwenModel?.unload()
                         qwenModel = nil
-                        downloadProgress(1.0)
+                        recognitionProgress(1.0)
                         print("Qwen3-ASR kullanılamadı; yerel zamanlama sonucu korunuyor: \(error.localizedDescription)")
                     }
                 } else {
-                    downloadProgress(1.0)
+                    recognitionProgress(1.0)
                 }
 
                 try Task.checkCancellation()
                 guard self.finishRecognitionIfActive(recognitionID) else { return }
                 self.completeOnMain {
+                    let notice = analysisNotices.isEmpty
+                        ? nil
+                        : analysisNotices.joined(separator: " ")
                     if normalizedWords.isEmpty {
                         completion(
                             [],
                             "Videoda deşifre edilebilecek net bir vokal veya konuşma bulunamadı.",
-                            cloudFallbackReason
+                            notice
                         )
                     } else {
-                        completion(normalizedWords, nil, cloudFallbackReason)
+                        completion(normalizedWords, nil, notice)
                     }
                 }
             } catch is CancellationError {
@@ -982,7 +1073,10 @@ class VideoProcessor: ObservableObject {
                 qwenModel?.unload()
                 if self.finishRecognitionIfActive(recognitionID) {
                     self.completeOnMain {
-                        completion([], "İşlem iptal edildi.", cloudFallbackReason)
+                        let notice = analysisNotices.isEmpty
+                            ? nil
+                            : analysisNotices.joined(separator: " ")
+                        completion([], "İşlem iptal edildi.", notice)
                     }
                 }
             } catch {
@@ -994,7 +1088,10 @@ class VideoProcessor: ObservableObject {
                 let message = self.friendlyRecognitionError(error)
                 if self.finishRecognitionIfActive(recognitionID) {
                     self.completeOnMain {
-                        completion([], message, cloudFallbackReason)
+                        let notice = analysisNotices.isEmpty
+                            ? nil
+                            : analysisNotices.joined(separator: " ")
+                        completion([], message, notice)
                     }
                 }
             }
@@ -3334,7 +3431,7 @@ class VideoProcessor: ObservableObject {
         segmentStart: Double,
         segmentEnd: Double
     ) -> [KineticOverlayGroup] {
-        if overlay == .spotlight {
+        if overlay.requiresKaraokeTracking {
             return placements.compactMap { placement in
                 guard cleaned.indices.contains(placement.index) else { return nil }
                 let word = cleaned[placement.index].word
@@ -3415,6 +3512,9 @@ class VideoProcessor: ObservableObject {
         case .spotlight:
             padX = 17
             padY = 11
+        case .underShadow:
+            padX = 13
+            padY = 8
         case .automatic, .none:
             return nil
         }
@@ -3436,6 +3536,7 @@ class VideoProcessor: ObservableObject {
         switch style {
         case .cinematicBand: radius = 1
         case .spotlight: radius = max(7, min(18, height / 4))
+        case .underShadow: radius = max(6, min(15, height / 4))
         case .glass, .accentPanel: radius = max(10, min(24, height / 5))
         case .automatic, .none: radius = 1
         }
@@ -3640,6 +3741,29 @@ class VideoProcessor: ObservableObject {
                     alpha: spotlightAlpha,
                     extraTags: "\\bord1.4\\3c&H\(accent.assColor)&\\3a&H38&\\fad(45,80)"
                 )
+            case .underShadow:
+                let shadowBounds = KineticOverlayBounds(
+                    left: bounds.left,
+                    top: min(virtualHeight - bounds.height - 4, bounds.top + 7),
+                    width: bounds.width,
+                    height: bounds.height,
+                    radius: bounds.radius
+                )
+                let shadowAlpha: String
+                switch intensity {
+                case .subtle: shadowAlpha = "98"
+                case .balanced: shadowAlpha = "88"
+                case .energetic: shadowAlpha = "78"
+                }
+                result += kineticOverlayShapeDialogue(
+                    layer: 1,
+                    start: group.start,
+                    end: group.end,
+                    bounds: shadowBounds,
+                    color: "000000",
+                    alpha: shadowAlpha,
+                    extraTags: "\\blur5.5\\fad(35,75)"
+                )
             case .automatic, .none:
                 break
             }
@@ -3784,7 +3908,7 @@ class VideoProcessor: ObservableObject {
         let karaokeTrackingEnabled = lyricTrackingMode == .karaoke
         var effectiveOverlayStyle = overlayStyle
         if !karaokeTrackingEnabled,
-           overlayStyle.resolved(for: plan) == .spotlight {
+           overlayStyle.resolved(for: plan).requiresKaraokeTracking {
             effectiveOverlayStyle = .none
         }
         var result = kineticOverlayDialogues(
@@ -4607,6 +4731,10 @@ class VideoProcessor: ObservableObject {
             "-hide_banner",
             "-loglevel", "error",
             "-i", inPath,
+            // Görüntü ve ses her zaman kaynak videodan seçilir. Analiz için üretilen
+            // vokal dosyaları bu komuta hiç girmez; finalde orijinal mix korunur.
+            "-map", "0:v:0",
+            "-map", "0:a:0?",
             "-vf", vfString,
             "-c:v", "h264_videotoolbox",
             "-allow_sw", "1",

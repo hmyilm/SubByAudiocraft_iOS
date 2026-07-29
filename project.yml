@@ -19,18 +19,26 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "18.0"
-    version: 1.19.5
-    build: 49
+    version: 1.20.0
+    build: 50
     settings:
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       PRODUCT_BUNDLE_IDENTIFIER: com.hmyilm.SubByAudiocraft
-      MARKETING_VERSION: "1.19.5"
-      CURRENT_PROJECT_VERSION: "49"
+      MARKETING_VERSION: "1.20.0"
+      CURRENT_PROJECT_VERSION: "50"
     sources: [SubByAudiocraft]
     dependencies:
       - package: WhisperKit
       - package: Qwen3Speech
         product: Qwen3ASR
+      - package: Qwen3Speech
+        product: SourceSeparation
+      - package: Qwen3Speech
+        product: AudioCommon
+      - package: MLXSwift
+        product: MLX
+      - package: MLXSwift
+        product: MLXNN
     info:
       path: SubByAudiocraft/Info.plist
       properties:
@@ -66,8 +74,8 @@ targets:
         UILaunchScreen: {}
         CFBundleIconName: AppIcon
         CFBundleDisplayName: Sub by Audiocraft
-        CFBundleShortVersionString: "1.19.5"
-        CFBundleVersion: "49"
+        CFBundleShortVersionString: "1.20.0"
+        CFBundleVersion: "50"
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

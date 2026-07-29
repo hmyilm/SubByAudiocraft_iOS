@@ -594,7 +594,7 @@ struct KaraokeModePicker: View {
                                 HStack(spacing: 8) {
                                     ForEach(KineticOverlayStyle.allCases) { overlayStyle in
                                         let isSelected = overlayStyle == kineticOverlayStyle
-                                        let isAvailable = overlayStyle != .spotlight
+                                        let isAvailable = !overlayStyle.requiresKaraokeTracking
                                             || lyricTrackingMode == .karaoke
                                         Button {
                                             Theme.haptic()
@@ -627,7 +627,7 @@ struct KaraokeModePicker: View {
                                 .fixedSize(horizontal: false, vertical: true)
 
                             if lyricTrackingMode != .karaoke {
-                                Text("Spot katmanı aktif kelimeyi izlediği için yalnız Karaoke söz takibinde kullanılabilir.")
+                                Text("Spot ve Alt Gölge katmanları aktif kelimeyi izlediği için yalnız Karaoke söz takibinde kullanılabilir.")
                                     .font(.caption2)
                                     .foregroundColor(.gray)
                                     .fixedSize(horizontal: false, vertical: true)
@@ -658,7 +658,7 @@ struct KaraokeModePicker: View {
             }
         }
         .onChange(of: lyricTrackingMode) { mode in
-            if mode != .karaoke, kineticOverlayStyle == .spotlight {
+            if mode != .karaoke, kineticOverlayStyle.requiresKaraokeTracking {
                 kineticOverlayStyle = .none
             }
         }
@@ -1193,11 +1193,13 @@ private struct KineticPreviewLockup: View {
                                 )
                                 .padding(
                                     .horizontal,
-                                    plan.highlight == .pill || resolvedOverlay == .spotlight ? 6 : 0
+                                    plan.highlight == .pill
+                                        || resolvedOverlay.requiresKaraokeTracking ? 6 : 0
                                 )
                                 .padding(
                                     .vertical,
-                                    plan.highlight == .pill || resolvedOverlay == .spotlight ? 3 : 0
+                                    plan.highlight == .pill
+                                        || resolvedOverlay.requiresKaraokeTracking ? 3 : 0
                                 )
                                 .background(
                                     RoundedRectangle(cornerRadius: 5, style: .continuous)
@@ -1220,7 +1222,8 @@ private struct KineticPreviewLockup: View {
                                     color: isActive && plan.highlight == .glow
                                         ? resolvedAccent.previewColor.opacity(0.55)
                                         : .black.opacity(0.8),
-                                    radius: isActive ? 4 : 2
+                                    radius: isActive ? 4 : 2,
+                                    y: isActive && resolvedOverlay == .underShadow ? 4 : 0
                                 )
                                 .transition(.asymmetric(
                                     insertion: .scale(scale: previewEntranceScale).combined(with: .opacity),
@@ -1257,7 +1260,7 @@ private struct KineticPreviewLockup: View {
 
     private var resolvedOverlay: KineticOverlayStyle {
         let resolved = overlayStyle.resolved(for: plan)
-        if trackingMode != .karaoke, resolved == .spotlight {
+        if trackingMode != .karaoke, resolved.requiresKaraokeTracking {
             return .none
         }
         return resolved
@@ -1268,7 +1271,7 @@ private struct KineticPreviewLockup: View {
         case .glass: return max(10, previewHeight / 42)
         case .cinematicBand: return max(12, previewHeight / 36)
         case .accentPanel: return max(14, previewHeight / 34)
-        case .automatic, .none, .spotlight: return 0
+        case .automatic, .none, .spotlight, .underShadow: return 0
         }
     }
 
@@ -1277,7 +1280,7 @@ private struct KineticPreviewLockup: View {
         case .glass: return max(7, previewHeight / 64)
         case .cinematicBand: return max(10, previewHeight / 52)
         case .accentPanel: return max(9, previewHeight / 55)
-        case .automatic, .none, .spotlight: return 0
+        case .automatic, .none, .spotlight, .underShadow: return 0
         }
     }
 
@@ -1294,6 +1297,15 @@ private struct KineticPreviewLockup: View {
             case .energetic: opacity = 0.56
             }
             return resolvedAccent.previewColor.opacity(opacity)
+        }
+        if resolvedOverlay == .underShadow {
+            let opacity: Double
+            switch intensity {
+            case .subtle: opacity = 0.25
+            case .balanced: opacity = 0.34
+            case .energetic: opacity = 0.42
+            }
+            return Color.black.opacity(opacity)
         }
         return .clear
     }
@@ -1336,7 +1348,7 @@ private struct KineticPreviewLockup: View {
                     .frame(width: 3)
                     .padding(.vertical, 9)
             }
-        case .automatic, .none, .spotlight:
+        case .automatic, .none, .spotlight, .underShadow:
             Color.clear
         }
     }

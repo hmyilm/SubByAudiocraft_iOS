@@ -101,6 +101,54 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertNil(AnalysisQuality.cloud.qwenModelID(physicalMemory: UInt64.max))
     }
 
+    func testVocalIsolationDefaultsToAutomaticAndCanBeDisabled() {
+        XCTAssertEqual(VocalIsolationMode.resolved(nil), .automatic)
+        XCTAssertTrue(VocalIsolationMode.automatic.usesVocalIsolation)
+        XCTAssertFalse(VocalIsolationMode.off.usesVocalIsolation)
+    }
+
+    func testVocalIsolationChunkPlanCoversEverySampleExactlyOnce() {
+        let chunks = VocalIsolationService.chunkPlan(
+            totalSamples: 1_000,
+            coreSamples: 300,
+            contextSamples: 40
+        )
+
+        XCTAssertEqual(chunks.map(\.outputRange), [
+            0..<300,
+            300..<600,
+            600..<900,
+            900..<1_000
+        ])
+        XCTAssertEqual(chunks.first?.inputRange, 0..<340)
+        XCTAssertEqual(chunks[1].inputRange, 260..<640)
+        XCTAssertEqual(chunks.last?.inputRange, 860..<1_000)
+        XCTAssertEqual(
+            chunks.flatMap { Array($0.outputRange) },
+            Array(0..<1_000)
+        )
+        XCTAssertTrue(chunks.allSatisfy {
+            $0.localOutputRange.count == $0.outputRange.count
+                && $0.localOutputRange.lowerBound >= 0
+                && $0.localOutputRange.upperBound <= $0.inputRange.count
+        })
+    }
+
+    func testVocalIsolationDownmixKeepsLengthAndCentersStereo() {
+        let mono = VocalIsolationService.downmixToMono(
+            left: [1, 0.5, -1],
+            right: [-1, 0.5, 1]
+        )
+
+        XCTAssertEqual(mono, [0, 0.5, 0])
+    }
+
+    func testUnderShadowOverlayFollowsOnlyActiveKaraokeWord() {
+        XCTAssertTrue(KineticOverlayStyle.underShadow.requiresKaraokeTracking)
+        XCTAssertTrue(KineticOverlayStyle.spotlight.requiresKaraokeTracking)
+        XCTAssertFalse(KineticOverlayStyle.glass.requiresKaraokeTracking)
+    }
+
     func testGroqAPIKeyValidationDoesNotAcceptGoogleOrIncompleteKeys() {
         XCTAssertTrue(
             GroqSpeechClient.isPlausibleAPIKey(
@@ -1440,6 +1488,48 @@ final class VideoProcessorTests: XCTestCase {
             words.count
         )
         XCTAssertTrue(ass.contains("\\3a&H38&"))
+    }
+
+    func testUnderShadowOverlayCreatesSubtleDarkPlateForEveryReadWord() {
+        let words = makeWords(["gölgen", "kalır", "altta"])
+        let ass = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.4,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            style: .cinematic,
+            intensity: .balanced,
+            overlayStyle: .underShadow,
+            lyricTrackingMode: .karaoke
+        )
+
+        XCTAssertEqual(
+            ass.components(separatedBy: "\\alpha&H88&").count - 1,
+            words.count
+        )
+        XCTAssertTrue(ass.contains("\\c&H000000&"))
+        XCTAssertTrue(ass.contains("\\blur5.5"))
+
+        let trackingOff = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.4,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            style: .cinematic,
+            overlayStyle: .underShadow,
+            lyricTrackingMode: .off
+        )
+        XCTAssertFalse(trackingOff.contains("\\blur5.5"))
     }
 
     func testUnknownAndLegacyKaraokeModesResolveToClassic() {
