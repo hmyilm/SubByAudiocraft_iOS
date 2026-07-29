@@ -17,6 +17,7 @@ enum AppStep {
 private struct TranscriptAutosaveToken: Equatable {
     let words: [VideoProcessor.WordTimestamp]
     let lineBreaks: Set<UUID>
+    let inlineLineBreaks: Set<UUID>
     let emphasisWordIDs: Set<UUID>
 }
 
@@ -70,6 +71,7 @@ struct ContentView: View {
     @State private var modelDownloadProgress: Double? = nil
     @State private var words: [VideoProcessor.WordTimestamp] = []
     @State private var lineBreaks: Set<UUID> = []
+    @State private var inlineLineBreaks: Set<UUID> = []
     @State private var kineticEmphasisWordIDs: Set<UUID> = []
     @State private var videoURL: URL? = nil
     @State private var audioURL: URL? = nil
@@ -182,7 +184,11 @@ struct ContentView: View {
         case .selectVideo:
             selectVideoContent
         case .editLines:
-            LineEditView(words: $words, breaks: $lineBreaks)
+            LineEditView(
+                words: $words,
+                breaks: $lineBreaks,
+                inlineBreaks: $inlineLineBreaks
+            )
         case .editSubtitles:
             editSubtitlesContent
         case .processing:
@@ -215,6 +221,7 @@ struct ContentView: View {
         EditWordsView(
             words: $words,
             breaks: $lineBreaks,
+            inlineBreaks: $inlineLineBreaks,
             player: player,
             fontName: $fontName,
             fontSize: $fontSize,
@@ -235,6 +242,7 @@ struct ContentView: View {
         TranscriptAutosaveToken(
             words: words,
             lineBreaks: lineBreaks,
+            inlineLineBreaks: inlineLineBreaks,
             emphasisWordIDs: kineticEmphasisWordIDs
         )
     }
@@ -695,6 +703,7 @@ struct ContentView: View {
                 self.modelDownloadProgress = nil
                 self.words = words
                 self.lineBreaks = VideoProcessor.shared.autoLineBreaks(for: words)
+                self.inlineLineBreaks = []
                 self.kineticEmphasisWordIDs = []
 
                 // Projeyi Geçmiş'e kaydet: video kalıcı proje klasörüne taşınır,
@@ -705,6 +714,7 @@ struct ContentView: View {
                         videoURL: vURL,
                         kelimeler: words,
                         satirSonlari: self.lineBreaks,
+                        icSatirSonlari: self.inlineLineBreaks,
                         fontAdi: self.fontName,
                         fontBoyu: self.fontSize,
                         dikeyKonum: self.marginV,
@@ -779,6 +789,7 @@ struct ContentView: View {
             let assURL = await VideoProcessor.shared.generateASS(
                 words: words,
                 lineBreaks: lineBreaks,
+                inlineLineBreaks: inlineLineBreaks,
                 fontName: actualFontName,
                 fontSize: Int(fontSize),
                 marginV: Int(marginV),
@@ -892,6 +903,7 @@ struct ContentView: View {
         self.selectedItem = nil
         self.words = []
         self.lineBreaks = []
+        self.inlineLineBreaks = []
         self.kineticEmphasisWordIDs = []
         self.currentProjectID = nil
         self.currentStep = .selectVideo
@@ -939,6 +951,7 @@ struct ContentView: View {
             id: pid,
             kelimeler: words,
             satirSonlari: lineBreaks,
+            icSatirSonlari: inlineLineBreaks,
             fontAdi: fontName,
             fontBoyu: fontSize,
             dikeyKonum: marginV,
@@ -983,6 +996,7 @@ struct ContentView: View {
         player?.isMuted = true
         words = proje.kelimeler
         lineBreaks = Set(proje.satirSonlari)
+        inlineLineBreaks = proje.inlineLineBreakIDs
         kineticEmphasisWordIDs = proje.kineticEmphasisWordIDs
         if FontCatalog.secenek(proje.fontAdi) != nil { fontName = proje.fontAdi }
         fontSize = proje.fontBoyu

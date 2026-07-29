@@ -41,6 +41,97 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(breaks, Set(groups.compactMap { $0.last?.id }))
     }
 
+    func testInlineBreakKeepsOneTimedPhraseButCreatesTwoVisualRows() {
+        let words = makeWords(["hep", "birlikte", "burada", "kalalım"])
+        let inlineBreaks = Set([words[1].id])
+
+        let rows = VideoProcessor.shared.visualLineGroups(
+            for: words,
+            inlineLineBreaks: inlineBreaks
+        )
+
+        XCTAssertEqual(rows.map { $0.map(\.text) }, [
+            ["hep", "birlikte"],
+            ["burada", "kalalım"]
+        ])
+
+        let bold = VideoProcessor.shared.makeBoldWordDialogues(
+            group: words,
+            segStart: 0,
+            segEnd: 2,
+            fontName: "Anton-Regular",
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080,
+            inlineLineBreaks: inlineBreaks
+        )
+        XCTAssertTrue(bold.contains("hep birlikte\\Nburada kalalım"))
+        XCTAssertTrue(bold.contains("\\pos("))
+        XCTAssertTrue(bold.contains(",890)"))
+        XCTAssertTrue(bold.contains(",960)"))
+
+        let connected = VideoProcessor.shared.makeConnectedKaraokeRowsDialogues(
+            group: words,
+            inlineLineBreaks: inlineBreaks,
+            segStart: 0,
+            segEnd: 2,
+            fontName: "PetitFormalScript-Regular",
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080
+        )
+        let connectedDialogues = connected.components(separatedBy: "\n").filter {
+            $0.hasPrefix("Dialogue:")
+        }
+        XCTAssertEqual(connectedDialogues.count, 4)
+        XCTAssertTrue(connectedDialogues.contains { $0.hasSuffix("}hep birlikte") })
+        XCTAssertTrue(connectedDialogues.contains { $0.hasSuffix("}burada kalalım") })
+
+        let reveal = VideoProcessor.shared.makeCenteredWordRevealDialogues(
+            group: words,
+            segStart: 0,
+            segEnd: 2,
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080,
+            inlineLineBreaks: inlineBreaks
+        )
+        XCTAssertTrue(reveal.contains("\\N"))
+
+        let characterReveal = VideoProcessor.shared.makeCenteredRevealDialogues(
+            group: words,
+            segStart: 0,
+            segEnd: 2,
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080,
+            inlineLineBreaks: inlineBreaks
+        )
+        XCTAssertTrue(characterReveal.contains("\\N"))
+
+        let kinetic = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 2,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080,
+            style: .impact,
+            inlineLineBreaks: inlineBreaks
+        )
+        let kineticTextDialogues = kinetic.components(separatedBy: "\n").filter {
+            $0.hasPrefix("Dialogue: 2,") || $0.hasPrefix("Dialogue: 3,")
+        }
+        XCTAssertEqual(kineticTextDialogues.count, words.count)
+    }
+
     func testRenderSpaceRequirementUsesSafeMinimumAndScalesWithInput() {
         let megabyte = Int64(1_024 * 1_024)
 
@@ -1651,6 +1742,7 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertNil(project.kinetikVurgular)
         XCTAssertNil(project.kinetikHarfStili)
         XCTAssertNil(project.kinetikOverlay)
+        XCTAssertNil(project.icSatirSonlari)
         XCTAssertEqual(project.karaokeMode, .classic)
         XCTAssertEqual(project.lyricTrackingMode, .karaoke)
         XCTAssertEqual(project.kineticStyle, .automatic)
@@ -1658,6 +1750,7 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(project.kineticCustomColorHex, KineticAccent.defaultCustomHex)
         XCTAssertEqual(project.kineticIntensity, .balanced)
         XCTAssertTrue(project.kineticEmphasisWordIDs.isEmpty)
+        XCTAssertTrue(project.inlineLineBreakIDs.isEmpty)
         XCTAssertEqual(project.kineticLetterStyle, .clean)
         XCTAssertEqual(project.kineticOverlayStyle, .none)
     }

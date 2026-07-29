@@ -19,6 +19,7 @@ private enum EditorPanel: String, CaseIterable, Identifiable {
 struct EditWordsView: View {
     @Binding var words: [VideoProcessor.WordTimestamp]
     @Binding var breaks: Set<UUID>
+    @Binding var inlineBreaks: Set<UUID>
     let player: AVPlayer?
     @Binding var fontName: String
     @Binding var fontSize: Double
@@ -69,6 +70,7 @@ struct EditWordsView: View {
                         sampleText: previewLine,
                         height: 200,
                         karaokeWords: previewWords,
+                        inlineLineBreaks: inlineBreaks,
                         playbackTime: playbackTime,
                         isMuted: false,
                         karaokeMode: karaokeMode,
@@ -289,6 +291,9 @@ struct EditWordsView: View {
         .onChange(of: breaks) { _ in
             normalizeEmphasisSelection()
         }
+        .onChange(of: inlineBreaks) { _ in
+            updatePreviewLine()
+        }
     }
 
     private var previewPlan: KineticTypographyPlan? {
@@ -345,7 +350,12 @@ struct EditWordsView: View {
         }) {
             let index = match.offset
             let line = match.element
-            previewLine = line.map { $0.text }.joined(separator: " ")
+            previewLine = VideoProcessor.shared.visualLineGroups(
+                for: line,
+                inlineLineBreaks: inlineBreaks
+            )
+            .map { $0.map(\.text).joined(separator: " ") }
+            .joined(separator: "\n")
             previewWords = line
             previewLineIndex = index
         } else {
@@ -361,6 +371,10 @@ struct EditWordsView: View {
         let endedLine = breaks.remove(id) != nil
         if endedLine, index > 0 {
             breaks.insert(words[index - 1].id)
+        }
+        let endedVisualRow = inlineBreaks.remove(id) != nil
+        if endedVisualRow, index > 0, !breaks.contains(words[index - 1].id) {
+            inlineBreaks.insert(words[index - 1].id)
         }
         words.remove(at: index)
         if expandedWordID == id { expandedWordID = nil }

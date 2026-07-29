@@ -2014,6 +2014,26 @@ class VideoProcessor: ObservableObject {
         return result
     }
 
+    // Zaman cümlesini değiştirmeden görsel olarak iki satıra böler. Bu kırılmalar
+    // lineBreaks'ten ayrıdır: iki görsel satır aynı anda görünür ve aynı segmente aittir.
+    func visualLineGroups(
+        for group: [WordTimestamp],
+        inlineLineBreaks: Set<UUID>
+    ) -> [[WordTimestamp]] {
+        guard !group.isEmpty else { return [] }
+        var rows: [[WordTimestamp]] = []
+        var current: [WordTimestamp] = []
+        for word in group {
+            current.append(word)
+            if inlineLineBreaks.contains(word.id), word.id != group.last?.id {
+                rows.append(current)
+                current = []
+            }
+        }
+        if !current.isEmpty { rows.append(current) }
+        return rows
+    }
+
     // El yazısı süpürmesi için: satırdaki her karakterin BİTİŞ x konumunu ve toplam satır
     // genişliğini ASS piksel biriminde ölçer. libass, font boyutunu "hücre yüksekliği"
     // (çıkıcı+inici) olarak yorumlar (FreeType REAL_DIM); CoreText ise em puntosuyla
@@ -3135,7 +3155,8 @@ class VideoProcessor: ObservableObject {
             max(Double(baseSize) + 30, Double(virtualHeight - marginV) - Double(baseSize) * 0.38)
         )
 
-        if plan.scene == .focusCut || plan.scene == .impactSequence {
+        if rowsOverride == nil,
+           plan.scene == .focusCut || plan.scene == .impactSequence {
             return cleaned.indices.map { index in
                 let glyphDesign = kineticGlyphDesign(
                     text: cleaned[index].text,
@@ -3434,7 +3455,8 @@ class VideoProcessor: ObservableObject {
         plan: KineticTypographyPlan,
         overlay: KineticOverlayStyle,
         segmentStart: Double,
-        segmentEnd: Double
+        segmentEnd: Double,
+        forceSingleGroup: Bool = false
     ) -> [KineticOverlayGroup] {
         if overlay.requiresKaraokeTracking {
             return placements.compactMap { placement in
@@ -3451,7 +3473,7 @@ class VideoProcessor: ObservableObject {
             }
         }
 
-        if plan.scene == .captionWindow {
+        if plan.scene == .captionWindow && !forceSingleGroup {
             return plan.pages.compactMap { page in
                 let pagePlacements = placements.filter { page.contains($0.index) }
                 guard let firstIndex = page.first,
@@ -3583,7 +3605,8 @@ class VideoProcessor: ObservableObject {
         virtualWidth: Int,
         virtualHeight: Int,
         segmentStart: Double,
-        segmentEnd: Double
+        segmentEnd: Double,
+        forceSingleGroup: Bool = false
     ) -> String {
         let resolvedStyle = overlayStyle.resolved(for: plan)
         guard resolvedStyle != .none else { return "" }
@@ -3593,7 +3616,8 @@ class VideoProcessor: ObservableObject {
             plan: plan,
             overlay: resolvedStyle,
             segmentStart: segmentStart,
-            segmentEnd: segmentEnd
+            segmentEnd: segmentEnd,
+            forceSingleGroup: forceSingleGroup
         )
         var result = ""
         let spotlightAlpha: String
@@ -3867,6 +3891,7 @@ class VideoProcessor: ObservableObject {
         letterStyle: KineticLetterStyle = .clean,
         overlayStyle: KineticOverlayStyle = .none,
         lyricTrackingMode: LyricTrackingMode = .karaoke,
+        inlineLineBreaks: Set<UUID> = [],
         repeatCount: Int = 1,
         scenePlan: KineticTypographyPlan? = nil
     ) -> String {
@@ -3882,8 +3907,31 @@ class VideoProcessor: ObservableObject {
             style: style,
             repeatCount: repeatCount
         )
+        var requestedRows: [[Int]] = []
+        var requestedRow: [Int] = []
+        for (index, item) in cleaned.enumerated() {
+            requestedRow.append(index)
+            if inlineLineBreaks.contains(item.word.id), index < cleaned.count - 1 {
+                requestedRows.append(requestedRow)
+                requestedRow = []
+            }
+        }
+        if !requestedRow.isEmpty { requestedRows.append(requestedRow) }
+        let manualRows = requestedRows.count > 1 ? requestedRows : nil
         let placements: [KineticWordPlacement]
-        if plan.scene == .captionWindow {
+        if let manualRows {
+            placements = kineticPlacements(
+                cleaned: cleaned,
+                plan: plan,
+                fontName: fontName,
+                requestedFontSize: requestedFontSize,
+                marginV: marginV,
+                virtualWidth: virtualWidth,
+                virtualHeight: virtualHeight,
+                letterStyle: letterStyle,
+                rowsOverride: manualRows
+            )
+        } else if plan.scene == .captionWindow {
             placements = plan.pages.flatMap { page in
                 kineticPlacements(
                     cleaned: cleaned,
@@ -3929,18 +3977,20 @@ class VideoProcessor: ObservableObject {
             virtualWidth: virtualWidth,
             virtualHeight: virtualHeight,
             segmentStart: segStart,
-            segmentEnd: segEnd
+            segmentEnd: segEnd,
+            forceSingleGroup: manualRows != nil
         )
 
         for placement in placements {
             let index = placement.index
             let item = cleaned[index]
             let emphasis = index == plan.emphasisIndex
-            let pageIndex = plan.pages.firstIndex { $0.contains(index) } ?? 0
-            let page = plan.pages.indices.contains(pageIndex) ? plan.pages[pageIndex] : [index]
+            let layoutPages = manualRows ?? plan.pages
+            let pageIndex = layoutPages.firstIndex { $0.contains(index) } ?? 0
+            let page = layoutPages.indices.contains(pageIndex) ? layoutPages[pageIndex] : [index]
             let localIndex = page.firstIndex(of: index) ?? index
-            let isolatedWord = plan.motion == .punchCut
-            let pagedWords = plan.scene == .captionWindow
+            let isolatedWord = manualRows == nil && plan.motion == .punchCut
+            let pagedWords = manualRows == nil && plan.scene == .captionWindow
 
             let eventStart: Double
             let eventEnd: Double
@@ -3951,7 +4001,7 @@ class VideoProcessor: ObservableObject {
                 let rawStart = cleaned[firstIndex].word.start - 0.10
                 let rawEnd = cleaned[lastIndex].word.end + 0.12
                 let previousBoundary: Double
-                if pageIndex > 0, let previousLast = plan.pages[pageIndex - 1].last {
+                if pageIndex > 0, let previousLast = layoutPages[pageIndex - 1].last {
                     previousBoundary = (
                         cleaned[previousLast].word.end + cleaned[firstIndex].word.start
                     ) / 2
@@ -3959,8 +4009,8 @@ class VideoProcessor: ObservableObject {
                     previousBoundary = segStart
                 }
                 let nextBoundary: Double
-                if pageIndex + 1 < plan.pages.count,
-                   let nextFirst = plan.pages[pageIndex + 1].first {
+                if pageIndex + 1 < layoutPages.count,
+                   let nextFirst = layoutPages[pageIndex + 1].first {
                     nextBoundary = (
                         cleaned[lastIndex].word.end + cleaned[nextFirst].word.start
                     ) / 2
@@ -4188,6 +4238,7 @@ class VideoProcessor: ObservableObject {
         marginV: Int,
         virtualWidth: Int,
         virtualHeight: Int,
+        inlineLineBreaks: Set<UUID> = [],
         extraTags: String = ""
     ) -> String {
         struct BoldWordItem {
@@ -4197,91 +4248,236 @@ class VideoProcessor: ObservableObject {
             let endUTF16: Int
         }
 
-        var items: [BoldWordItem] = []
-        var utf16Cursor = 0
-        for word in group {
-            let text = cleanASSWord(word.text)
-            guard !text.isEmpty else { continue }
-            if !items.isEmpty { utf16Cursor += 1 }
-            let startUTF16 = utf16Cursor
-            utf16Cursor += text.utf16.count
-            items.append(
-                BoldWordItem(
-                    word: word,
-                    text: text,
-                    startUTF16: startUTF16,
-                    endUTF16: utf16Cursor
+        let itemsByRow: [[BoldWordItem]] = visualLineGroups(
+            for: group,
+            inlineLineBreaks: inlineLineBreaks
+        ).compactMap { row in
+            var items: [BoldWordItem] = []
+            var utf16Cursor = 0
+            for word in row {
+                let text = cleanASSWord(word.text)
+                guard !text.isEmpty else { continue }
+                if !items.isEmpty { utf16Cursor += 1 }
+                let startUTF16 = utf16Cursor
+                utf16Cursor += text.utf16.count
+                items.append(
+                    BoldWordItem(
+                        word: word,
+                        text: text,
+                        startUTF16: startUTF16,
+                        endUTF16: utf16Cursor
+                    )
                 )
-            )
+            }
+            return items.isEmpty ? nil : items
         }
-        guard !items.isEmpty, segEnd > segStart else { return "" }
+        guard !itemsByRow.isEmpty, segEnd > segStart else { return "" }
 
-        let lineText = items.map(\.text).joined(separator: " ")
-        let measurement = harfSinirlariniOlc(
-            metin: lineText,
-            fontName: fontName,
-            assFontSize: fontSize
-        )
+        let rowTexts = itemsByRow.map { $0.map(\.text).joined(separator: " ") }
+        let lineText = rowTexts.joined(separator: "\\N")
         let maximumWidth = max(24.0, Double(virtualWidth - 20))
-        let estimatedWidth = min(
-            maximumWidth,
-            max(24.0, Double(max(1, lineText.utf16.count)) * Double(fontSize) * 0.56)
-        )
-        let lineWidth = measurement?.genislik ?? estimatedWidth
-        let lineLeft = (Double(virtualWidth) - lineWidth) / 2
         let eventDurationMs = max(20, Int(((segEnd - segStart) * 1000).rounded()))
         let t0 = formatASSTime(segStart)
         let t1 = formatASSTime(segEnd)
         let baselineY = max(0, virtualHeight - marginV)
+        let rowGap = max(1, fontSize)
         let needsSyntheticWeight = FontCatalog.secenek(fontName)?.kalin
             ?? fontName.localizedCaseInsensitiveContains("Bold")
 
         var result = "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,," +
-            "{\\fs\(fontSize)\\b0\(extraTags)}\(lineText)\n"
+            "{\\q2\\fs\(fontSize)\\b0\(extraTags)}\(lineText)\n"
 
-        for item in items {
-            let wordStart = min(segEnd, max(segStart, item.word.start))
-            let wordEnd = min(segEnd, max(wordStart + 0.05, item.word.end))
-            guard wordEnd > wordStart else { continue }
+        for (rowIndex, items) in itemsByRow.enumerated() {
+            let rowText = rowTexts[rowIndex]
+            let measurement = harfSinirlariniOlc(
+                metin: rowText,
+                fontName: fontName,
+                assFontSize: fontSize
+            )
+            let estimatedWidth = min(
+                maximumWidth,
+                max(24.0, Double(max(1, rowText.utf16.count)) * Double(fontSize) * 0.56)
+            )
+            let lineWidth = measurement?.genislik ?? estimatedWidth
+            let lineLeft = (Double(virtualWidth) - lineWidth) / 2
+            let rowY = baselineY - ((itemsByRow.count - rowIndex - 1) * rowGap)
 
-            let leftOffset: Double
-            let rightOffset: Double
-            if let measurement,
-               item.endUTF16 > 0,
-               item.endUTF16 <= measurement.sinirlar.count {
-                leftOffset = item.startUTF16 == 0
-                    ? 0
-                    : measurement.sinirlar[item.startUTF16 - 1]
-                rightOffset = measurement.sinirlar[item.endUTF16 - 1]
-            } else {
-                let denominator = Double(max(1, lineText.utf16.count))
-                leftOffset = lineWidth * Double(item.startUTF16) / denominator
-                rightOffset = lineWidth * Double(item.endUTF16) / denominator
+            for item in items {
+                let wordStart = min(segEnd, max(segStart, item.word.start))
+                let wordEnd = min(segEnd, max(wordStart + 0.05, item.word.end))
+                guard wordEnd > wordStart else { continue }
+
+                let leftOffset: Double
+                let rightOffset: Double
+                if let measurement,
+                   item.endUTF16 > 0,
+                   item.endUTF16 <= measurement.sinirlar.count {
+                    leftOffset = item.startUTF16 == 0
+                        ? 0
+                        : measurement.sinirlar[item.startUTF16 - 1]
+                    rightOffset = measurement.sinirlar[item.endUTF16 - 1]
+                } else {
+                    let denominator = Double(max(1, rowText.utf16.count))
+                    leftOffset = lineWidth * Double(item.startUTF16) / denominator
+                    rightOffset = lineWidth * Double(item.endUTF16) / denominator
+                }
+
+                let wordCenterX = min(
+                    virtualWidth,
+                    max(0, Int((lineLeft + ((leftOffset + rightOffset) / 2)).rounded()))
+                )
+                let wordStartMs = min(
+                    eventDurationMs,
+                    max(0, Int(((wordStart - segStart) * 1000).rounded()))
+                )
+                let wordEndMs = min(
+                    eventDurationMs,
+                    max(wordStartMs + 10, Int(((wordEnd - segStart) * 1000).rounded()))
+                )
+                let boldInEnd = min(eventDurationMs, wordStartMs + 10)
+                let boldOutEnd = min(eventDurationMs, wordEndMs + 10)
+                let weightContrastTags = needsSyntheticWeight
+                    ? "\\3c&HFFFFFF&\\bord0.8\\shad0"
+                    : ""
+                let tags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
+                    "\\fs\(fontSize)\\b1\(weightContrastTags)\(extraTags)\\alpha&HFF&" +
+                    "\\t(\(wordStartMs),\(boldInEnd),\\alpha&H00&)" +
+                    "\\t(\(wordEndMs),\(boldOutEnd),\\alpha&HFF&)}"
+                result += "Dialogue: 2,\(t0),\(t1),Default,,0,0,0,,\(tags)\(item.text)\n"
+            }
+        }
+        return result
+    }
+
+    // Bitişik el yazısı fontlarında iki görsel satırın karaoke süpürmesini, metnin
+    // içine harf etiketi sokmadan ayrı ayrı üretir. Her satır tek parça şekillendiği
+    // için harf bağları korunur; iki satır da aynı segment boyunca birlikte görünür.
+    func makeConnectedKaraokeRowsDialogues(
+        group: [WordTimestamp],
+        inlineLineBreaks: Set<UUID>,
+        segStart: Double,
+        segEnd: Double,
+        fontName: String,
+        fontSize: Int,
+        marginV: Int,
+        virtualWidth: Int,
+        virtualHeight: Int,
+        extraTags: String = ""
+    ) -> String {
+        struct CharacterTiming {
+            let endUTF16: Int
+            let startMs: Int
+            let endMs: Int
+        }
+
+        let rows = visualLineGroups(
+            for: group,
+            inlineLineBreaks: inlineLineBreaks
+        )
+        guard rows.count > 1, segEnd > segStart else { return "" }
+
+        let t0 = formatASSTime(segStart)
+        let t1 = formatASSTime(segEnd)
+        let centerX = virtualWidth / 2
+        let baselineY = max(0, virtualHeight - marginV)
+        let rowGap = max(1, fontSize)
+        let maximumWidth = max(24.0, Double(virtualWidth - 20))
+        var result = ""
+
+        for (rowIndex, row) in rows.enumerated() {
+            var rowText = ""
+            var timings: [CharacterTiming] = []
+            var utf16Cursor = 0
+            let cleanedWords = row.compactMap { word -> (WordTimestamp, String)? in
+                let text = cleanASSWord(word.text)
+                return text.isEmpty ? nil : (word, text)
+            }
+            guard !cleanedWords.isEmpty else { continue }
+
+            for (wordIndex, item) in cleanedWords.enumerated() {
+                if wordIndex > 0 {
+                    rowText += " "
+                    utf16Cursor += 1
+                }
+                let wordStart = max(segStart, item.0.start)
+                let wordEnd = min(segEnd, max(wordStart + 0.05, item.0.end))
+                let characters = Array(item.1)
+                let characterDuration = max(
+                    0.01,
+                    (wordEnd - wordStart) / Double(max(1, characters.count))
+                )
+                for (characterIndex, character) in characters.enumerated() {
+                    rowText.append(character)
+                    utf16Cursor += String(character).utf16.count
+                    let startMs = max(
+                        0,
+                        Int((
+                            wordStart
+                                + (Double(characterIndex) * characterDuration)
+                                - segStart
+                        ) * 1000)
+                    )
+                    let endMs = max(
+                        startMs + 10,
+                        Int((
+                            wordStart
+                                + (Double(characterIndex + 1) * characterDuration)
+                                - segStart
+                        ) * 1000)
+                    )
+                    timings.append(
+                        CharacterTiming(
+                            endUTF16: utf16Cursor,
+                            startMs: startMs,
+                            endMs: endMs
+                        )
+                    )
+                }
             }
 
-            let wordCenterX = min(
-                virtualWidth,
-                max(0, Int((lineLeft + ((leftOffset + rightOffset) / 2)).rounded()))
+            let measurement = harfSinirlariniOlc(
+                metin: rowText,
+                fontName: fontName,
+                assFontSize: fontSize
             )
+            let estimatedWidth = min(
+                maximumWidth,
+                max(24.0, Double(max(1, rowText.utf16.count)) * Double(fontSize) * 0.56)
+            )
+            let lineWidth = measurement?.genislik ?? estimatedWidth
+            let lineLeft = (Double(virtualWidth) - lineWidth) / 2
+            let rowY = baselineY - ((rows.count - rowIndex - 1) * rowGap)
 
-            let wordStartMs = min(
-                eventDurationMs,
-                max(0, Int(((wordStart - segStart) * 1000).rounded()))
-            )
-            let wordEndMs = min(
-                eventDurationMs,
-                max(wordStartMs + 10, Int(((wordEnd - segStart) * 1000).rounded()))
-            )
-            let boldInEnd = min(eventDurationMs, wordStartMs + 10)
-            let boldOutEnd = min(eventDurationMs, wordEndMs + 10)
-            let weightContrastTags = needsSyntheticWeight
-                ? "\\3c&HFFFFFF&\\bord0.8\\shad0"
-                : ""
-            let tags = "{\\an2\\pos(\(wordCenterX),\(baselineY))" +
-                "\\fs\(fontSize)\\b1\(weightContrastTags)\(extraTags)\\alpha&HFF&" +
-                "\\t(\(wordStartMs),\(boldInEnd),\\alpha&H00&)" +
-                "\\t(\(wordEndMs),\(boldOutEnd),\\alpha&HFF&)}"
-            result += "Dialogue: 2,\(t0),\(t1),Default,,0,0,0,,\(tags)\(item.text)\n"
+            let commonTags = "\\q2\\an2\\pos(\(centerX),\(rowY))" +
+                "\\fs\(fontSize)\(extraTags)"
+            result += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,," +
+                "{\(commonTags)\\alpha&HA0&}\(rowText)\n"
+
+            var sweepTags = "{\(commonTags)" +
+                "\\clip(0,0,\(virtualWidth),\(virtualHeight))"
+            var timingCursor = 0
+            for timing in timings {
+                let startMs = max(timingCursor, timing.startMs)
+                let endMs = max(startMs + 10, timing.endMs)
+                timingCursor = endMs
+                let offset: Double
+                if let measurement,
+                   timing.endUTF16 > 0,
+                   timing.endUTF16 <= measurement.sinirlar.count {
+                    offset = measurement.sinirlar[timing.endUTF16 - 1]
+                } else {
+                    offset = lineWidth * Double(timing.endUTF16) / Double(max(1, rowText.utf16.count))
+                }
+                let x = min(
+                    virtualWidth,
+                    max(0, Int((lineLeft + offset).rounded()))
+                )
+                sweepTags += "\\t(\(startMs),\(endMs)," +
+                    "\\clip(\(x),0,\(virtualWidth),\(virtualHeight)))"
+            }
+            sweepTags += "}"
+            result += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,," +
+                "\(sweepTags)\(rowText)\n"
         }
         return result
     }
@@ -4298,7 +4494,8 @@ class VideoProcessor: ObservableObject {
         virtualWidth: Int,
         virtualHeight: Int,
         accent: KineticAccent = .gold,
-        customColorHex: String = KineticAccent.defaultCustomHex
+        customColorHex: String = KineticAccent.defaultCustomHex,
+        inlineLineBreaks: Set<UUID> = []
     ) -> String {
         struct RevealEvent {
             let start: Double
@@ -4310,6 +4507,7 @@ class VideoProcessor: ObservableObject {
 
         var events: [RevealEvent] = []
         var cumulative = ""
+        var previousWordEndedVisualRow = false
         for word in group {
             let clean = cleanASSWord(word.text)
             guard !clean.isEmpty else { continue }
@@ -4317,7 +4515,7 @@ class VideoProcessor: ObservableObject {
             guard !characters.isEmpty else { continue }
 
             if !cumulative.isEmpty {
-                cumulative += " "
+                cumulative += previousWordEndedVisualRow ? "\\N" : " "
             }
 
             let wordStart = max(segStart, word.start)
@@ -4344,6 +4542,7 @@ class VideoProcessor: ObservableObject {
                 )
                 cumulative.append(character)
             }
+            previousWordEndedVisualRow = inlineLineBreaks.contains(word.id)
         }
 
         guard !events.isEmpty else { return "" }
@@ -4393,7 +4592,8 @@ class VideoProcessor: ObservableObject {
         virtualWidth: Int,
         virtualHeight: Int,
         accent: KineticAccent = .gold,
-        customColorHex: String = KineticAccent.defaultCustomHex
+        customColorHex: String = KineticAccent.defaultCustomHex,
+        inlineLineBreaks: Set<UUID> = []
     ) -> String {
         struct RevealEvent {
             let start: Double
@@ -4404,21 +4604,23 @@ class VideoProcessor: ObservableObject {
         guard segEnd > segStart else { return "" }
 
         var events: [RevealEvent] = []
-        var completedWords: [String] = []
+        var completedText = ""
+        var previousWordEndedVisualRow = false
         for word in group {
             let clean = cleanASSWord(word.text)
             guard !clean.isEmpty else { continue }
-            let leading = completedWords.isEmpty
-                ? ""
-                : completedWords.joined(separator: " ") + " "
+            if !completedText.isEmpty {
+                completedText += previousWordEndedVisualRow ? "\\N" : " "
+            }
             events.append(
                 RevealEvent(
                     start: min(segEnd, max(segStart, word.start)),
-                    leading: leading,
+                    leading: completedText,
                     latest: clean
                 )
             )
-            completedWords.append(clean)
+            completedText += clean
+            previousWordEndedVisualRow = inlineLineBreaks.contains(word.id)
         }
 
         guard !events.isEmpty else { return "" }
@@ -4456,10 +4658,12 @@ class VideoProcessor: ObservableObject {
     }
 
     // 3. ASS Altyazı Dosyası Oluşturma (iOS 16+ uyumlu asenkron yapı)
-    // lineBreaks: kullanıcının onayladığı satır sonları (boşsa otomatik öneri kullanılır)
+    // lineBreaks zaman cümlelerini, inlineLineBreaks ise aynı anda görünen cümle
+    // içindeki görsel alt satırı belirler.
     func generateASS(
         words: [WordTimestamp],
         lineBreaks: Set<UUID>,
+        inlineLineBreaks: Set<UUID> = [],
         fontName: String,
         fontSize: Int,
         marginV: Int,
@@ -4588,22 +4792,29 @@ class VideoProcessor: ObservableObject {
             if segEnd < segStart + 0.2 { segEnd = segStart + 0.2 }
             cursor = segEnd
 
-            let lineText = seg.group.map {
-                $0.text
-                    .replacingOccurrences(of: "\\", with: "")
-                    .replacingOccurrences(of: "{", with: "")
-                    .replacingOccurrences(of: "}", with: "")
-                    .replacingOccurrences(of: "\n", with: " ")
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-            }.filter { !$0.isEmpty }.joined(separator: " ")
+            let visualRows = visualLineGroups(
+                for: seg.group,
+                inlineLineBreaks: inlineLineBreaks
+            )
+            let cleanVisualRows = visualRows.map { row in
+                row.compactMap { word -> String? in
+                    let text = cleanASSWord(word.text)
+                    return text.isEmpty ? nil : text
+                }
+            }.filter { !$0.isEmpty }
+            let lineText = cleanVisualRows
+                .map { $0.joined(separator: " ") }
+                .joined(separator: "\\N")
             guard !lineText.isEmpty else { continue }
 
             let maximumLineWidth = max(1, Double(virtualWidth - 40))
-            let measuredWidth = harfSinirlariniOlc(
-                metin: lineText,
-                fontName: fontName,
-                assFontSize: fontSize
-            )?.genislik ?? 0
+            let measuredWidth = cleanVisualRows.map { row in
+                harfSinirlariniOlc(
+                    metin: row.joined(separator: " "),
+                    fontName: fontName,
+                    assFontSize: fontSize
+                )?.genislik ?? 0
+            }.max() ?? 0
             let lineFontSize = fittedFontSize(
                 requested: fontSize,
                 measuredWidth: measuredWidth,
@@ -4621,7 +4832,8 @@ class VideoProcessor: ObservableObject {
                         virtualWidth: virtualWidth,
                         virtualHeight: virtualHeight,
                         accent: kineticAccent,
-                        customColorHex: kineticCustomColorHex
+                        customColorHex: kineticCustomColorHex,
+                        inlineLineBreaks: inlineLineBreaks
                     )
                 } else {
                     assContent += makeCenteredRevealDialogues(
@@ -4633,7 +4845,8 @@ class VideoProcessor: ObservableObject {
                         virtualWidth: virtualWidth,
                         virtualHeight: virtualHeight,
                         accent: kineticAccent,
-                        customColorHex: kineticCustomColorHex
+                        customColorHex: kineticCustomColorHex,
+                        inlineLineBreaks: inlineLineBreaks
                     )
                 }
                 continue
@@ -4660,13 +4873,14 @@ class VideoProcessor: ObservableObject {
                     letterStyle: kineticLetterStyle,
                     overlayStyle: kineticOverlayStyle,
                     lyricTrackingMode: lyricTrackingMode,
+                    inlineLineBreaks: inlineLineBreaks,
                     repeatCount: kineticPlans[index].repeatCount,
                     scenePlan: kineticPlans[index]
                 )
                 continue
             }
 
-            if karaokeMode == .kinetic && bitisikFont {
+            if karaokeMode == .kinetic && bitisikFont && visualRows.count == 1 {
                 let fittedLineWidth = harfSinirlariniOlc(
                     metin: lineText,
                     fontName: fontName,
@@ -4711,7 +4925,8 @@ class VideoProcessor: ObservableObject {
                     fontSize: lineFontSize,
                     marginV: marginV,
                     virtualWidth: virtualWidth,
-                    virtualHeight: virtualHeight
+                    virtualHeight: virtualHeight,
+                    inlineLineBreaks: inlineLineBreaks
                 )
                 continue
             }
@@ -4724,11 +4939,30 @@ class VideoProcessor: ObservableObject {
                 continue
             }
 
+            if bitisikFont && visualRows.count > 1 {
+                assContent += makeConnectedKaraokeRowsDialogues(
+                    group: seg.group,
+                    inlineLineBreaks: inlineLineBreaks,
+                    segStart: segStart,
+                    segEnd: segEnd,
+                    fontName: fontName,
+                    fontSize: lineFontSize,
+                    marginV: marginV,
+                    virtualWidth: virtualWidth,
+                    virtualHeight: virtualHeight,
+                    extraTags: lineMotionTags
+                )
+                continue
+            }
+
             var effectText = "{\\fs\(lineFontSize)\(lineMotionTags)}"   // normal fontlar: tek katman; bitişik fontlarda yedek üst katman
             var plainText = ""    // bitişik fontlar: etiketsiz tam satır metni
             var harfZamanlar: [(sonUTF16: Int, s: Int, e: Int)] = []  // süpürme sınırı için harf zamanları
             var utf16Pos = 0
-            for word in seg.group {
+            let renderableWords = seg.group.filter {
+                !cleanASSWord($0.text).isEmpty
+            }
+            for (wordIndex, word) in renderableWords.enumerated() {
                 // ASS formatını bozabilecek özel karakterleri temizle ({, }, \ ve satır sonları)
                 let cleanText = word.text
                     .replacingOccurrences(of: "\\", with: "")
@@ -4758,9 +4992,13 @@ class VideoProcessor: ObservableObject {
                     harfZamanlar.append((utf16Pos, lStartMs, max(lStartMs + 10, lEndMs)))
                 }
 
-                effectText += " "
-                plainText += cleanText + " "
-                utf16Pos += 1
+                plainText += cleanText
+                if wordIndex < renderableWords.count - 1 {
+                    let separator = inlineLineBreaks.contains(word.id) ? "\\N" : " "
+                    effectText += separator
+                    plainText += separator
+                    if separator == " " { utf16Pos += 1 }
+                }
             }
 
             if plainText.trimmingCharacters(in: .whitespaces).isEmpty { continue }

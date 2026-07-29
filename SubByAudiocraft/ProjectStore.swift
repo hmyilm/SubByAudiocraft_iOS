@@ -12,6 +12,8 @@ struct SavedProject: Identifiable, Codable {
     var baslik: String
     var kelimeler: [VideoProcessor.WordTimestamp]
     var satirSonlari: [UUID]
+    // Optional tutulur: eski projelerde aynı cümle içi görsel satır kırılması yoktur.
+    var icSatirSonlari: [UUID]?
     var fontAdi: String
     var fontBoyu: Double
     var dikeyKonum: Double
@@ -64,6 +66,10 @@ struct SavedProject: Identifiable, Codable {
 
     var kineticEmphasisWordIDs: Set<UUID> {
         Set(kinetikVurgular ?? [])
+    }
+
+    var inlineLineBreakIDs: Set<UUID> {
+        Set(icSatirSonlari ?? [])
     }
 
     var kineticLetterStyle: KineticLetterStyle {
@@ -151,6 +157,7 @@ final class ProjectStore: ObservableObject {
     func olustur(videoURL kaynak: URL,
                  kelimeler: [VideoProcessor.WordTimestamp],
                  satirSonlari: Set<UUID>,
+                 icSatirSonlari: Set<UUID>,
                  fontAdi: String,
                  fontBoyu: Double,
                  dikeyKonum: Double,
@@ -195,6 +202,9 @@ final class ProjectStore: ObservableObject {
             baslik: Self.baslikUret(kelimeler),
             kelimeler: kelimeler,
             satirSonlari: Array(satirSonlari),
+            icSatirSonlari: icSatirSonlari.sorted {
+                $0.uuidString < $1.uuidString
+            },
             fontAdi: fontAdi,
             fontBoyu: fontBoyu,
             dikeyKonum: dikeyKonum,
@@ -237,6 +247,7 @@ final class ProjectStore: ObservableObject {
     func guncelle(id: UUID,
                   kelimeler: [VideoProcessor.WordTimestamp],
                   satirSonlari: Set<UUID>,
+                  icSatirSonlari: Set<UUID>,
                   fontAdi: String,
                   fontBoyu: Double,
                   dikeyKonum: Double,
@@ -254,6 +265,9 @@ final class ProjectStore: ObservableObject {
         var proje = projeler[idx]
         proje.kelimeler = kelimeler
         proje.satirSonlari = Array(satirSonlari)
+        proje.icSatirSonlari = icSatirSonlari.sorted {
+            $0.uuidString < $1.uuidString
+        }
         proje.fontAdi = fontAdi
         proje.fontBoyu = fontBoyu
         proje.dikeyKonum = dikeyKonum

@@ -809,6 +809,7 @@ struct SubtitlePreviewPlayer: View {
     let sampleText: String
     let height: CGFloat
     let karaokeWords: [VideoProcessor.WordTimestamp]
+    let inlineLineBreaks: Set<UUID>
     let playbackTime: Double
     let isMuted: Bool
     let karaokeMode: KaraokeMode
@@ -831,6 +832,7 @@ struct SubtitlePreviewPlayer: View {
         sampleText: String,
         height: CGFloat,
         karaokeWords: [VideoProcessor.WordTimestamp] = [],
+        inlineLineBreaks: Set<UUID> = [],
         playbackTime: Double = 0,
         isMuted: Bool = true,
         karaokeMode: KaraokeMode = .classic,
@@ -852,6 +854,7 @@ struct SubtitlePreviewPlayer: View {
         self.sampleText = sampleText
         self.height = height
         self.karaokeWords = karaokeWords
+        self.inlineLineBreaks = inlineLineBreaks
         self.playbackTime = playbackTime
         self.isMuted = isMuted
         self.karaokeMode = karaokeMode
@@ -903,12 +906,14 @@ struct SubtitlePreviewPlayer: View {
                             if lyricTrackingMode == .centeredWordReveal {
                                 CenteredWordRevealPreview(
                                     words: previewWords,
+                                    inlineLineBreaks: inlineLineBreaks,
                                     playbackTime: revealPlaybackTime,
                                     accent: revealAccent
                                 )
                             } else {
                                 CenteredRevealPreview(
                                     words: previewWords,
+                                    inlineLineBreaks: inlineLineBreaks,
                                     playbackTime: revealPlaybackTime,
                                     accent: revealAccent
                                 )
@@ -936,15 +941,20 @@ struct SubtitlePreviewPlayer: View {
                                 intensity: kineticIntensity,
                                 letterStyle: kineticLetterStyle,
                                 overlayStyle: kineticOverlayStyle,
-                                trackingMode: lyricTrackingMode
+                                trackingMode: lyricTrackingMode,
+                                manualRows: manualKineticRows(for: previewWords)
                             )
                         } else if karaokeWords.isEmpty {
                             Text(sampleText)
                                 .foregroundColor(.white)
                         } else {
-                            HStack(spacing: max(2, geo.size.height / 100)) {
-                                ForEach(Array(karaokeWords.enumerated()), id: \.element.id) { item in
-                                    let word = item.element
+                            VStack(spacing: max(2, geo.size.height / 120)) {
+                                ForEach(
+                                    Array(classicPreviewRows.enumerated()),
+                                    id: \.offset
+                                ) { row in
+                                    HStack(spacing: max(2, geo.size.height / 100)) {
+                                        ForEach(row.element) { word in
                                     let isActive = lyricTrackingMode == .karaoke
                                         && playbackTime >= word.start
                                         && playbackTime < word.end
@@ -986,6 +996,8 @@ struct SubtitlePreviewPlayer: View {
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .center)
+                                }
+                        }
                         }
                     }
                         .font(.custom(fontName, size: CGFloat(fontSize) * (geo.size.height / 1080.0)))
@@ -1009,6 +1021,29 @@ struct SubtitlePreviewPlayer: View {
         .background(Color.black)
         .cornerRadius(14)
         .clipped()
+    }
+
+    private var classicPreviewRows: [[VideoProcessor.WordTimestamp]] {
+        VideoProcessor.shared.visualLineGroups(
+            for: karaokeWords,
+            inlineLineBreaks: inlineLineBreaks
+        )
+    }
+
+    private func manualKineticRows(
+        for words: [VideoProcessor.WordTimestamp]
+    ) -> [[Int]]? {
+        let rows = VideoProcessor.shared.visualLineGroups(
+            for: words,
+            inlineLineBreaks: inlineLineBreaks
+        )
+        guard rows.count > 1 else { return nil }
+        let indexByID = Dictionary(
+            uniqueKeysWithValues: words.enumerated().map { ($0.element.id, $0.offset) }
+        )
+        return rows.map { row in
+            row.compactMap { indexByID[$0.id] }
+        }
     }
 
     private var sampleTimingWords: [VideoProcessor.WordTimestamp] {
@@ -1036,6 +1071,7 @@ struct SubtitlePreviewPlayer: View {
 
 private struct CenteredRevealPreview: View {
     let words: [VideoProcessor.WordTimestamp]
+    let inlineLineBreaks: Set<UUID>
     let playbackTime: Double
     let accent: Color
 
@@ -1047,7 +1083,7 @@ private struct CenteredRevealPreview: View {
             Text(reveal.latest)
                 .foregroundColor(accent)
         )
-            .lineLimit(1)
+            .lineLimit(2)
             .minimumScaleFactor(0.45)
             .frame(maxWidth: .infinity, alignment: .center)
             .animation(.easeOut(duration: 0.09), value: reveal.full)
@@ -1055,6 +1091,7 @@ private struct CenteredRevealPreview: View {
 
     private var reveal: (leading: String, latest: String, full: String) {
         var text = ""
+        var previousWordEndedVisualRow = false
 
         for word in words {
             let clean = word.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1062,7 +1099,7 @@ private struct CenteredRevealPreview: View {
             guard playbackTime >= word.start else { break }
 
             if !text.isEmpty {
-                text += " "
+                text += previousWordEndedVisualRow ? "\n" : " "
             }
 
             let characters = Array(clean)
@@ -1082,6 +1119,7 @@ private struct CenteredRevealPreview: View {
             if count < characters.count {
                 break
             }
+            previousWordEndedVisualRow = inlineLineBreaks.contains(word.id)
         }
 
         guard let latest = text.last else {
@@ -1105,20 +1143,25 @@ private struct CenteredWordRevealPreview: View {
     }
 
     let words: [VideoProcessor.WordTimestamp]
+    let inlineLineBreaks: Set<UUID>
     let playbackTime: Double
     let accent: Color
 
     var body: some View {
-        HStack(spacing: 5) {
-            ForEach(revealedWords) { word in
-                Text(word.text)
-                    .foregroundColor(word.id == revealedWords.last?.id ? accent : .white)
-                    .transition(
-                        .asymmetric(
-                            insertion: .scale(scale: 1.12).combined(with: .opacity),
-                            removal: .opacity
-                        )
-                    )
+        VStack(spacing: 3) {
+            ForEach(Array(revealedRows.enumerated()), id: \.offset) { row in
+                HStack(spacing: 5) {
+                    ForEach(row.element) { word in
+                        Text(word.text)
+                            .foregroundColor(word.id == revealedWords.last?.id ? accent : .white)
+                            .transition(
+                                .asymmetric(
+                                    insertion: .scale(scale: 1.12).combined(with: .opacity),
+                                    removal: .opacity
+                                )
+                            )
+                    }
+                }
             }
         }
         .lineLimit(1)
@@ -1137,6 +1180,20 @@ private struct CenteredWordRevealPreview: View {
             return RevealedWord(id: word.id, text: clean)
         }
     }
+
+    private var revealedRows: [[RevealedWord]] {
+        var rows: [[RevealedWord]] = []
+        var current: [RevealedWord] = []
+        for word in revealedWords {
+            current.append(word)
+            if inlineLineBreaks.contains(word.id), word.id != revealedWords.last?.id {
+                rows.append(current)
+                current = []
+            }
+        }
+        if !current.isEmpty { rows.append(current) }
+        return rows
+    }
 }
 
 private struct KineticPreviewLockup: View {
@@ -1152,6 +1209,7 @@ private struct KineticPreviewLockup: View {
     let letterStyle: KineticLetterStyle
     let overlayStyle: KineticOverlayStyle
     let trackingMode: LyricTrackingMode
+    let manualRows: [[Int]]?
 
     private var playbackIndex: Int? {
         words.firstIndex { playbackTime >= $0.start && playbackTime < $0.end }
@@ -1164,6 +1222,9 @@ private struct KineticPreviewLockup: View {
     }
 
     private var visibleRows: [[Int]] {
+        if let manualRows {
+            return manualRows
+        }
         if plan.scene == .focusCut || plan.scene == .impactSequence {
             return [[focusedIndex]]
         }
@@ -1484,7 +1545,7 @@ private struct KineticPreviewLockup: View {
         let scale: Double
         switch plan.scene {
         case .phraseBuild:
-            scale = plan.rows.count > 1 ? 0.88 : 1
+            scale = (manualRows ?? plan.rows).count > 1 ? 0.88 : 1
         case .captionWindow:
             scale = 1.04
         case .focusCut:
