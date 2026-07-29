@@ -10,6 +10,7 @@ struct LineEditView: View {
     @State private var editingWordID: UUID? = nil
     @State private var editText: String = ""
     @State private var showEditAlert = false
+    @State private var previousBreaks: Set<UUID>? = nil
 
     private var lines: [[VideoProcessor.WordTimestamp]] {
         var groups: [[VideoProcessor.WordTimestamp]] = []
@@ -28,16 +29,16 @@ struct LineEditView: View {
     var body: some View {
         VStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(icon: "text.alignleft", title: "Satır Düzeni")
+                SectionHeader(icon: "text.alignleft", title: "Sözleri Satırlara Böl")
 
-                Text("Her satır ekranda birlikte görünür. Kelimeye dokun: satır orada bölünür/birleşir. Basılı tut: kelimeyi düzenle veya sil.")
+                Text("Kelimeye dokunarak yazımı düzelt. Yanındaki dönüş düğmesiyle cümlenin nerede biteceğini belirle.")
                     .font(.caption)
                     .foregroundColor(.gray)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                // Hızlı bölme: türkü hece ölçüsüne göre 2'li, 3'lü, 4'lü, 5'li kelime grupları
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        Text("Hızlı:")
+                        Text("Hazır düzen")
                             .font(.caption.weight(.semibold))
                             .foregroundColor(.gray)
                         ForEach([2, 3, 4, 5], id: \.self) { n in
@@ -49,21 +50,41 @@ struct LineEditView: View {
                                     .font(.caption.weight(.bold))
                                     .foregroundColor(.black)
                                     .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
+                                    .frame(minHeight: 44)
                                     .background(Capsule().fill(Theme.yellow))
                             }
                             .buttonStyle(.plain)
                         }
                         Button {
                             Theme.haptic()
+                            previousBreaks = breaks
                             breaks = VideoProcessor.shared.autoLineBreaks(for: words)
                         } label: {
                             Text("Otomatik")
                                 .font(.caption.weight(.bold))
                                 .foregroundColor(Theme.yellow)
                                 .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
+                                .frame(minHeight: 44)
                                 .background(Capsule().stroke(Theme.yellow, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                HStack {
+                    Label("Silme işlemi için kelimeye basılı tutabilirsin.", systemImage: "hand.tap")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                    Spacer()
+                    if previousBreaks != nil {
+                        Button {
+                            Theme.haptic()
+                            undoLastBreakChange()
+                        } label: {
+                            Label("Geri Al", systemImage: "arrow.uturn.backward")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(Theme.yellow)
+                                .frame(minHeight: 44)
                         }
                         .buttonStyle(.plain)
                     }
@@ -116,36 +137,43 @@ struct LineEditView: View {
 
     private func wordChip(_ word: VideoProcessor.WordTimestamp) -> some View {
         let endsLine = breaks.contains(word.id) && word.id != words.last?.id
-        return Button {
-            Theme.haptic()
-            toggleBreak(after: word)
-        } label: {
-            HStack(spacing: 4) {
+        return HStack(spacing: 0) {
+            Button {
+                Theme.haptic()
+                beginEditing(word)
+            } label: {
                 Text(word.text)
                     .font(.callout)
                     .foregroundColor(.white)
-                if endsLine {
-                    Image(systemName: "return")
-                        .font(.caption2)
-                        .foregroundColor(Theme.yellow)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("\(word.text), düzenle")
+
+            if word.id != words.last?.id {
+                Button {
+                    Theme.haptic()
+                    toggleBreak(after: word)
+                } label: {
+                    Image(systemName: endsLine ? "return.circle.fill" : "return.circle")
+                        .font(.body)
+                        .foregroundColor(endsLine ? Theme.yellow : .gray)
+                        .frame(width: 44, height: 44)
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel(endsLine ? "Satır sonunu kaldır" : "Buraya satır sonu ekle")
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(Theme.field)
-            )
         }
-        .buttonStyle(.plain)
+        .background(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Theme.field)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .stroke(endsLine ? Theme.yellow.opacity(0.7) : Color.clear, lineWidth: 1)
+        )
         .contextMenu {
-            Button {
-                editingWordID = word.id
-                editText = word.text
-                showEditAlert = true
-            } label: {
-                Label("Kelimeyi Düzenle", systemImage: "pencil")
-            }
             Button(role: .destructive) {
                 deleteWord(word.id)
             } label: {
@@ -154,8 +182,15 @@ struct LineEditView: View {
         }
     }
 
+    private func beginEditing(_ word: VideoProcessor.WordTimestamp) {
+        editingWordID = word.id
+        editText = word.text
+        showEditAlert = true
+    }
+
     private func toggleBreak(after word: VideoProcessor.WordTimestamp) {
         guard word.id != words.last?.id else { return }
+        previousBreaks = breaks
         if breaks.contains(word.id) {
             breaks.remove(word.id)
         } else {
@@ -164,11 +199,18 @@ struct LineEditView: View {
     }
 
     private func splitEvery(_ n: Int) {
+        previousBreaks = breaks
         var newBreaks = Set<UUID>()
         for (index, word) in words.enumerated() where (index + 1) % n == 0 {
             newBreaks.insert(word.id)
         }
         breaks = newBreaks
+    }
+
+    private func undoLastBreakChange() {
+        guard let previousBreaks else { return }
+        breaks = previousBreaks
+        self.previousBreaks = nil
     }
 
     private func deleteWord(_ id: UUID) {

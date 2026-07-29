@@ -21,7 +21,7 @@ struct SuccessView: View {
                 .fontWeight(.bold)
                 .foregroundColor(.white)
 
-            Text("Altyazılı videon galerine kaydedildi.\nBeğenmediysen düzenlemeye geri dönebilirsin;\nprojen Geçmiş'te de saklanıyor.")
+            Text("Altyazılı videon galerine kaydedildi.\nİstersen düzenlemeye geri dönebilirsin;\nprojen Projeler bölümünde saklanıyor.")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .multilineTextAlignment(.center)

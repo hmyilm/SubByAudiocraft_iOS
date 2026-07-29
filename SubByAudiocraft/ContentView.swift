@@ -115,9 +115,11 @@ struct ContentView: View {
 
                 ScrollView {
                     VStack(spacing: 16) {
-                        StepIndicator(currentIndex: stepIndex)
-                            .padding(.horizontal, 24)
-                            .padding(.top, 4)
+                        if currentStep != .processing {
+                            StepIndicator(currentIndex: stepIndex)
+                                .padding(.horizontal, 24)
+                                .padding(.top, 4)
+                        }
 
                         currentStepContent
 
@@ -200,20 +202,8 @@ struct ContentView: View {
         SelectVideoView(
             selectedItem: $selectedItem,
             player: player,
-            fontName: $fontName,
-            fontSize: $fontSize,
-            marginV: $marginV,
-            karaokeMode: karaokeModeBinding,
-            lyricTrackingMode: lyricTrackingModeBinding,
-            kineticStyle: kineticStyleBinding,
-            kineticAccent: kineticAccentBinding,
-            kineticCustomColorHex: $kineticCustomColorHex,
-            kineticIntensity: kineticIntensityBinding,
-            kineticLetterStyle: kineticLetterStyleBinding,
-            kineticOverlayStyle: kineticOverlayStyleBinding,
             analysisQuality: analysisQualityBinding,
-            isLoadingVideo: isLoadingVideo,
-            fonts: FontCatalog.hepsi
+            isLoadingVideo: isLoadingVideo
         )
     }
 
@@ -338,7 +328,7 @@ struct ContentView: View {
             } label: {
                 HStack(spacing: 5) {
                     Image(systemName: "clock.arrow.circlepath")
-                    Text("Geçmiş")
+                    Text("Projeler")
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundColor(Theme.yellow)
@@ -373,8 +363,8 @@ struct ContentView: View {
         BottomBarSurface {
             Button(action: startAnalysis) {
                 Label(
-                    isLoadingVideo ? "Video Yükleniyor" : "Analizi Başlat",
-                    systemImage: isLoadingVideo ? "hourglass" : "wand.and.stars"
+                    isLoadingVideo ? "Video Yükleniyor" : "Sözleri Çıkar",
+                    systemImage: isLoadingVideo ? "hourglass" : "text.badge.plus"
                 )
             }
             .buttonStyle(
@@ -389,7 +379,7 @@ struct ContentView: View {
     private var lineEditorBottomBar: some View {
         BottomBarSurface {
             Button(action: confirmLineLayout) {
-                Label("Satırları Onayla", systemImage: "checkmark.circle.fill")
+                Label("Tasarımı Aç", systemImage: "paintbrush.fill")
             }
             .buttonStyle(PrimaryButtonStyle())
 
@@ -420,7 +410,7 @@ struct ContentView: View {
             } else {
                 Button(action: burnFinalVideo) {
                     Label(
-                        "Videoya Göm ve Kaydet",
+                        "Videoyu Oluştur ve Kaydet",
                         systemImage: "square.and.arrow.down"
                     )
                 }
@@ -569,7 +559,7 @@ struct ContentView: View {
                     self.videoURL = movie.url
                     self.player = AVPlayer(url: movie.url)
                     self.player?.isMuted = true
-                    self.statusMessage = "Video hazır. Analiz kalitesini ve altyazı stilini seçebilirsin."
+                    self.statusMessage = "Video hazır. Sözleri çıkarmaya başlayabilirsin."
                 case .success(nil):
                     self.statusMessage = "Hata: Seçilen video yüklenemedi."
                 case .failure(let error):
@@ -954,7 +944,7 @@ struct ContentView: View {
 
         showHistory = false
         currentStep = .editLines
-        statusMessage = "Proje geçmişten açıldı. Düzenleyip yeniden dışa aktarabilirsin."
+        statusMessage = "Proje açıldı. Düzenleyip yeniden dışa aktarabilirsin."
     }
 }
 

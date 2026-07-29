@@ -34,7 +34,7 @@ struct HistoryView: View {
                     }
                 }
             }
-            .navigationTitle("Geçmiş")
+            .navigationTitle("Projeler")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -95,21 +95,28 @@ struct HistoryView: View {
                     .foregroundColor(.gray)
 
                 HStack(spacing: 6) {
-                    Text("\(proje.kelimeler.count) kelime")
+                    Label("\(proje.kelimeler.count) kelime", systemImage: "text.word.spacing")
                     Text("•")
                     Label(
-                        proje.karaokeMode == .kinetic
-                            ? "\(proje.karaokeMode.title) · \(proje.lyricTrackingMode.title) · \(proje.kineticStyle.title) · \(proje.kineticIntensity.title) · \(proje.kineticLetterStyle.title) · \(proje.kineticOverlayStyle.title)"
-                            : "\(proje.karaokeMode.title) · \(proje.lyricTrackingMode.title)",
+                        proje.karaokeMode == .kinetic ? "Kinetik" : "Klasik",
                         systemImage: proje.karaokeMode == .kinetic ? "sparkles" : "captions.bubble"
                     )
                     if proje.disaAktarimSayisi > 0 {
                         Text("•")
-                        Text("\(proje.disaAktarimSayisi) kez dışa aktarıldı")
+                        Label("\(proje.disaAktarimSayisi)", systemImage: "checkmark.circle")
                     }
                 }
                 .font(.caption2)
                 .foregroundColor(Theme.yellow.opacity(0.85))
+
+                Text(
+                    proje.karaokeMode == .kinetic
+                        ? "\(proje.lyricTrackingMode.title) · \(proje.kineticStyle.title) · \(proje.kineticIntensity.title)"
+                        : proje.lyricTrackingMode.title
+                )
+                .font(.caption2)
+                .foregroundColor(.gray)
+                .lineLimit(1)
             }
 
             Spacer(minLength: 0)
@@ -128,7 +135,7 @@ struct HistoryView: View {
                     Image(systemName: "trash")
                         .font(.subheadline)
                         .foregroundColor(.red.opacity(0.8))
-                        .padding(8)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Projeyi sil")

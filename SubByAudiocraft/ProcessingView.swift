@@ -25,6 +25,7 @@ struct ProcessingView: View {
     var onCancel: (() -> Void)? = nil
 
     @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 28) {
@@ -42,13 +43,26 @@ struct ProcessingView: View {
                     .foregroundColor(Theme.yellow)
             }
             .onAppear {
-                withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
-                    pulse = true
+                if !reduceMotion {
+                    withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) {
+                        pulse = true
+                    }
                 }
             }
 
+            VStack(spacing: 5) {
+                Text(isAnalysis ? "Sözler Hazırlanıyor" : "Video Hazırlanıyor")
+                    .font(.system(.title3, design: .rounded))
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+
+                Text(isAnalysis ? "Uygulamayı açık tutabilirsin." : "İşlem bitince video galerine kaydedilecek.")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+
             VStack(alignment: .leading, spacing: 14) {
-                ForEach(ProcessingStage.allCases, id: \.rawValue) { item in
+                ForEach(visibleStages, id: \.rawValue) { item in
                     HStack(spacing: 10) {
                         if item.rawValue < stage.rawValue {
                             Image(systemName: "checkmark.circle.fill")
@@ -100,5 +114,15 @@ struct ProcessingView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 36)
         .card()
+    }
+
+    private var isAnalysis: Bool {
+        stage == .extractingAudio || stage == .transcribing
+    }
+
+    private var visibleStages: [ProcessingStage] {
+        isAnalysis
+            ? [.extractingAudio, .transcribing]
+            : [.burning, .saving]
     }
 }

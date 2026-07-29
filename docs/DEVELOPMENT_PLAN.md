@@ -636,6 +636,7 @@ Dış TestFlight incelemesi otomatik gönderilmez; App Store Connect test ileti�
 | 1.19.0 | Pencereli ses belleği | WP-001 unit testleri + manual Codemagic + iPhone 14 smoke |
 | 1.19.1 | Xcode 26 Metal CI hazırlığı | Metal Toolchain indirme/doğrulama aşaması + manual Codemagic |
 | 1.19.2 | SwiftUI derleme karmaşıklığı | `ContentView` type-check sınırları + manual Codemagic |
+| 1.19.3 | Arayüz sadeleştirme | Video → sözler → tasarım akışı, gelişmiş ayarların ayrılması ve iPhone 14 ergonomisi |
 | 1.20.0 | Tanılama ve güvenli proje | WP-002, WP-101, WP-102, WP-103 |
 | 1.21.0 | Ölçülebilir söz motoru | WP-201, WP-202, benchmark başlangıç raporu |
 | 1.22.0 | Daha doğru bağlam/zaman | WP-203, inceleme işaretleri, zaman kalite testleri |

@@ -3,10 +3,10 @@ import SwiftUI
 import AVKit
 import UIKit
 
-// MARK: - 3 Adımlı İlerleme Göstergesi (Video → Düzenle → Kaydet)
+// MARK: - Ana üretim akışı
 struct StepIndicator: View {
     let currentIndex: Int
-    private let steps = ["Video", "Satırlar", "Zaman", "Kaydet"]
+    private let steps = ["Video", "Sözler", "Tasarım", "Kaydet"]
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -777,6 +777,7 @@ struct LabeledSlider: View {
     @Binding var value: Double
     let range: ClosedRange<Double>
     let step: Double
+    var valueText: ((Double) -> String)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -789,10 +790,12 @@ struct LabeledSlider: View {
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
                 Spacer()
-                ValueBadge(text: "\(Int(value))")
+                ValueBadge(text: valueText?(value) ?? "\(Int(value))")
             }
             Slider(value: $value, in: range, step: step)
                 .tint(Theme.yellow)
+                .accessibilityLabel(title)
+                .accessibilityValue(valueText?(value) ?? "\(Int(value))")
         }
     }
 }

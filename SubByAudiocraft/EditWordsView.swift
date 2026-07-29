@@ -1,6 +1,20 @@
 import SwiftUI
 import AVKit
 
+private enum EditorPanel: String, CaseIterable, Identifiable {
+    case design
+    case words
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .design: return "Tasarım"
+        case .words: return "Kelime ve Zaman"
+        }
+    }
+}
+
 // Adım 2: Ön izleme + kelime düzenleme listesi
 struct EditWordsView: View {
     @Binding var words: [VideoProcessor.WordTimestamp]
@@ -24,6 +38,7 @@ struct EditWordsView: View {
     @State private var previewWords: [VideoProcessor.WordTimestamp] = []
     @State private var previewLineIndex: Int = 0
     @State private var playbackTime: Double = 0
+    @State private var selectedPanel: EditorPanel = .design
 
     private var lines: [[VideoProcessor.WordTimestamp]] {
         var groups: [[VideoProcessor.WordTimestamp]] = []
@@ -93,42 +108,71 @@ struct EditWordsView: View {
                     Label(previewTrackingHint, systemImage: lyricTrackingMode.icon)
                     .font(.caption2)
                     .foregroundColor(.gray)
-
-                    KaraokeModePicker(
-                        selection: $karaokeMode,
-                        lyricTrackingMode: $lyricTrackingMode,
-                        kineticStyle: $kineticStyle,
-                        kineticAccent: $kineticAccent,
-                        kineticCustomColorHex: $kineticCustomColorHex,
-                        kineticIntensity: $kineticIntensity,
-                        kineticLetterStyle: $kineticLetterStyle,
-                        kineticOverlayStyle: $kineticOverlayStyle
-                    )
-
-                    // Font burada da değiştirilebilir: Geçmiş'ten açılan projelerde
-                    // 1. adıma (video seçme) dönüş yoktur, stilin tamamı bu ekrandan yönetilir.
-                    FontChipPicker(
-                        fonts: FontCatalog.hepsi,
-                        selection: $fontName,
-                        karaokeMode: karaokeMode,
-                        kineticStyle: kineticStyle
-                    )
-
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 12) {
-                            LabeledSlider(icon: "textformat.size", title: "Boyut", value: $fontSize, range: 30...150, step: 1)
-                            LabeledSlider(icon: "arrow.up.and.down", title: "Konum", value: $marginV, range: 30...950, step: 5)
-                        }
-                        VStack(spacing: 12) {
-                            LabeledSlider(icon: "textformat.size", title: "Boyut", value: $fontSize, range: 30...150, step: 1)
-                            LabeledSlider(icon: "arrow.up.and.down", title: "Konum", value: $marginV, range: 30...950, step: 5)
-                        }
-                    }
                 }
                 .card()
+
+                Picker("Düzenleme Bölümü", selection: $selectedPanel) {
+                    ForEach(EditorPanel.allCases) { panel in
+                        Text(panel.title).tag(panel)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityHint("Tasarım ayarlarıyla kelime zamanlaması arasında geçiş yapar.")
+
+                if selectedPanel == .design {
+                    VStack(alignment: .leading, spacing: 14) {
+                        SectionHeader(icon: "paintbrush.fill", title: "Tasarım Ayarları")
+
+                        StudioTypographyControls(
+                            karaokeMode: $karaokeMode,
+                            lyricTrackingMode: $lyricTrackingMode,
+                            kineticStyle: $kineticStyle,
+                            kineticAccent: $kineticAccent,
+                            kineticCustomColorHex: $kineticCustomColorHex,
+                            kineticIntensity: $kineticIntensity,
+                            kineticLetterStyle: $kineticLetterStyle,
+                            kineticOverlayStyle: $kineticOverlayStyle
+                        )
+
+                        // Geçmişten açılan projelerde de stilin tamamı burada yönetilir.
+                        CompactFontPicker(
+                            fonts: FontCatalog.hepsi,
+                            selection: $fontName,
+                            karaokeMode: karaokeMode,
+                            kineticStyle: kineticStyle
+                        )
+
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 12) {
+                                LabeledSlider(icon: "textformat.size", title: "Yazı Boyutu", value: $fontSize, range: 30...150, step: 1)
+                                LabeledSlider(
+                                    icon: "arrow.up.and.down",
+                                    title: "Dikey Konum",
+                                    value: $marginV,
+                                    range: 30...950,
+                                    step: 5,
+                                    valueText: positionTitle
+                                )
+                            }
+                            VStack(spacing: 12) {
+                                LabeledSlider(icon: "textformat.size", title: "Yazı Boyutu", value: $fontSize, range: 30...150, step: 1)
+                                LabeledSlider(
+                                    icon: "arrow.up.and.down",
+                                    title: "Dikey Konum",
+                                    value: $marginV,
+                                    range: 30...950,
+                                    step: 5,
+                                    valueText: positionTitle
+                                )
+                            }
+                        }
+                    }
+                    .card()
+                }
             }
 
-            VStack(alignment: .leading, spacing: 12) {
+            if selectedPanel == .words {
+                VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
                     Image(systemName: "text.quote")
                         .font(.subheadline.weight(.semibold))
@@ -141,6 +185,11 @@ struct EditWordsView: View {
                         .font(.caption2)
                         .foregroundColor(.gray)
                 }
+
+                Text("Kelimeyi doğrudan düzenleyebilir, zaman etiketine dokunarak saniyelerini ayarlayabilirsin.")
+                    .font(.caption2)
+                    .foregroundColor(.gray)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if karaokeMode == .kinetic,
                    !lyricTrackingMode.isProgressiveReveal {
@@ -193,44 +242,42 @@ struct EditWordsView: View {
                         .font(.caption.weight(.bold))
                         .foregroundColor(.black)
                         .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
+                        .frame(minHeight: 44)
                         .background(Capsule().fill(Theme.yellow))
                 }
                 .buttonStyle(.plain)
 
-                ScrollView {
-                    VStack(spacing: 8) {
-                        // Kimlik (id) tabanlı ForEach: silme sırasında çökmeyi önler
-                        ForEach($words) { $word in
-                            WordRow(
-                                word: $word,
-                                isExpanded: expandedWordID == word.id,
-                                showsEmphasis: karaokeMode == .kinetic
-                                    && !lyricTrackingMode.isProgressiveReveal,
-                                isEmphasis: kineticEmphasisWordIDs.contains(word.id),
-                                onToggleEmphasis: {
-                                    toggleEmphasis(word.id)
-                                },
-                                onToggleExpand: {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        expandedWordID = (expandedWordID == word.id) ? nil : word.id
-                                    }
-                                    player?.seek(
-                                        to: CMTime(seconds: max(0, word.start), preferredTimescale: 600),
-                                        toleranceBefore: .zero,
-                                        toleranceAfter: .zero
-                                    )
-                                },
-                                onDelete: {
-                                    deleteWord(word.id)
+                LazyVStack(spacing: 8) {
+                    // Kimlik (id) tabanlı ForEach: silme sırasında çökmeyi önler
+                    ForEach($words) { $word in
+                        WordRow(
+                            word: $word,
+                            isExpanded: expandedWordID == word.id,
+                            showsEmphasis: karaokeMode == .kinetic
+                                && !lyricTrackingMode.isProgressiveReveal,
+                            isEmphasis: kineticEmphasisWordIDs.contains(word.id),
+                            onToggleEmphasis: {
+                                toggleEmphasis(word.id)
+                            },
+                            onToggleExpand: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    expandedWordID = (expandedWordID == word.id) ? nil : word.id
                                 }
-                            )
-                        }
+                                player?.seek(
+                                    to: CMTime(seconds: max(0, word.start), preferredTimescale: 600),
+                                    toleranceBefore: .zero,
+                                    toleranceAfter: .zero
+                                )
+                            },
+                            onDelete: {
+                                deleteWord(word.id)
+                            }
+                        )
                     }
                 }
-                .frame(maxHeight: 300)
+                }
+                .card()
             }
-            .card()
         }
         // Oynatma konumuna göre aktif satırı bulup ön izlemeye yansıt
         .onReceive(Timer.publish(every: 0.1, on: .main, in: .common).autoconnect()) { _ in
@@ -266,6 +313,12 @@ struct EditWordsView: View {
         case .centeredWordReveal:
             return "Yeni kelime tek parça halinde gelir; cümle merkezde kalırken önceki kelimeler sola kayar."
         }
+    }
+
+    private func positionTitle(_ value: Double) -> String {
+        if value < 260 { return "Alt" }
+        if value < 650 { return "Orta" }
+        return "Üst"
     }
 
     private func updatePreviewLine() {
@@ -363,7 +416,7 @@ struct WordRow: View {
                     .font(.body)
                     .foregroundColor(.white)
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+                    .frame(minHeight: 44)
                     .background(
                         RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(Theme.field)
@@ -379,6 +432,7 @@ struct WordRow: View {
                                 Circle()
                                     .fill(isEmphasis ? Theme.yellow : Theme.field)
                             )
+                            .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(
@@ -395,7 +449,7 @@ struct WordRow: View {
                     }
                     .foregroundColor(Theme.yellow)
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
+                    .frame(minHeight: 44)
                     .background(Capsule().fill(Theme.field))
                 }
                 .buttonStyle(.plain)
@@ -404,7 +458,7 @@ struct WordRow: View {
                     Image(systemName: "trash")
                         .font(.caption)
                         .foregroundColor(.red.opacity(0.85))
-                        .padding(6)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
             }
@@ -447,6 +501,7 @@ struct WordRow: View {
                 Button(action: minus) {
                     Image(systemName: "minus.circle.fill")
                         .foregroundColor(.gray)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
                 Text(String(format: "%.1fs", value))
@@ -456,6 +511,7 @@ struct WordRow: View {
                 Button(action: plus) {
                     Image(systemName: "plus.circle.fill")
                         .foregroundColor(.gray)
+                        .frame(width: 44, height: 44)
                 }
                 .buttonStyle(.plain)
             }

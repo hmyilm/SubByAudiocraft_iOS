@@ -43,6 +43,7 @@ extension View {
 // Birincil (sarı) buton: basılınca küçülür ve hafif titreşim verir
 struct PrimaryButtonStyle: ButtonStyle {
     var enabled: Bool = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -54,8 +55,8 @@ struct PrimaryButtonStyle: ButtonStyle {
                     .fill(enabled ? Theme.yellow : Color(white: 0.2))
             )
             .foregroundColor(enabled ? .black : .gray)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1.0)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: configuration.isPressed)
             .onChange(of: configuration.isPressed) { pressed in
                 if pressed && enabled { Theme.haptic() }
             }
@@ -64,6 +65,8 @@ struct PrimaryButtonStyle: ButtonStyle {
 
 // İkincil (koyu) buton
 struct SecondaryButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .fontWeight(.semibold)
@@ -78,8 +81,8 @@ struct SecondaryButtonStyle: ButtonStyle {
                     .stroke(Theme.cardStroke, lineWidth: 1)
             )
             .foregroundColor(.white)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1.0)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1.0)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
