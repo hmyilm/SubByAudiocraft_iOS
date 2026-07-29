@@ -40,6 +40,10 @@ struct EditWordsView: View {
     @State private var previewLineIndex: Int = 0
     @State private var playbackTime: Double = 0
     @State private var selectedPanel: EditorPanel = .design
+    @State private var showsAddWordAlert = false
+    @State private var newWordText = ""
+    @State private var pendingWordStart: Double?
+    @State private var wordSortWorkItem: DispatchWorkItem?
 
     private var lines: [[VideoProcessor.WordTimestamp]] {
         var groups: [[VideoProcessor.WordTimestamp]] = []
@@ -232,13 +236,10 @@ struct EditWordsView: View {
 
                 Button {
                     Theme.haptic()
-                    let newWord = VideoProcessor.WordTimestamp(
-                        text: "Yeni",
-                        start: words.last?.end ?? 0.0,
-                        end: (words.last?.end ?? 0.0) + 1.0
-                    )
-                    words.append(newWord)
-                    expandedWordID = newWord.id
+                    pendingWordStart = currentInsertionTime()
+                    newWordText = ""
+                    player?.pause()
+                    showsAddWordAlert = true
                 } label: {
                     Label("Kelime Ekle", systemImage: "plus.circle.fill")
                         .font(.caption.weight(.bold))
@@ -273,6 +274,9 @@ struct EditWordsView: View {
                             },
                             onDelete: {
                                 deleteWord(word.id)
+                            },
+                            onTimingChanged: {
+                                scheduleChronologicalSort()
                             }
                         )
                     }
@@ -293,6 +297,24 @@ struct EditWordsView: View {
         }
         .onChange(of: inlineBreaks) { _ in
             updatePreviewLine()
+        }
+        .alert("Kelime Ekle", isPresented: $showsAddWordAlert) {
+            TextField("Kelime", text: $newWordText)
+            Button("İptal", role: .cancel) {
+                pendingWordStart = nil
+            }
+            Button("Ekle") {
+                addWordAtPendingTime()
+            }
+            .disabled(newWordText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text(
+                "Kelime \(String(format: "%.1f", pendingWordStart ?? 0)) saniyeye eklenecek."
+            )
+        }
+        .onDisappear {
+            wordSortWorkItem?.cancel()
+            wordSortWorkItem = nil
         }
     }
 
@@ -380,6 +402,71 @@ struct EditWordsView: View {
         if expandedWordID == id { expandedWordID = nil }
     }
 
+    private func currentInsertionTime() -> Double {
+        if let currentTime = player?.currentTime().seconds,
+           currentTime.isFinite,
+           currentTime >= 0 {
+            return currentTime
+        }
+        if let expandedWordID,
+           let expandedWord = words.first(where: { $0.id == expandedWordID }) {
+            return max(0, expandedWord.end)
+        }
+        let lastEnd = VideoProcessor.shared.chronologicallySortedWords(words).last?.end ?? 0
+        return max(0, lastEnd)
+    }
+
+    private func addWordAtPendingTime() {
+        let text = newWordText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            pendingWordStart = nil
+            return
+        }
+
+        wordSortWorkItem?.cancel()
+        wordSortWorkItem = nil
+
+        let sortedBefore = VideoProcessor.shared.chronologicallySortedWords(words)
+        let start = max(0, pendingWordStart ?? currentInsertionTime())
+        let nextStart = sortedBefore.first(where: { $0.start > start + 0.02 })?.start
+        var end = start + 0.6
+        if let nextStart, nextStart - start >= 0.12 {
+            end = min(end, nextStart - 0.02)
+        }
+        end = max(start + 0.1, end)
+
+        let newWord = VideoProcessor.WordTimestamp(text: text, start: start, end: end)
+        if let previousLast = sortedBefore.last,
+           start >= previousLast.start,
+           breaks.remove(previousLast.id) != nil {
+            breaks.insert(newWord.id)
+        }
+
+        words.append(newWord)
+        words = VideoProcessor.shared.chronologicallySortedWords(words)
+        expandedWordID = newWord.id
+        pendingWordStart = nil
+        player?.seek(
+            to: CMTime(seconds: start, preferredTimescale: 600),
+            toleranceBefore: .zero,
+            toleranceAfter: .zero
+        )
+    }
+
+    private func scheduleChronologicalSort() {
+        wordSortWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
+            let sorted = VideoProcessor.shared.chronologicallySortedWords(words)
+            if sorted.map(\.id) != words.map(\.id) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    words = sorted
+                }
+            }
+        }
+        wordSortWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: workItem)
+    }
+
     private func toggleEmphasis(_ id: UUID) {
         guard let line = lines.first(where: { group in group.contains(where: { $0.id == id }) }) else {
             return
@@ -424,6 +511,7 @@ struct WordRow: View {
     let onToggleEmphasis: () -> Void
     let onToggleExpand: () -> Void
     let onDelete: () -> Void
+    let onTimingChanged: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
@@ -480,20 +568,29 @@ struct WordRow: View {
             }
 
             if isExpanded {
-                HStack(spacing: 16) {
-                    // Başlangıç her zaman bitişten önce kalacak şekilde kelepçelenir
-                    timeControl(
-                        label: "Başlangıç",
-                        value: word.start,
-                        minus: { word.start = max(0, word.start - 0.1) },
-                        plus: { if word.start + 0.1 <= word.end - 0.1 { word.start += 0.1 } }
-                    )
-                    timeControl(
-                        label: "Bitiş",
-                        value: word.end,
-                        minus: { word.end = max(word.end - 0.1, word.start + 0.1) },
-                        plus: { word.end += 0.1 }
-                    )
+                VStack(spacing: 8) {
+                    HStack(spacing: 16) {
+                        // Başlangıç her zaman bitişten önce kalacak şekilde kelepçelenir
+                        timeControl(
+                            label: "Başlangıç",
+                            value: word.start,
+                            minus: { word.start = max(0, word.start - 0.1) },
+                            plus: { if word.start + 0.1 <= word.end - 0.1 { word.start += 0.1 } }
+                        )
+                        timeControl(
+                            label: "Bitiş",
+                            value: word.end,
+                            minus: { word.end = max(word.end - 0.1, word.start + 0.1) },
+                            plus: { word.end += 0.1 }
+                        )
+                    }
+
+                    shiftControl
+
+                    Text("Düğmeye basılı tuttukça ayar hızlanır. Kaydır, kelimenin süresini korur.")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
                 }
             }
         }
@@ -514,24 +611,112 @@ struct WordRow: View {
                 .font(.caption2)
                 .foregroundColor(.gray)
             HStack(spacing: 10) {
-                Button(action: minus) {
-                    Image(systemName: "minus.circle.fill")
-                        .foregroundColor(.gray)
-                        .frame(width: 44, height: 44)
+                AcceleratingStepButton(systemImage: "minus.circle.fill") {
+                    minus()
+                    onTimingChanged()
                 }
-                .buttonStyle(.plain)
                 Text(String(format: "%.1fs", value))
                     .font(.system(.caption, design: .monospaced))
                     .foregroundColor(.white)
                     .frame(width: 44)
-                Button(action: plus) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundColor(.gray)
-                        .frame(width: 44, height: 44)
+                AcceleratingStepButton(systemImage: "plus.circle.fill") {
+                    plus()
+                    onTimingChanged()
                 }
-                .buttonStyle(.plain)
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private var shiftControl: some View {
+        HStack(spacing: 10) {
+            Text("Kelimeyi kaydır")
+                .font(.caption2)
+                .foregroundColor(.gray)
+            Spacer(minLength: 4)
+            AcceleratingStepButton(systemImage: "backward.end.fill") {
+                let shift = min(0.1, word.start)
+                guard shift > 0 else { return }
+                word.start -= shift
+                word.end -= shift
+                onTimingChanged()
+            }
+            Text(String(format: "%.1f–%.1fs", word.start, word.end))
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.white)
+                .frame(minWidth: 82)
+            AcceleratingStepButton(systemImage: "forward.end.fill") {
+                word.start += 0.1
+                word.end += 0.1
+                onTimingChanged()
+            }
+        }
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Theme.field.opacity(0.7))
+        )
+    }
+}
+
+private struct AcceleratingStepButton: View {
+    let systemImage: String
+    let action: () -> Void
+
+    @State private var repeatTask: Task<Void, Never>?
+    @State private var isPressed = false
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .foregroundColor(.gray)
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .scaleEffect(isPressed ? 0.92 : 1)
+            .animation(.easeOut(duration: 0.1), value: isPressed)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in
+                        beginPress()
+                    }
+                    .onEnded { _ in
+                        endPress()
+                    }
+            )
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction {
+                action()
+            }
+            .onDisappear {
+                endPress()
+            }
+    }
+
+    private func beginPress() {
+        guard repeatTask == nil else { return }
+        isPressed = true
+        action()
+        repeatTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 360_000_000)
+            var repeatCount = 0
+            while !Task.isCancelled {
+                action()
+                repeatCount += 1
+                let interval: UInt64
+                if repeatCount < 6 {
+                    interval = 140_000_000
+                } else if repeatCount < 18 {
+                    interval = 80_000_000
+                } else {
+                    interval = 45_000_000
+                }
+                try? await Task.sleep(nanoseconds: interval)
+            }
+        }
+    }
+
+    private func endPress() {
+        repeatTask?.cancel()
+        repeatTask = nil
+        isPressed = false
     }
 }

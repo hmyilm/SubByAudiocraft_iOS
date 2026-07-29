@@ -2,6 +2,30 @@ import XCTest
 @testable import SubByAudiocraft
 
 final class VideoProcessorTests: XCTestCase {
+    func testChronologicalWordSortPlacesNewWordAtItsTimestamp() {
+        var words = makeWords(["bir", "iki", "üç"])
+        let inserted = VideoProcessor.WordTimestamp(
+            text: "yeni",
+            start: 0.2,
+            end: 0.35
+        )
+        words.append(inserted)
+
+        let sorted = VideoProcessor.shared.chronologicallySortedWords(words)
+
+        XCTAssertEqual(sorted.map(\.text), ["bir", "yeni", "iki", "üç"])
+        XCTAssertEqual(sorted[1].id, inserted.id)
+    }
+
+    func testChronologicalWordSortKeepsEqualTimedWordsStable() {
+        let first = VideoProcessor.WordTimestamp(text: "ilk", start: 1, end: 1.4)
+        let second = VideoProcessor.WordTimestamp(text: "ikinci", start: 1, end: 1.4)
+
+        let sorted = VideoProcessor.shared.chronologicallySortedWords([first, second])
+
+        XCTAssertEqual(sorted.map(\.id), [first.id, second.id])
+    }
+
     func testAutomaticGroupingLimitsLineToFourWords() {
         let words = makeWords(["bir", "iki", "üç", "dört", "beş"])
 

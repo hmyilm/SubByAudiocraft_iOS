@@ -730,6 +730,35 @@ class VideoProcessor: ObservableObject {
         var end: Double
     }
 
+    // Düzenleyicide zaman değiştirilen veya sonradan eklenen kelimeleri kronolojik
+    // sıraya getirir. Eşit zamanlı kelimelerde mevcut sıra korunur.
+    func chronologicallySortedWords(_ words: [WordTimestamp]) -> [WordTimestamp] {
+        words.enumerated()
+            .sorted { left, right in
+                let leftStart = left.element.start.isFinite
+                    ? left.element.start
+                    : Double.greatestFiniteMagnitude
+                let rightStart = right.element.start.isFinite
+                    ? right.element.start
+                    : Double.greatestFiniteMagnitude
+                if leftStart != rightStart {
+                    return leftStart < rightStart
+                }
+
+                let leftEnd = left.element.end.isFinite
+                    ? left.element.end
+                    : Double.greatestFiniteMagnitude
+                let rightEnd = right.element.end.isFinite
+                    ? right.element.end
+                    : Double.greatestFiniteMagnitude
+                if leftEnd != rightEnd {
+                    return leftEnd < rightEnd
+                }
+                return left.offset < right.offset
+            }
+            .map(\.element)
+    }
+
     struct LyricRecognitionWindow: Equatable {
         let wordRange: Range<Int>
         let start: Double
