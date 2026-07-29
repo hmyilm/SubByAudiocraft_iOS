@@ -422,6 +422,7 @@ struct StudioTypographyControls: View {
         switch mode {
         case .off: return "Kapalı"
         case .karaoke: return "Karaoke"
+        case .boldWord: return "Kalın"
         case .centeredReveal: return "Harf Harf"
         case .centeredWordReveal: return "Kelime Kelime"
         }
@@ -433,6 +434,8 @@ struct StudioTypographyControls: View {
             return "Cümle zamanında görünür; söylenen bölüm ayrıca işaretlenmez."
         case .karaoke:
             return "Söylenen kelime renk ve hareketle takip edilir."
+        case .boldWord:
+            return "Yalnız o anda söylenen kelime kalınlaşır; satırın yeri ve rengi değişmez."
         case .centeredReveal:
             return "Harfler tek tek gelir; büyüyen cümle sürekli ortada kalır."
         case .centeredWordReveal:

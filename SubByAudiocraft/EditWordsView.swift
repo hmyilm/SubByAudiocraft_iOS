@@ -308,6 +308,8 @@ struct EditWordsView: View {
             return "Söz takibi kapalı; satır zamanlamasını sesi dinleyerek kontrol edebilirsin."
         case .karaoke:
             return "Vurgulanan kelime o anda söylenen bölümü gösterir."
+        case .boldWord:
+            return "O anda söylenen kelime kalın görünür; satır konumu ve diğer kelimeler sabit kalır."
         case .centeredReveal:
             return "Yeni harf vokalle gelir; büyüyen cümle merkezde kalırken önceki harfler sola kayar."
         case .centeredWordReveal:

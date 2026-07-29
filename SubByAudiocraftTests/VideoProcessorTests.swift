@@ -1159,7 +1159,7 @@ final class VideoProcessorTests: XCTestCase {
                     virtualWidth: 608,
                     virtualHeight: 1080
                 )
-            case .off, .karaoke:
+            case .off, .karaoke, .boldWord:
                 output = VideoProcessor.shared.makeKineticDialogues(
                     group: words,
                     lineIndex: 0,
@@ -1191,7 +1191,7 @@ final class VideoProcessorTests: XCTestCase {
             for intensity in KineticIntensity.allCases {
                 for letterStyle in KineticLetterStyle.allCases {
                     for overlayStyle in KineticOverlayStyle.allCases {
-                        for trackingMode in [LyricTrackingMode.off, .karaoke] {
+                        for trackingMode in [LyricTrackingMode.off, .karaoke, .boldWord] {
                             let ass = VideoProcessor.shared.makeKineticDialogues(
                                 group: words,
                                 lineIndex: 0,
@@ -1244,6 +1244,68 @@ final class VideoProcessorTests: XCTestCase {
             )
             XCTAssertFalse(ass.isEmpty, "\(accent.title) vurgu rengi çıktı üretmedi")
         }
+    }
+
+    func testBoldWordTrackingOnlyRaisesTheActiveWordsWeight() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 0.10, end: 0.55),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 0.65, end: 1.15),
+            VideoProcessor.WordTimestamp(text: "içimde", start: 1.25, end: 1.85)
+        ]
+
+        let classic = VideoProcessor.shared.makeBoldWordDialogues(
+            group: words,
+            segStart: 0,
+            segEnd: 2,
+            fontName: "Anton-Regular",
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080
+        )
+        let classicDialogues = classic.components(separatedBy: "\n").filter {
+            $0.hasPrefix("Dialogue:")
+        }
+
+        XCTAssertEqual(classicDialogues.count, 4)
+        XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 1,") }.count, 1)
+        XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 2,") }.count, 3)
+        XCTAssertTrue(classic.contains("\\fs70\\b0"))
+        XCTAssertTrue(classic.contains("\\fs70\\b1"))
+        XCTAssertTrue(classicDialogues.contains { $0.hasSuffix("}kara") })
+        XCTAssertTrue(classic.contains("\\t(100,110,\\alpha&H00&)"))
+        XCTAssertTrue(classic.contains("\\t(550,560,\\alpha&HFF&)"))
+
+        let boldFaceClassic = VideoProcessor.shared.makeBoldWordDialogues(
+            group: words,
+            segStart: 0,
+            segEnd: 2,
+            fontName: "Montserrat-ExtraBold",
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080
+        )
+        XCTAssertTrue(
+            boldFaceClassic.contains("\\b1\\3c&HFFFFFF&\\bord0.8\\shad0")
+        )
+
+        let kinetic = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 2,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080,
+            lyricTrackingMode: .boldWord
+        )
+
+        XCTAssertTrue(kinetic.contains("\\b0}"))
+        XCTAssertTrue(kinetic.contains("\\b1\\alpha&HFF&"))
+        XCTAssertFalse(kinetic.contains("\\alpha&HA0&"))
     }
 
     func testEditorialASSUsesAnimatedUnderlineInsteadOfRandomScaling() {
@@ -1554,9 +1616,11 @@ final class VideoProcessorTests: XCTestCase {
             LyricTrackingMode.resolved("centeredWordReveal"),
             .centeredWordReveal
         )
+        XCTAssertEqual(LyricTrackingMode.resolved("boldWord"), .boldWord)
         XCTAssertTrue(LyricTrackingMode.centeredReveal.isProgressiveReveal)
         XCTAssertTrue(LyricTrackingMode.centeredWordReveal.isProgressiveReveal)
         XCTAssertFalse(LyricTrackingMode.karaoke.isProgressiveReveal)
+        XCTAssertFalse(LyricTrackingMode.boldWord.isProgressiveReveal)
     }
 
     func testLegacyProjectWithoutKaraokeModeDecodesAsClassic() throws {

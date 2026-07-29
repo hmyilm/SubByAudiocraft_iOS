@@ -134,6 +134,7 @@ enum KaraokeMode: String, CaseIterable, Identifiable, Codable {
 enum LyricTrackingMode: String, CaseIterable, Identifiable, Codable {
     case off
     case karaoke
+    case boldWord
     case centeredReveal
     case centeredWordReveal
 
@@ -143,6 +144,7 @@ enum LyricTrackingMode: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .off: return "Kapalı"
         case .karaoke: return "Karaoke"
+        case .boldWord: return "Kalın Kelime"
         case .centeredReveal: return "Harf Akışı"
         case .centeredWordReveal: return "Kelime Akışı"
         }
@@ -152,6 +154,7 @@ enum LyricTrackingMode: String, CaseIterable, Identifiable, Codable {
         switch self {
         case .off: return "pause.circle"
         case .karaoke: return "waveform"
+        case .boldWord: return "bold"
         case .centeredReveal: return "character.cursor.ibeam"
         case .centeredWordReveal: return "text.append"
         }
@@ -163,6 +166,8 @@ enum LyricTrackingMode: String, CaseIterable, Identifiable, Codable {
             return "Satır zamanında görünür; söylenen kelime veya harf ayrıca işaretlenmez."
         case .karaoke:
             return "Söylenen kelime ve harfler renk, ölçek ve hareketle takip edilir."
+        case .boldWord:
+            return "Satır ve renk sabit kalır; yalnız o anda söylenen kelime kalınlaşır."
         case .centeredReveal:
             return "Harfler vokalle birlikte eklenir; metin büyürken önceki harfler sola kayar ve cümle daima ortada kalır."
         case .centeredWordReveal:
@@ -3906,6 +3911,9 @@ class VideoProcessor: ObservableObject {
         }
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
         let karaokeTrackingEnabled = lyricTrackingMode == .karaoke
+        let boldWordTrackingEnabled = lyricTrackingMode == .boldWord
+        let needsSyntheticWeight = FontCatalog.secenek(fontName)?.kalin
+            ?? fontName.localizedCaseInsensitiveContains("Bold")
         var effectiveOverlayStyle = overlayStyle
         if !karaokeTrackingEnabled,
            overlayStyle.resolved(for: plan).requiresKaraokeTracking {
@@ -4132,6 +4140,9 @@ class VideoProcessor: ObservableObject {
             if emphasis {
                 tags += "\\3c&H3A2610&\\bord3.4"
             }
+            if boldWordTrackingEnabled {
+                tags += "\\b0"
+            }
             tags += "}"
 
             if karaokeTrackingEnabled {
@@ -4147,6 +4158,130 @@ class VideoProcessor: ObservableObject {
             }
             let layer = emphasis ? 3 : 2
             result += "Dialogue: \(layer),\(formatASSTime(eventStart)),\(formatASSTime(safeEventEnd)),Default,,0,0,0,,\(tags)\(text)\n"
+            if boldWordTrackingEnabled {
+                let boldInEnd = min(eventDurationMs, wordStartMs + 10)
+                let boldOutEnd = min(eventDurationMs, wordEndMs + 10)
+                var boldTags = String(tags.dropLast())
+                boldTags += "\\b1\\alpha&HFF&"
+                if needsSyntheticWeight {
+                    boldTags += "\\3c&HFFFFFF&\\bord0.8\\shad0"
+                }
+                boldTags += "\\t(\(wordStartMs),\(boldInEnd),\\alpha&H00&)"
+                boldTags += "\\t(\(wordEndMs),\(boldOutEnd),\\alpha&HFF&)}"
+                result += "Dialogue: \(layer + 1),\(formatASSTime(eventStart)),\(formatASSTime(safeEventEnd)),Default,,0,0,0,,\(boldTags)\(text)\n"
+            }
+        }
+        return result
+    }
+
+    // Kalın Kelime: satır tek parça ve normal ağırlıkta sabit kalır. Her kelimenin
+    // kalın kopyası aynı zaman aralığı boyunca görünmez tutulur; yalnız kendi vokal
+    // zamanında ve normal kelimenin ölçülmüş merkezi üzerinde açılır. Böylece font
+    // ağırlığı değişirken satır yeniden ölçülmez, konumu zıplamaz ve bitişik el yazısı
+    // fontlarında kelimenin içindeki harf bağları bölünmez.
+    func makeBoldWordDialogues(
+        group: [WordTimestamp],
+        segStart: Double,
+        segEnd: Double,
+        fontName: String,
+        fontSize: Int,
+        marginV: Int,
+        virtualWidth: Int,
+        virtualHeight: Int,
+        extraTags: String = ""
+    ) -> String {
+        struct BoldWordItem {
+            let word: WordTimestamp
+            let text: String
+            let startUTF16: Int
+            let endUTF16: Int
+        }
+
+        var items: [BoldWordItem] = []
+        var utf16Cursor = 0
+        for word in group {
+            let text = cleanASSWord(word.text)
+            guard !text.isEmpty else { continue }
+            if !items.isEmpty { utf16Cursor += 1 }
+            let startUTF16 = utf16Cursor
+            utf16Cursor += text.utf16.count
+            items.append(
+                BoldWordItem(
+                    word: word,
+                    text: text,
+                    startUTF16: startUTF16,
+                    endUTF16: utf16Cursor
+                )
+            )
+        }
+        guard !items.isEmpty, segEnd > segStart else { return "" }
+
+        let lineText = items.map(\.text).joined(separator: " ")
+        let measurement = harfSinirlariniOlc(
+            metin: lineText,
+            fontName: fontName,
+            assFontSize: fontSize
+        )
+        let maximumWidth = max(24.0, Double(virtualWidth - 20))
+        let estimatedWidth = min(
+            maximumWidth,
+            max(24.0, Double(max(1, lineText.utf16.count)) * Double(fontSize) * 0.56)
+        )
+        let lineWidth = measurement?.genislik ?? estimatedWidth
+        let lineLeft = (Double(virtualWidth) - lineWidth) / 2
+        let eventDurationMs = max(20, Int(((segEnd - segStart) * 1000).rounded()))
+        let t0 = formatASSTime(segStart)
+        let t1 = formatASSTime(segEnd)
+        let baselineY = max(0, virtualHeight - marginV)
+        let needsSyntheticWeight = FontCatalog.secenek(fontName)?.kalin
+            ?? fontName.localizedCaseInsensitiveContains("Bold")
+
+        var result = "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,," +
+            "{\\fs\(fontSize)\\b0\(extraTags)}\(lineText)\n"
+
+        for item in items {
+            let wordStart = min(segEnd, max(segStart, item.word.start))
+            let wordEnd = min(segEnd, max(wordStart + 0.05, item.word.end))
+            guard wordEnd > wordStart else { continue }
+
+            let leftOffset: Double
+            let rightOffset: Double
+            if let measurement,
+               item.endUTF16 > 0,
+               item.endUTF16 <= measurement.sinirlar.count {
+                leftOffset = item.startUTF16 == 0
+                    ? 0
+                    : measurement.sinirlar[item.startUTF16 - 1]
+                rightOffset = measurement.sinirlar[item.endUTF16 - 1]
+            } else {
+                let denominator = Double(max(1, lineText.utf16.count))
+                leftOffset = lineWidth * Double(item.startUTF16) / denominator
+                rightOffset = lineWidth * Double(item.endUTF16) / denominator
+            }
+
+            let wordCenterX = min(
+                virtualWidth,
+                max(0, Int((lineLeft + ((leftOffset + rightOffset) / 2)).rounded()))
+            )
+
+            let wordStartMs = min(
+                eventDurationMs,
+                max(0, Int(((wordStart - segStart) * 1000).rounded()))
+            )
+            let wordEndMs = min(
+                eventDurationMs,
+                max(wordStartMs + 10, Int(((wordEnd - segStart) * 1000).rounded()))
+            )
+            let boldInEnd = min(eventDurationMs, wordStartMs + 10)
+            let boldOutEnd = min(eventDurationMs, wordEndMs + 10)
+            let weightContrastTags = needsSyntheticWeight
+                ? "\\3c&HFFFFFF&\\bord0.8\\shad0"
+                : ""
+            let tags = "{\\an2\\pos(\(wordCenterX),\(baselineY))" +
+                "\\fs\(fontSize)\\b1\(weightContrastTags)\(extraTags)\\alpha&HFF&" +
+                "\\t(\(wordStartMs),\(boldInEnd),\\alpha&H00&)" +
+                "\\t(\(wordEndMs),\(boldOutEnd),\\alpha&HFF&)}"
+            result += "Dialogue: 2,\(t0),\(t1),Default,,0,0,0,,\(tags)\(item.text)\n"
         }
         return result
     }
@@ -4565,6 +4700,20 @@ class VideoProcessor: ObservableObject {
                 )
             } else {
                 lineMotionTags = ""
+            }
+
+            if lyricTrackingMode == .boldWord {
+                assContent += makeBoldWordDialogues(
+                    group: seg.group,
+                    segStart: segStart,
+                    segEnd: segEnd,
+                    fontName: fontName,
+                    fontSize: lineFontSize,
+                    marginV: marginV,
+                    virtualWidth: virtualWidth,
+                    virtualHeight: virtualHeight
+                )
+                continue
             }
 
             if lyricTrackingMode == .off {

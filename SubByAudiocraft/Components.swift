@@ -950,12 +950,34 @@ struct SubtitlePreviewPlayer: View {
                                         && playbackTime < word.end
                                     let isPast = lyricTrackingMode == .karaoke
                                         && playbackTime >= word.end
+                                    let isBoldActive = lyricTrackingMode == .boldWord
+                                        && playbackTime >= word.start
+                                        && playbackTime < word.end
+                                    let needsSyntheticWeight = FontCatalog.secenek(fontName)?.kalin
+                                        ?? fontName.localizedCaseInsensitiveContains("Bold")
                                     Text(word.text)
                                         .foregroundColor(
-                                            isActive
-                                                ? Theme.yellow
-                                                : (isPast ? .white.opacity(0.35) : .white)
+                                            isBoldActive
+                                                ? .clear
+                                                : (
+                                                    isActive
+                                                        ? Theme.yellow
+                                                        : (isPast ? .white.opacity(0.35) : .white)
+                                                )
                                         )
+                                        .overlay {
+                                            if isBoldActive {
+                                                Text(word.text)
+                                                    .fontWeight(.bold)
+                                                    .foregroundColor(.white)
+                                                    .shadow(
+                                                        color: needsSyntheticWeight
+                                                            ? .white.opacity(0.9)
+                                                            : .clear,
+                                                        radius: needsSyntheticWeight ? 0.55 : 0
+                                                    )
+                                            }
+                                        }
                                         .scaleEffect(isActive ? 1.08 : 1)
                                         .shadow(
                                             color: isActive ? Theme.yellow.opacity(0.45) : .clear,
@@ -1166,31 +1188,58 @@ private struct KineticPreviewLockup: View {
                                 && playbackTime < word.end
                             let isPast = trackingMode == .karaoke
                                 && playbackTime >= word.end
+                            let isBoldActive = trackingMode == .boldWord
+                                && playbackTime >= word.start
+                                && playbackTime < word.end
+                            let needsSyntheticWeight = FontCatalog.secenek(fontName)?.kalin
+                                ?? fontName.localizedCaseInsensitiveContains("Bold")
                             let glyphDesign = VideoProcessor.shared.kineticGlyphDesign(
                                 text: word.text,
                                 wordIndex: index,
                                 plan: plan,
                                 letterStyle: letterStyle
                             )
+                            let previewFontSize = scaledFontSize(
+                                wordIndex: index,
+                                rowIndex: rowItem.offset,
+                                row: rowItem.element,
+                                treatment: glyphDesign.treatment
+                            )
                             KineticGlyphRun(
                                 design: glyphDesign,
                                 fontName: fontName,
-                                baseFontSize: scaledFontSize(
-                                    wordIndex: index,
-                                    rowIndex: rowItem.offset,
-                                    row: rowItem.element,
-                                    treatment: glyphDesign.treatment
-                                )
+                                baseFontSize: previewFontSize
                             )
                                 .foregroundColor(
-                                    isActive
-                                        ? (
-                                            plan.highlight == .pill
-                                                ? resolvedAccent.foregroundPreviewColor
-                                                : resolvedAccent.previewColor
+                                    isBoldActive
+                                        ? .clear
+                                        : (
+                                            isActive
+                                                ? (
+                                                    plan.highlight == .pill
+                                                        ? resolvedAccent.foregroundPreviewColor
+                                                        : resolvedAccent.previewColor
+                                                )
+                                                : (isPast ? .white.opacity(0.35) : .white)
                                         )
-                                        : (isPast ? .white.opacity(0.35) : .white)
                                 )
+                                .overlay {
+                                    if isBoldActive {
+                                        KineticGlyphRun(
+                                            design: glyphDesign,
+                                            fontName: fontName,
+                                            baseFontSize: previewFontSize,
+                                            fontWeight: .bold
+                                        )
+                                        .foregroundColor(.white)
+                                        .shadow(
+                                            color: needsSyntheticWeight
+                                                ? .white.opacity(0.9)
+                                                : .clear,
+                                            radius: needsSyntheticWeight ? 0.55 : 0
+                                        )
+                                    }
+                                }
                                 .padding(
                                     .horizontal,
                                     plan.highlight == .pill
@@ -1471,6 +1520,19 @@ private struct KineticGlyphRun: View {
     let design: KineticGlyphDesign
     let fontName: String
     let baseFontSize: CGFloat
+    let fontWeight: Font.Weight?
+
+    init(
+        design: KineticGlyphDesign,
+        fontName: String,
+        baseFontSize: CGFloat,
+        fontWeight: Font.Weight? = nil
+    ) {
+        self.design = design
+        self.fontName = fontName
+        self.baseFontSize = baseFontSize
+        self.fontWeight = fontWeight
+    }
 
     var body: some View {
         HStack(
@@ -1483,6 +1545,7 @@ private struct KineticGlyphRun: View {
                     : 1
                 Text(String(item.element))
                     .font(.custom(fontName, size: baseFontSize * CGFloat(scale)))
+                    .fontWeight(fontWeight)
                     .lineLimit(1)
             }
         }
