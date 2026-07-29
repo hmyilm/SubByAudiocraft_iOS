@@ -119,7 +119,7 @@ enum KaraokeMode: String, CaseIterable, Identifiable, Codable {
     var detail: String {
         switch self {
         case .classic:
-            return "Okunaklı sabit satır düzeni ve aktif kelime karaoke takibi."
+            return "Okunaklı sabit cümle düzeni ve harf harf karaoke takibi."
         case .kinetic:
             return "Vokal temposu ve anlam vurgusuna göre boyut, kompozisyon ve hareket üretir."
         }
@@ -143,8 +143,8 @@ enum LyricTrackingMode: String, CaseIterable, Identifiable, Codable {
     var title: String {
         switch self {
         case .off: return "Kapalı"
-        case .karaoke: return "Karaoke"
-        case .boldWord: return "Kalın Kelime"
+        case .karaoke: return "Harf Takibi"
+        case .boldWord: return "Cümle + Kalın"
         case .centeredReveal: return "Harf Akışı"
         case .centeredWordReveal: return "Kelime Akışı"
         }
@@ -165,9 +165,9 @@ enum LyricTrackingMode: String, CaseIterable, Identifiable, Codable {
         case .off:
             return "Satır zamanında görünür; söylenen kelime veya harf ayrıca işaretlenmez."
         case .karaoke:
-            return "Söylenen kelime ve harfler renk, ölçek ve hareketle takip edilir."
+            return "Cümle sabit kalır; okuma ilerledikçe harfler vokal zamanına göre tek tek takip edilir."
         case .boldWord:
-            return "Satır ve renk sabit kalır; yalnız o anda söylenen kelime kalınlaşır."
+            return "Cümlenin tamamı sabit kalır; yalnız okunan kelime kalınlaşır, geçince yeniden normal olur."
         case .centeredReveal:
             return "Harfler vokalle birlikte eklenir; metin büyürken önceki harfler sola kayar ve cümle daima ortada kalır."
         case .centeredWordReveal:
@@ -810,7 +810,9 @@ class VideoProcessor: ObservableObject {
             return .centeredCharacterReveal
         case .centeredWordReveal:
             return .centeredWordReveal
-        case .off, .karaoke, .boldWord:
+        case .boldWord:
+            return .boldWord
+        case .off, .karaoke:
             break
         }
 
@@ -4068,8 +4070,7 @@ class VideoProcessor: ObservableObject {
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
         let karaokeTrackingEnabled = lyricTrackingMode == .karaoke
         let boldWordTrackingEnabled = lyricTrackingMode == .boldWord
-        let needsSyntheticWeight = FontCatalog.secenek(fontName)?.kalin
-            ?? fontName.localizedCaseInsensitiveContains("Bold")
+        let needsSyntheticWeight = FontCatalog.boldPSName(for: fontName) == nil
         var effectiveOverlayStyle = overlayStyle
         if !karaokeTrackingEnabled,
            overlayStyle.resolved(for: plan).requiresKaraokeTracking {
@@ -4346,9 +4347,9 @@ class VideoProcessor: ObservableObject {
                 let boldInEnd = min(eventDurationMs, wordStartMs + 10)
                 let boldOutEnd = min(eventDurationMs, wordEndMs + 10)
                 var boldTags = String(tags.dropLast())
-                boldTags += "\\b1\\alpha&HFF&"
+                boldTags += "\\b1\\c&H\(resolvedAccent.assColor)&\\alpha&HFF&"
                 if needsSyntheticWeight {
-                    boldTags += "\\3c&HFFFFFF&\\bord0.8\\shad0"
+                    boldTags += "\\3c&H\(resolvedAccent.assColor)&\\bord0.8\\shad0"
                 }
                 boldTags += "\\t(\(wordStartMs),\(boldInEnd),\\alpha&H00&)"
                 boldTags += "\\t(\(wordEndMs),\(boldOutEnd),\\alpha&HFF&)}"
@@ -4373,7 +4374,9 @@ class VideoProcessor: ObservableObject {
         virtualWidth: Int,
         virtualHeight: Int,
         inlineLineBreaks: Set<UUID> = [],
-        extraTags: String = ""
+        extraTags: String = "",
+        accent: KineticAccent = .gold,
+        customColorHex: String = KineticAccent.defaultCustomHex
     ) -> String {
         struct BoldWordItem {
             let word: WordTimestamp
@@ -4415,8 +4418,8 @@ class VideoProcessor: ObservableObject {
         let t1 = formatASSTime(segEnd)
         let baselineY = max(0, virtualHeight - marginV)
         let rowGap = max(1, fontSize)
-        let needsSyntheticWeight = FontCatalog.secenek(fontName)?.kalin
-            ?? fontName.localizedCaseInsensitiveContains("Bold")
+        let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
+        let needsSyntheticWeight = FontCatalog.boldPSName(for: fontName) == nil
 
         var result = "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,," +
             "{\\q2\\fs\(fontSize)\\b0\(extraTags)}\(lineText)\n"
@@ -4471,132 +4474,14 @@ class VideoProcessor: ObservableObject {
                 let boldInEnd = min(eventDurationMs, wordStartMs + 10)
                 let boldOutEnd = min(eventDurationMs, wordEndMs + 10)
                 let weightContrastTags = needsSyntheticWeight
-                    ? "\\3c&HFFFFFF&\\bord0.8\\shad0"
+                    ? "\\3c&H\(resolvedAccent.assColor)&\\bord0.8\\shad0"
                     : ""
                 let tags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fs\(fontSize)\\b1\(weightContrastTags)\(extraTags)\\alpha&HFF&" +
+                    "\\fs\(fontSize)\\b1\\c&H\(resolvedAccent.assColor)&" +
+                    "\(weightContrastTags)\(extraTags)\\alpha&HFF&" +
                     "\\t(\(wordStartMs),\(boldInEnd),\\alpha&H00&)" +
                     "\\t(\(wordEndMs),\(boldOutEnd),\\alpha&HFF&)}"
                 result += "Dialogue: 2,\(t0),\(t1),Default,,0,0,0,,\(tags)\(item.text)\n"
-            }
-        }
-        return result
-    }
-
-    // Klasik Karaoke: SwiftUI ön izlemesindeki davranışın ASS karşılığıdır.
-    // Kelimeler sabit merkezlerinde kalır; aktif kelime altın renge geçip %8 büyür,
-    // okunan kelime ise beyazın %35 opaklığına iner. Her kelime bağımsız katman
-    // olduğundan renk/ağırlık değişimi satırı yeniden ölçmez ve yazı zıplamaz.
-    func makeClassicWordTrackingDialogues(
-        group: [WordTimestamp],
-        segStart: Double,
-        segEnd: Double,
-        fontName: String,
-        fontSize: Int,
-        marginV: Int,
-        virtualWidth: Int,
-        virtualHeight: Int,
-        inlineLineBreaks: Set<UUID> = []
-    ) -> String {
-        struct TrackingWordItem {
-            let word: WordTimestamp
-            let text: String
-            let startUTF16: Int
-            let endUTF16: Int
-        }
-
-        let itemsByRow: [[TrackingWordItem]] = visualLineGroups(
-            for: group,
-            inlineLineBreaks: inlineLineBreaks
-        ).compactMap { row in
-            var items: [TrackingWordItem] = []
-            var utf16Cursor = 0
-            for word in row {
-                let text = cleanASSWord(word.text)
-                guard !text.isEmpty else { continue }
-                if !items.isEmpty { utf16Cursor += 1 }
-                let startUTF16 = utf16Cursor
-                utf16Cursor += text.utf16.count
-                items.append(
-                    TrackingWordItem(
-                        word: word,
-                        text: text,
-                        startUTF16: startUTF16,
-                        endUTF16: utf16Cursor
-                    )
-                )
-            }
-            return items.isEmpty ? nil : items
-        }
-        guard !itemsByRow.isEmpty, segEnd > segStart else { return "" }
-
-        let rowTexts = itemsByRow.map { $0.map(\.text).joined(separator: " ") }
-        let maximumWidth = max(24.0, Double(virtualWidth - 20))
-        let eventDurationMs = max(20, Int(((segEnd - segStart) * 1000).rounded()))
-        let t0 = formatASSTime(segStart)
-        let t1 = formatASSTime(segEnd)
-        let baselineY = max(0, virtualHeight - marginV)
-        let rowGap = max(1, fontSize)
-        let accent = KineticAccent.gold.assColor
-        var result = ""
-
-        for (rowIndex, items) in itemsByRow.enumerated() {
-            let rowText = rowTexts[rowIndex]
-            let measurement = harfSinirlariniOlc(
-                metin: rowText,
-                fontName: fontName,
-                assFontSize: fontSize
-            )
-            let estimatedWidth = min(
-                maximumWidth,
-                max(24.0, Double(max(1, rowText.utf16.count)) * Double(fontSize) * 0.56)
-            )
-            let lineWidth = measurement?.genislik ?? estimatedWidth
-            let lineLeft = (Double(virtualWidth) - lineWidth) / 2
-            let rowY = baselineY - ((itemsByRow.count - rowIndex - 1) * rowGap)
-
-            for item in items {
-                let wordStart = min(segEnd, max(segStart, item.word.start))
-                let wordEnd = min(segEnd, max(wordStart + 0.05, item.word.end))
-                guard wordEnd > wordStart else { continue }
-
-                let leftOffset: Double
-                let rightOffset: Double
-                if let measurement,
-                   item.endUTF16 > 0,
-                   item.endUTF16 <= measurement.sinirlar.count {
-                    leftOffset = item.startUTF16 == 0
-                        ? 0
-                        : measurement.sinirlar[item.startUTF16 - 1]
-                    rightOffset = measurement.sinirlar[item.endUTF16 - 1]
-                } else {
-                    let denominator = Double(max(1, rowText.utf16.count))
-                    leftOffset = lineWidth * Double(item.startUTF16) / denominator
-                    rightOffset = lineWidth * Double(item.endUTF16) / denominator
-                }
-
-                let wordCenterX = min(
-                    virtualWidth,
-                    max(0, Int((lineLeft + ((leftOffset + rightOffset) / 2)).rounded()))
-                )
-                let wordStartMs = min(
-                    eventDurationMs,
-                    max(0, Int(((wordStart - segStart) * 1000).rounded()))
-                )
-                let wordEndMs = min(
-                    eventDurationMs,
-                    max(wordStartMs + 10, Int(((wordEnd - segStart) * 1000).rounded()))
-                )
-                let colorInEnd = min(eventDurationMs, wordStartMs + 55)
-                let colorOutEnd = min(eventDurationMs, wordEndMs + 75)
-                let tags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fs\(fontSize)\\b0\\c&HFFFFFF&\\alpha&H00&" +
-                    "\\fscx100\\fscy100\\4c&H\(accent)&\\4a&HFF&" +
-                    "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(accent)&" +
-                    "\\fscx108\\fscy108\\4a&H82&)" +
-                    "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&\\alpha&HA6&" +
-                    "\\fscx100\\fscy100\\4a&HFF&)}"
-                result += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,\(tags)\(item.text)\n"
             }
         }
         return result
@@ -5186,7 +5071,9 @@ class VideoProcessor: ObservableObject {
                     marginV: marginV,
                     virtualWidth: virtualWidth,
                     virtualHeight: virtualHeight,
-                    inlineLineBreaks: inlineLineBreaks
+                    inlineLineBreaks: inlineLineBreaks,
+                    accent: kineticAccent,
+                    customColorHex: kineticCustomColorHex
                 )
                 continue
             }
@@ -5196,21 +5083,6 @@ class VideoProcessor: ObservableObject {
                 let t1 = formatASSTime(segEnd)
                 assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,," +
                     "{\\fs\(lineFontSize)\(lineMotionTags)}\(lineText)\n"
-                continue
-            }
-
-            if renderPath == .classicKaraoke {
-                assContent += makeClassicWordTrackingDialogues(
-                    group: seg.group,
-                    segStart: segStart,
-                    segEnd: segEnd,
-                    fontName: fontName,
-                    fontSize: lineFontSize,
-                    marginV: marginV,
-                    virtualWidth: virtualWidth,
-                    virtualHeight: virtualHeight,
-                    inlineLineBreaks: inlineLineBreaks
-                )
                 continue
             }
 
@@ -5331,27 +5203,32 @@ class VideoProcessor: ObservableObject {
             .replacingOccurrences(of: ",", with: "\\,")
     }
 
-    // Seçilen fontun GERÇEK dosyasını CoreText üzerinden bulup geçici bir klasöre kopyalar.
-    // Bu klasör libass'a fontsdir ile doğrudan verilir: fontconfig'in sistem klasörü
-    // taraması bazı sistem fontlarını bulamıyor ve libass sessizce varsayılan fonta
-    // düşüyordu ("video, ön izlemedeki fonttan farklı çıkıyor" şikayetinin nedeni).
-    // Dosya bulunamazsa nil döner ve eski fontconfig yolu yedek olarak devrede kalır.
-    private func prepareFontsDir(for fontName: String) -> URL? {
-        let ctFont = CTFontCreateWithName(fontName as CFString, 24, nil)
-
-        // CoreText istenen fontu bulamazsa sessizce başka bir fonta düşer;
-        // yanlış dosyayı kopyalamamak için çözümlenen adı doğruluyoruz.
-        let resolvedName = CTFontCopyPostScriptName(ctFont) as String
-        guard resolvedName.caseInsensitiveCompare(fontName) == .orderedSame,
-              let fontFileURL = CTFontCopyAttribute(ctFont, kCTFontURLAttribute) as? URL else {
-            return nil
+    // Regular ve Bold kesitleri aynı fontsdir içine kopyalanır. Böylece libass,
+    // \b1 geldiğinde yapay kontur yerine ailenin gerçek Bold dosyasını seçebilir.
+    // Tek ağırlıklı fontlarda yalnız mevcut dosya kopyalanır ve kontrollü sentetik
+    // kalınlık yedeği makeBoldWordDialogues içinde uygulanır.
+    private func prepareFontsDir(for fontSelection: String) -> URL? {
+        let fontFileURLs: [URL] = FontCatalog.renderPSNames(for: fontSelection).compactMap {
+            fontName in
+            let ctFont = CTFontCreateWithName(fontName as CFString, 24, nil)
+            let resolvedName = CTFontCopyPostScriptName(ctFont) as String
+            guard resolvedName.caseInsensitiveCompare(fontName) == .orderedSame else {
+                return nil
+            }
+            return CTFontCopyAttribute(ctFont, kCTFontURLAttribute) as? URL
         }
+        guard !fontFileURLs.isEmpty else { return nil }
 
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("ass_fonts_" + UUID().uuidString, isDirectory: true)
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-            try FileManager.default.copyItem(at: fontFileURL, to: dir.appendingPathComponent(fontFileURL.lastPathComponent))
+            for fontFileURL in Set(fontFileURLs) {
+                try FileManager.default.copyItem(
+                    at: fontFileURL,
+                    to: dir.appendingPathComponent(fontFileURL.lastPathComponent)
+                )
+            }
             return dir
         } catch {
             try? FileManager.default.removeItem(at: dir)

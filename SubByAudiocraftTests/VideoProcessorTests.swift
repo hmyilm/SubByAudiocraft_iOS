@@ -65,6 +65,14 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(
             processor.subtitleRenderPath(
                 karaokeMode: .kinetic,
+                lyricTrackingMode: .boldWord,
+                usesConnectedFont: true
+            ),
+            .boldWord
+        )
+        XCTAssertEqual(
+            processor.subtitleRenderPath(
+                karaokeMode: .kinetic,
                 lyricTrackingMode: .centeredWordReveal,
                 usesConnectedFont: true
             ),
@@ -1518,7 +1526,8 @@ final class VideoProcessorTests: XCTestCase {
             fontSize: 70,
             marginV: 120,
             virtualWidth: 608,
-            virtualHeight: 1080
+            virtualHeight: 1080,
+            accent: .coral
         )
         let classicDialogues = classic.components(separatedBy: "\n").filter {
             $0.hasPrefix("Dialogue:")
@@ -1529,9 +1538,12 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 2,") }.count, 3)
         XCTAssertTrue(classic.contains("\\fs70\\b0"))
         XCTAssertTrue(classic.contains("\\fs70\\b1"))
+        XCTAssertTrue(classic.contains("kara sevda içimde"))
         XCTAssertTrue(classicDialogues.contains { $0.hasSuffix("}kara") })
         XCTAssertTrue(classic.contains("\\t(100,110,\\alpha&H00&)"))
         XCTAssertTrue(classic.contains("\\t(550,560,\\alpha&HFF&)"))
+        XCTAssertTrue(classic.contains("\\c&H7A5CFF&"))
+        XCTAssertTrue(classic.contains("\\3c&H7A5CFF&\\bord0.8\\shad0"))
 
         let boldFaceClassic = VideoProcessor.shared.makeBoldWordDialogues(
             group: words,
@@ -1541,11 +1553,11 @@ final class VideoProcessorTests: XCTestCase {
             fontSize: 70,
             marginV: 120,
             virtualWidth: 608,
-            virtualHeight: 1080
+            virtualHeight: 1080,
+            accent: .violet
         )
-        XCTAssertTrue(
-            boldFaceClassic.contains("\\b1\\3c&HFFFFFF&\\bord0.8\\shad0")
-        )
+        XCTAssertTrue(boldFaceClassic.contains("\\b1\\c&HFA8BA7&"))
+        XCTAssertFalse(boldFaceClassic.contains("\\bord0.8"))
 
         let kinetic = VideoProcessor.shared.makeKineticDialogues(
             group: words,
@@ -1561,34 +1573,8 @@ final class VideoProcessorTests: XCTestCase {
         )
 
         XCTAssertTrue(kinetic.contains("\\b0}"))
-        XCTAssertTrue(kinetic.contains("\\b1\\alpha&HFF&"))
+        XCTAssertTrue(kinetic.contains("\\b1\\c&H2FCCFE&\\alpha&HFF&"))
         XCTAssertFalse(kinetic.contains("\\alpha&HA0&"))
-    }
-
-    func testClassicKaraokeExportMatchesPreviewColorScaleAndPastOpacity() {
-        let words = [
-            VideoProcessor.WordTimestamp(text: "kara", start: 0.10, end: 0.55),
-            VideoProcessor.WordTimestamp(text: "sevda", start: 0.65, end: 1.15)
-        ]
-
-        let ass = VideoProcessor.shared.makeClassicWordTrackingDialogues(
-            group: words,
-            segStart: 0,
-            segEnd: 1.4,
-            fontName: "Anton-Regular",
-            fontSize: 70,
-            marginV: 120,
-            virtualWidth: 608,
-            virtualHeight: 1080
-        )
-        let dialogues = ass.split(separator: "\n")
-
-        XCTAssertEqual(dialogues.count, words.count)
-        XCTAssertTrue(ass.contains("\\c&H2FCCFE&"))
-        XCTAssertTrue(ass.contains("\\fscx108\\fscy108"))
-        XCTAssertTrue(ass.contains("\\alpha&HA6&"))
-        XCTAssertTrue(ass.contains("\\pos("))
-        XCTAssertFalse(ass.contains("\\alpha&HA0&"))
     }
 
     func testEditorialASSUsesAnimatedUnderlineInsteadOfRandomScaling() {
@@ -1997,6 +1983,55 @@ final class FontCatalogTests: XCTestCase {
         )
         XCTAssertNil(FontCatalog.secenek("Creepster-Regular"))
         XCTAssertNil(FontCatalog.secenek("PermanentMarker-Regular"))
+    }
+
+    func testEveryFontSupportsDynamicRegularAndBoldRendering() {
+        for font in FontCatalog.hepsi {
+            XCTAssertFalse(font.regularFaceName.isEmpty, font.display)
+            XCTAssertEqual(
+                FontCatalog.regularPSName(for: font.psName),
+                font.regularFaceName,
+                font.display
+            )
+
+            let renderNames = FontCatalog.renderPSNames(for: font.psName)
+            XCTAssertEqual(renderNames.first, font.regularFaceName, font.display)
+            if let boldPSName = font.boldPSName {
+                XCTAssertTrue(renderNames.contains(boldPSName), font.display)
+                XCTAssertEqual(
+                    FontCatalog.boldPSName(for: font.regularFaceName),
+                    boldPSName,
+                    font.display
+                )
+            } else {
+                // Tek kesit yayımlayan aileler aynı Cümle + Kalın yolunda kontrollü
+                // sentetik ağırlık kullanır; hayali bir font dosyasına yönelmez.
+                XCTAssertNil(FontCatalog.boldPSName(for: font.psName), font.display)
+                XCTAssertEqual(renderNames, [font.regularFaceName], font.display)
+            }
+        }
+    }
+
+    func testBundledFamiliesWithPublishedWeightsUseRealRegularBoldPairs() {
+        let expectedPairs = [
+            "Montserrat-ExtraBold": ("Montserrat-Regular", "Montserrat-Bold"),
+            "Poppins-Bold": ("Poppins-Regular", "Poppins-Bold"),
+            "Lato-Bold": ("Lato-Regular", "Lato-Bold"),
+            "SpaceMono-Bold": ("SpaceMono-Regular", "SpaceMono-Bold"),
+            "LeagueSpartan-Bold": ("LeagueSpartan-Regular", "LeagueSpartan-Bold"),
+            "Oswald-Bold": ("Oswald-Regular", "Oswald-Bold"),
+            "PlayfairDisplayRoman-Black": (
+                "PlayfairDisplayRoman-Regular",
+                "PlayfairDisplayRoman-Bold"
+            ),
+            "CaveatRoman-Bold": ("CaveatRoman-Regular", "CaveatRoman-Bold")
+        ]
+
+        for (selection, pair) in expectedPairs {
+            XCTAssertEqual(FontCatalog.regularPSName(for: selection), pair.0)
+            XCTAssertEqual(FontCatalog.boldPSName(for: selection), pair.1)
+            XCTAssertEqual(FontCatalog.renderPSNames(for: selection), [pair.0, pair.1])
+        }
     }
 
     func testEveryModeHasNonConnectedCuratedRecommendations() {

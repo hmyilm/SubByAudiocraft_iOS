@@ -19,13 +19,13 @@ targets:
     type: application
     platform: iOS
     deploymentTarget: "18.0"
-    version: 1.21.2
-    build: 54
+    version: 1.21.3
+    build: 55
     settings:
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       PRODUCT_BUNDLE_IDENTIFIER: com.hmyilm.SubByAudiocraft
-      MARKETING_VERSION: "1.21.2"
-      CURRENT_PROJECT_VERSION: "54"
+      MARKETING_VERSION: "1.21.3"
+      CURRENT_PROJECT_VERSION: "55"
     sources: [SubByAudiocraft]
     dependencies:
       - package: WhisperKit
@@ -46,8 +46,10 @@ targets:
           - Anton-Regular.ttf
           - Bangers-Regular.ttf
           - BebasNeue-Regular.ttf
+          - Lato-Regular.ttf
           - Lato-Bold.ttf
           - Pacifico-Regular.ttf
+          - Poppins-Regular.ttf
           - Poppins-Bold.ttf
           - Lobster-Regular.ttf
           - AbrilFatface-Regular.ttf
@@ -64,18 +66,26 @@ targets:
           - KaushanScript-Regular.ttf
           - MarckScript-Regular.ttf
           - Courgette-Regular.ttf
+          - Montserrat-Regular.ttf
+          - Montserrat-Bold.ttf
           - Montserrat-ExtraBold.ttf
           - ArchivoBlack-Regular.ttf
+          - LeagueSpartan-Regular.ttf
           - LeagueSpartan-Bold.ttf
+          - Oswald-Regular.ttf
           - Oswald-Bold.ttf
+          - PlayfairDisplay-Regular.ttf
+          - PlayfairDisplay-Bold.ttf
           - PlayfairDisplay-Black.ttf
+          - SpaceMono-Regular.ttf
           - SpaceMono-Bold.ttf
+          - Caveat-Regular.ttf
           - Caveat-Bold.ttf
         UILaunchScreen: {}
         CFBundleIconName: AppIcon
         CFBundleDisplayName: Sub by Audiocraft
-        CFBundleShortVersionString: "1.21.2"
-        CFBundleVersion: "54"
+        CFBundleShortVersionString: "1.21.3"
+        CFBundleVersion: "55"
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

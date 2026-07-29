@@ -491,6 +491,14 @@ struct KaraokeModePicker: View {
                         .font(.caption2)
                         .foregroundColor(Theme.yellow)
                         .fixedSize(horizontal: false, vertical: true)
+                    } else if lyricTrackingMode == .boldWord {
+                        Label(
+                            "Cümle + Kalın seçiliyken tam cümle sabit kalır. Kinetik sahne düzeni kapanır; fontun Bold davranışı ve seçilen vurgu rengi etkin kalır.",
+                            systemImage: "bold"
+                        )
+                        .font(.caption2)
+                        .foregroundColor(Theme.yellow)
+                        .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Group {
@@ -634,16 +642,29 @@ struct KaraokeModePicker: View {
                             }
                         }
                     }
-                    .disabled(lyricTrackingMode.isProgressiveReveal)
-                    .opacity(lyricTrackingMode.isProgressiveReveal ? 0.42 : 1)
+                    .disabled(
+                        lyricTrackingMode.isProgressiveReveal
+                            || lyricTrackingMode == .boldWord
+                    )
+                    .opacity(
+                        lyricTrackingMode.isProgressiveReveal
+                            || lyricTrackingMode == .boldWord
+                            ? 0.42
+                            : 1
+                    )
 
                     accentControls
 
                     Label(
                         lyricTrackingMode.isProgressiveReveal
                             ? "Akış modu seçilen fontu ve rengi kullanır; uygulanmayan seçenekler yukarıda pasif gösterilir."
-                            : "Overlay, vurgu rengi, harf tasarımı ve geçişler aynı sahne planından beslenir; rastgele üst üste bindirilmez.",
+                            : (
+                                lyricTrackingMode == .boldWord
+                                    ? "Normal cümle Regular çizilir. Aktif kelime varsa gerçek Bold kesitiyle, tek kesitli fontlarda kontrollü kalınlıkla ve seçilen renkle gösterilir."
+                                    : "Overlay, vurgu rengi, harf tasarımı ve geçişler aynı sahne planından beslenir; rastgele üst üste bindirilmez."
+                            ),
                         systemImage: lyricTrackingMode.isProgressiveReveal
+                            || lyricTrackingMode == .boldWord
                             ? "checkmark.shield"
                             : "scope"
                     )
@@ -652,7 +673,8 @@ struct KaraokeModePicker: View {
                     .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.top, 2)
-            } else if lyricTrackingMode.isProgressiveReveal {
+            } else if lyricTrackingMode.isProgressiveReveal
+                        || lyricTrackingMode == .boldWord {
                 accentControls
                     .padding(.top, 2)
             }
@@ -924,7 +946,8 @@ struct SubtitlePreviewPlayer: View {
                                     accent: revealAccent
                                 )
                             }
-                        } else if karaokeMode == .kinetic {
+                        } else if karaokeMode == .kinetic
+                                    && lyricTrackingMode != .boldWord {
                             let previewWords = karaokeWords.isEmpty ? sampleTimingWords : karaokeWords
                             let plan = kineticScenePlan
                                 ?? VideoProcessor.shared.kineticTypographyPlan(
@@ -961,52 +984,66 @@ struct SubtitlePreviewPlayer: View {
                                 ) { row in
                                     HStack(spacing: max(1, viewport.height / 100)) {
                                         ForEach(row.element) { word in
-                                    let isActive = lyricTrackingMode == .karaoke
-                                        && playbackTime >= word.start
-                                        && playbackTime < word.end
-                                    let isPast = lyricTrackingMode == .karaoke
-                                        && playbackTime >= word.end
-                                    let isBoldActive = lyricTrackingMode == .boldWord
-                                        && playbackTime >= word.start
-                                        && playbackTime < word.end
-                                    let needsSyntheticWeight = FontCatalog.secenek(fontName)?.kalin
-                                        ?? fontName.localizedCaseInsensitiveContains("Bold")
-                                    Text(word.text)
-                                        .foregroundColor(
-                                            isBoldActive
-                                                ? .clear
-                                                : (
-                                                    isActive
-                                                        ? Theme.yellow
-                                                        : (isPast ? .white.opacity(0.35) : .white)
+                                            if lyricTrackingMode == .karaoke {
+                                                ClassicCharacterTrackingWord(
+                                                    text: word.text,
+                                                    start: word.start,
+                                                    end: word.end,
+                                                    playbackTime: playbackTime
                                                 )
-                                        )
-                                        .overlay {
-                                            if isBoldActive {
+                                            } else {
+                                                let isBoldActive = lyricTrackingMode == .boldWord
+                                                    && playbackTime >= word.start
+                                                    && playbackTime < word.end
                                                 Text(word.text)
-                                                    .fontWeight(.bold)
-                                                    .foregroundColor(.white)
-                                                    .shadow(
-                                                        color: needsSyntheticWeight
-                                                            ? .white.opacity(0.9)
-                                                            : .clear,
-                                                        radius: needsSyntheticWeight ? 0.55 : 0
+                                                    .foregroundColor(
+                                                        isBoldActive ? .clear : .white
                                                     )
+                                                    .overlay {
+                                                        if isBoldActive {
+                                                            Text(word.text)
+                                                                .font(
+                                                                    .custom(
+                                                                        boldPreviewFontName,
+                                                                        size: CGFloat(fontSize)
+                                                                            * previewScale
+                                                                    )
+                                                                )
+                                                                .fontWeight(
+                                                                    hasRealBoldPreviewFace
+                                                                        ? nil
+                                                                        : .bold
+                                                                )
+                                                                .foregroundColor(
+                                                                    resolvedPreviewAccent
+                                                                )
+                                                                .shadow(
+                                                                    color: hasRealBoldPreviewFace
+                                                                        ? .clear
+                                                                        : resolvedPreviewAccent
+                                                                            .opacity(0.9),
+                                                                    radius: hasRealBoldPreviewFace
+                                                                        ? 0
+                                                                        : 0.55
+                                                                )
+                                                        }
+                                                    }
                                             }
                                         }
-                                        .scaleEffect(isActive ? 1.08 : 1)
-                                        .shadow(
-                                            color: isActive ? Theme.yellow.opacity(0.45) : .clear,
-                                            radius: isActive ? 4 : 0
-                                        )
                                     }
+                                    .frame(maxWidth: .infinity, alignment: .center)
                                 }
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                }
-                        }
+                            }
                         }
                     }
-                        .font(.custom(fontName, size: CGFloat(fontSize) * previewScale))
+                        .font(
+                            .custom(
+                                lyricTrackingMode == .boldWord
+                                    ? regularPreviewFontName
+                                    : fontName,
+                                size: CGFloat(fontSize) * previewScale
+                            )
+                        )
                         .lineLimit(1)
                         .minimumScaleFactor(0.45)
                         .multilineTextAlignment(.center)
@@ -1046,6 +1083,24 @@ struct SubtitlePreviewPlayer: View {
         )
     }
 
+    private var regularPreviewFontName: String {
+        FontCatalog.regularPSName(for: fontName)
+    }
+
+    private var boldPreviewFontName: String {
+        FontCatalog.boldPSName(for: fontName) ?? regularPreviewFontName
+    }
+
+    private var hasRealBoldPreviewFace: Bool {
+        FontCatalog.boldPSName(for: fontName) != nil
+    }
+
+    private var resolvedPreviewAccent: Color {
+        kineticAccent.resolvedColor(
+            customHex: kineticCustomColorHex
+        ).previewColor
+    }
+
     private func manualKineticRows(
         for words: [VideoProcessor.WordTimestamp]
     ) -> [[Int]]? {
@@ -1082,6 +1137,39 @@ struct SubtitlePreviewPlayer: View {
     ) -> Double {
         guard words.indices.contains(plan.emphasisIndex) else { return words.first?.start ?? 0 }
         return words[plan.emphasisIndex].start + 0.05
+    }
+}
+
+// Klasik harf takibinin canlı ön izlemesi. Söylenmemiş bölüm tam beyaz kalır;
+// vokal ilerledikçe soldan sağa doğru dışa aktarımdaki gibi soluklaşır.
+private struct ClassicCharacterTrackingWord: View {
+    let text: String
+    let start: Double
+    let end: Double
+    let playbackTime: Double
+
+    private var progress: CGFloat {
+        guard end > start else { return playbackTime >= end ? 1 : 0 }
+        return CGFloat(min(1, max(0, (playbackTime - start) / (end - start))))
+    }
+
+    var body: some View {
+        Text(text)
+            .foregroundColor(.white.opacity(0.35))
+            .overlay(alignment: .trailing) {
+                Text(text)
+                    .foregroundColor(.white)
+                    .mask(alignment: .trailing) {
+                        GeometryReader { geometry in
+                            Rectangle()
+                                .frame(
+                                    width: geometry.size.width * max(0, 1 - progress)
+                                )
+                                .frame(maxWidth: .infinity, alignment: .trailing)
+                        }
+                    }
+            }
+            .fixedSize(horizontal: true, vertical: true)
     }
 }
 
@@ -1268,8 +1356,8 @@ private struct KineticPreviewLockup: View {
                             let isBoldActive = trackingMode == .boldWord
                                 && playbackTime >= word.start
                                 && playbackTime < word.end
-                            let needsSyntheticWeight = FontCatalog.secenek(fontName)?.kalin
-                                ?? fontName.localizedCaseInsensitiveContains("Bold")
+                            let needsSyntheticWeight =
+                                FontCatalog.boldPSName(for: fontName) == nil
                             let glyphDesign = VideoProcessor.shared.kineticGlyphDesign(
                                 text: word.text,
                                 wordIndex: index,
@@ -1310,10 +1398,10 @@ private struct KineticPreviewLockup: View {
                                             baseFontSize: previewFontSize,
                                             fontWeight: .bold
                                         )
-                                        .foregroundColor(.white)
+                                        .foregroundColor(resolvedAccent.previewColor)
                                         .shadow(
                                             color: needsSyntheticWeight
-                                                ? .white.opacity(0.9)
+                                                ? resolvedAccent.previewColor.opacity(0.9)
                                                 : .clear,
                                             radius: needsSyntheticWeight ? 0.55 : 0
                                         )
@@ -1650,20 +1738,31 @@ private struct KineticPreviewWordRun: View {
         self.fontWeight = fontWeight
     }
 
+    private var resolvedFontName: String {
+        guard fontWeight != nil else { return fontName }
+        return FontCatalog.boldPSName(for: fontName)
+            ?? FontCatalog.regularPSName(for: fontName)
+    }
+
+    private var resolvedFontWeight: Font.Weight? {
+        guard fontWeight != nil else { return nil }
+        return FontCatalog.boldPSName(for: fontName) == nil ? fontWeight : nil
+    }
+
     @ViewBuilder
     var body: some View {
         if FontCatalog.secenek(fontName)?.bitisik == true {
             Text(String(design.characters))
-                .font(.custom(fontName, size: baseFontSize))
-                .fontWeight(fontWeight)
+                .font(.custom(resolvedFontName, size: baseFontSize))
+                .fontWeight(resolvedFontWeight)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: true)
         } else {
             KineticGlyphRun(
                 design: design,
-                fontName: fontName,
+                fontName: resolvedFontName,
                 baseFontSize: baseFontSize,
-                fontWeight: fontWeight
+                fontWeight: resolvedFontWeight
             )
         }
     }

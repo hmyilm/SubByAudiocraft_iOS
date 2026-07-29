@@ -790,7 +790,8 @@ struct ContentView: View {
         let renderWords = words
         let renderLineBreaks = lineBreaks
         let renderInlineLineBreaks = inlineLineBreaks
-        let renderFontName = fontName
+        let renderFontSelection = fontName
+        let renderFontName = FontCatalog.regularPSName(for: fontName)
         let renderFontSize = Int(fontSize)
         let renderMarginV = Int(marginV)
         let renderKaraokeMode = KaraokeMode.resolved(karaokeModeRaw)
@@ -845,7 +846,7 @@ struct ContentView: View {
             VideoProcessor.shared.burnSubtitles(
                 videoURL: url,
                 assURL: assURL,
-                fontName: renderFontName
+                fontName: renderFontSelection
             ) { outputURL, errorMessage in
                 VideoProcessor.shared.deleteFile(at: assURL)
 

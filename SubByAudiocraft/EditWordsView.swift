@@ -92,6 +92,7 @@ struct EditWordsView: View {
 
                     if karaokeMode == .kinetic,
                        !lyricTrackingMode.isProgressiveReveal,
+                       lyricTrackingMode != .boldWord,
                        let plan = previewPlan {
                         VStack(alignment: .leading, spacing: 3) {
                             Label(
@@ -198,7 +199,8 @@ struct EditWordsView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if karaokeMode == .kinetic,
-                   !lyricTrackingMode.isProgressiveReveal {
+                   !lyricTrackingMode.isProgressiveReveal,
+                   lyricTrackingMode != .boldWord {
                     VStack(alignment: .leading, spacing: 7) {
                         HStack {
                             Label("Vurgu Yönetmeni", systemImage: "star.circle.fill")
@@ -257,7 +259,8 @@ struct EditWordsView: View {
                             word: $word,
                             isExpanded: expandedWordID == word.id,
                             showsEmphasis: karaokeMode == .kinetic
-                                && !lyricTrackingMode.isProgressiveReveal,
+                                && !lyricTrackingMode.isProgressiveReveal
+                                && lyricTrackingMode != .boldWord,
                             isEmphasis: kineticEmphasisWordIDs.contains(word.id),
                             onToggleEmphasis: {
                                 toggleEmphasis(word.id)
@@ -320,6 +323,7 @@ struct EditWordsView: View {
 
     private var previewPlan: KineticTypographyPlan? {
         guard !lyricTrackingMode.isProgressiveReveal,
+              lyricTrackingMode != .boldWord,
               lines.indices.contains(previewLineIndex) else { return nil }
         let plans = VideoProcessor.shared.kineticScenePlans(
             for: lines,
@@ -334,7 +338,7 @@ struct EditWordsView: View {
         case .off:
             return "Söz takibi kapalı; satır zamanlamasını sesi dinleyerek kontrol edebilirsin."
         case .karaoke:
-            return "Vurgulanan kelime o anda söylenen bölümü gösterir."
+            return "Harfler vokal ilerledikçe soldan sağa takip edilir."
         case .boldWord:
             return "O anda söylenen kelime kalın görünür; satır konumu ve diğer kelimeler sabit kalır."
         case .centeredReveal:
