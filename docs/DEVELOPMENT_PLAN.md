@@ -113,6 +113,7 @@ Mevcut yaklaşımın güçlü tarafları:
 | CI-02 | P0 | `Podfile.lock` ve `Package.resolved` depoda yok | Aynı commit farklı tarihte farklı dolaylı bağımlılık çözebilir. | Planlandı |
 | CI-03 | P1 | Codemagic `xcode: latest` kullanıyor | Yeni Xcode/runtime geldiği gün build davranışı değişebilir. | Planlandı |
 | CI-04 | P1 | CI yalnız unit test; gerçek video entegrasyon testi yok | ASS filtreleme, font yükleme, ses koruma ve çıktı süresi tek sistem testinde doğrulanmıyor. | Planlandı |
+| CI-05 | P0 | Xcode 26.4 image’ında MLX için Metal Toolchain kurulu değildi | Unit test derlemesi `CompileMetalFile` aşamasında başlamadan duruyordu. | **1.19.1’de düzeltildi:** CI Apple bileşenini indirip derleyiciyi doğruluyor |
 | SEC-01 | P0 | Privacy manifest görünmüyor | Uygulama ve bağımlılıklar Required Reason API kullanımı açısından paket üzerinde denetlenmeli. | Planlandı |
 | TST-01 | P1 | Türkçe şarkı ses fixture’ı ve altın transkript yok | ASR doğruluk gerilemesi otomatik yakalanamıyor. | Planlandı |
 | TST-02 | P1 | Bellek/performance testi yok | MEM-01 benzeri hata geri dönebilir. | Planlandı |
@@ -632,6 +633,7 @@ Dış TestFlight incelemesi otomatik gönderilmez; App Store Connect test ileti�
 | Sürüm | Tema | Çıkış şartı |
 |---|---|---|
 | 1.19.0 | Pencereli ses belleği | WP-001 unit testleri + manual Codemagic + iPhone 14 smoke |
+| 1.19.1 | Xcode 26 Metal CI hazırlığı | Metal Toolchain indirme/doğrulama aşaması + manual Codemagic |
 | 1.20.0 | Tanılama ve güvenli proje | WP-002, WP-101, WP-102, WP-103 |
 | 1.21.0 | Ölçülebilir söz motoru | WP-201, WP-202, benchmark başlangıç raporu |
 | 1.22.0 | Daha doğru bağlam/zaman | WP-203, inceleme işaretleri, zaman kalite testleri |

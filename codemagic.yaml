@@ -16,6 +16,16 @@ workflows:
       - name: Install Dependencies
         script: |
           pod install
+      - name: Install Metal Toolchain
+        script: |
+          set -euo pipefail
+
+          echo "Selected Xcode:"
+          xcodebuild -version
+          echo "Downloading the Metal Toolchain required by MLX..."
+          xcodebuild -downloadComponent metalToolchain
+          echo "Installed Metal compiler:"
+          xcrun --sdk iphonesimulator metal --version
       - name: Run Unit Tests
         script: |
           set -euo pipefail
