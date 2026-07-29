@@ -129,7 +129,7 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertGreaterThan(normalized[1].end, normalized[1].start)
     }
 
-    func testSecondTimingPassAveragesOnlyMatchingNearbyWords() {
+    func testSecondTimingPassPreservesOnsetsAndOnlyExtendsNearbyWords() {
         let primary = [
             VideoProcessor.WordTimestamp(text: "kara", start: 1.0, end: 1.4),
             VideoProcessor.WordTimestamp(text: "sevda", start: 1.5, end: 2.0)
@@ -145,11 +145,32 @@ final class VideoProcessorTests: XCTestCase {
         )
 
         XCTAssertEqual(merged.map(\.text), ["kara", "sevda"])
-        XCTAssertEqual(merged[0].start, 1.076, accuracy: 0.0001)
-        XCTAssertEqual(merged[1].start, 1.576, accuracy: 0.0001)
+        XCTAssertEqual(merged[0].start, 1.0, accuracy: 0.0001)
+        XCTAssertEqual(merged[1].start, 1.5, accuracy: 0.0001)
+        XCTAssertEqual(merged[0].end, 1.45, accuracy: 0.0001)
+        XCTAssertEqual(merged[1].end, 2.05, accuracy: 0.0001)
         XCTAssertTrue(zip(merged, merged.dropFirst()).allSatisfy { pair in
             pair.0.end <= pair.1.start
         })
+    }
+
+    func testSecondTimingPassRejectsLargeTimingShift() {
+        let primary = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 1.0, end: 1.4),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 1.5, end: 2.0)
+        ]
+        let shifted = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 1.8, end: 2.2),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 2.3, end: 2.8)
+        ]
+
+        let merged = VideoProcessor.shared.mergeTimingPasses(
+            primary: primary,
+            secondary: shifted
+        )
+
+        XCTAssertEqual(merged.map(\.start), primary.map(\.start))
+        XCTAssertEqual(merged.map(\.end), primary.map(\.end))
     }
 
     func testQwenTranscriptCorrectsWordsWithoutLosingWhisperTiming() throws {
@@ -171,6 +192,25 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertGreaterThan(aligned[2].end, aligned[2].start)
     }
 
+    func testQwenTranscriptUsesTwoStrongNeighborsForCompleteWordCorrection() throws {
+        let timed = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 2.0, end: 2.4),
+            VideoProcessor.WordTimestamp(text: "bilmem", start: 2.5, end: 2.9),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 3.0, end: 3.6)
+        ]
+
+        let aligned = try XCTUnwrap(
+            VideoProcessor.shared.alignEnhancedTranscriptWords(
+                ["kara", "yaktın", "sevda"],
+                to: timed
+            )
+        )
+
+        XCTAssertEqual(aligned.map(\.text), ["kara", "yaktın", "sevda"])
+        XCTAssertEqual(aligned.map(\.start), timed.map(\.start))
+        XCTAssertEqual(aligned.map(\.end), timed.map(\.end))
+    }
+
     func testQwenTranscriptInterpolatesAnInsertedWordMonotonically() throws {
         let timed = [
             VideoProcessor.WordTimestamp(text: "kara", start: 1.0, end: 1.4),
@@ -189,6 +229,92 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertGreaterThan(aligned[1].start, aligned[0].start)
         XCTAssertLessThan(aligned[1].start, aligned[2].start)
         XCTAssertEqual(aligned[2].start, 2.0, accuracy: 0.0001)
+    }
+
+    func testQwenTranscriptDoesNotInventWordInsideTightTimingGap() throws {
+        let timed = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 1.0, end: 1.48),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 1.5, end: 2.0)
+        ]
+
+        let aligned = try XCTUnwrap(
+            VideoProcessor.shared.alignEnhancedTranscriptWords(
+                ["kara", "bir", "sevda"],
+                to: timed
+            )
+        )
+
+        XCTAssertEqual(aligned.map(\.text), ["kara", "sevda"])
+        XCTAssertEqual(aligned.map(\.start), timed.map(\.start))
+    }
+
+    func testQwenTranscriptDropsSungVowelInsteadOfMakingCaptionWord() throws {
+        let timed = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 1.0, end: 1.4),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 2.0, end: 2.5)
+        ]
+
+        let aligned = try XCTUnwrap(
+            VideoProcessor.shared.alignEnhancedTranscriptWords(
+                ["kara", "aaaa", "sevda"],
+                to: timed
+            )
+        )
+
+        XCTAssertEqual(aligned.map(\.text), ["kara", "sevda"])
+        XCTAssertEqual(aligned.map(\.start), timed.map(\.start))
+    }
+
+    func testQwenTranscriptRejectsUnrelatedWindow() {
+        let timed = [
+            VideoProcessor.WordTimestamp(text: "kara", start: 1.0, end: 1.4),
+            VideoProcessor.WordTimestamp(text: "sevda", start: 1.5, end: 2.0),
+            VideoProcessor.WordTimestamp(text: "yandı", start: 2.1, end: 2.6)
+        ]
+
+        XCTAssertNil(
+            VideoProcessor.shared.alignEnhancedTranscriptWords(
+                ["gece", "çok", "uzun"],
+                to: timed
+            )
+        )
+    }
+
+    func testRecognitionNormalizationMergesMelismaIntoPreviousWordDuration() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "sevda", start: 1.0, end: 1.5),
+            VideoProcessor.WordTimestamp(text: "aaaa", start: 1.54, end: 2.2),
+            VideoProcessor.WordTimestamp(text: "yakıyor", start: 2.4, end: 2.9)
+        ]
+
+        let normalized = VideoProcessor.shared.normalizeRecognizedWords(words)
+
+        XCTAssertEqual(normalized.map(\.text), ["sevda", "yakıyor"])
+        XCTAssertEqual(normalized[0].end, 2.2, accuracy: 0.0001)
+        XCTAssertEqual(normalized[1].start, 2.4, accuracy: 0.0001)
+    }
+
+    func testRecognitionNormalizationKeepsLegitimateSingleLetterWord() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "işte", start: 1.0, end: 1.4),
+            VideoProcessor.WordTimestamp(text: "o", start: 1.45, end: 1.8)
+        ]
+
+        let normalized = VideoProcessor.shared.normalizeRecognizedWords(words)
+
+        XCTAssertEqual(normalized.map(\.text), ["işte", "o"])
+    }
+
+    func testRecognitionNormalizationDropsUnanchoredSungVowels() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "aaaa", start: 0.2, end: 0.8),
+            VideoProcessor.WordTimestamp(text: "kara", start: 1.0, end: 1.4),
+            VideoProcessor.WordTimestamp(text: "ü", start: 2.0, end: 2.3)
+        ]
+
+        let normalized = VideoProcessor.shared.normalizeRecognizedWords(words)
+
+        XCTAssertEqual(normalized.map(\.text), ["kara"])
     }
 
     func testLyricRecognitionWindowsCoverEveryWordWithinMemorySafeDuration() {

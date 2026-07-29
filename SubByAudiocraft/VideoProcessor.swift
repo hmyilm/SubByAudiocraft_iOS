@@ -1022,9 +1022,10 @@ class VideoProcessor: ObservableObject {
         return normalizeRecognizedWords(words)
     }
 
-    // VAD ve sabit pencere geçişlerini kelime sırasına göre eşleştirir. İki
-    // geçişin aynı kelime için yakın bulduğu başlangıç/bitişlerin ortalaması,
-    // tek bir geçişte görülen 200-500 ms'lik karaoke kaymalarını azaltır.
+    // VAD ve sabit pencere geçişlerini kelime sırasına göre eşleştirir. VAD
+    // kelime başlangıçlarında ana zaman kaynağıdır. İkinci geçiş yalnız çok yakın
+    // bir eşleşmede kelime sonunu hafifçe iyileştirir; başlangıcı ortalamak şarkı
+    // sözlerinde karaoke vurgusunu duyulan heceden yüzlerce ms uzağa taşıyabiliyor.
     func mergeTimingPasses(
         primary: [WordTimestamp],
         secondary: [WordTimestamp]
@@ -1043,14 +1044,19 @@ class VideoProcessor: ObservableObject {
                   secondary.indices.contains(secondaryIndex) else { continue }
             let second = secondary[secondaryIndex]
             let similarity = tokenSimilarity(merged[index].text, second.text)
-            guard similarity >= 0.45,
-                  abs(merged[index].start - second.start) <= 1.2,
-                  abs(merged[index].end - second.end) <= 1.4 else { continue }
+            guard similarity >= 0.60,
+                  abs(merged[index].start - second.start) <= 0.25,
+                  abs(merged[index].end - second.end) <= 0.45 else { continue }
 
-            // VAD başlangıçta daha güvenilir, sabit pencere ise uzatılmış hecelerin
-            // bitişini daha iyi korur; ağırlıklar buna göre seçildi.
-            merged[index].start = (merged[index].start * 0.62) + (second.start * 0.38)
-            merged[index].end = (merged[index].end * 0.48) + (second.end * 0.52)
+            // Başlangıcı olduğu gibi koru. İkinci geçiş yalnız uzatılmış hecenin
+            // sonunu destekliyorsa küçük bir katkı yapabilir ve hiçbir zaman bir
+            // sonraki VAD başlangıcını aşamaz.
+            guard second.end > merged[index].end else { continue }
+            let blendedEnd = (merged[index].end * 0.75) + (second.end * 0.25)
+            let nextStart = index + 1 < primary.count
+                ? primary[index + 1].start
+                : .infinity
+            merged[index].end = min(blendedEnd, nextStart)
         }
         return normalizeRecognizedWords(merged)
     }
@@ -1304,20 +1310,21 @@ class VideoProcessor: ObservableObject {
     ) -> [WordTimestamp]? {
         let cleanedEnhanced = enhancedWords.compactMap { raw -> String? in
             let value = cleanRecognizedText(raw)
-            return value.isEmpty ? nil : value
+            guard !value.isEmpty, !isNonLexicalVocalization(value) else { return nil }
+            return value
         }
         let local = normalizeRecognizedWords(timedWords)
         guard !cleanedEnhanced.isEmpty, !local.isEmpty else { return nil }
 
         let countRatio = Double(cleanedEnhanced.count) / Double(local.count)
-        guard (0.38...2.35).contains(countRatio) else { return nil }
+        guard (0.50...1.75).contains(countRatio) else { return nil }
 
         let mapping = sequenceMapping(
             source: cleanedEnhanced,
             target: local.map(\.text)
         )
-        let matchedPairs = mapping.enumerated().compactMap { sourceIndex, targetIndex
-            -> (Int, Int, Double)? in
+        let mappedPairs = mapping.enumerated().compactMap { sourceIndex, targetIndex
+            -> (source: Int, target: Int, similarity: Double)? in
             guard let targetIndex, local.indices.contains(targetIndex) else { return nil }
             return (
                 sourceIndex,
@@ -1325,88 +1332,97 @@ class VideoProcessor: ObservableObject {
                 tokenSimilarity(cleanedEnhanced[sourceIndex], local[targetIndex].text)
             )
         }
-        guard !matchedPairs.isEmpty else { return nil }
-
-        let structuralCoverage = Double(matchedPairs.count)
+        let anchors = mappedPairs.filter { $0.similarity >= 0.62 }
+        let comparablePairs = mappedPairs.filter { $0.similarity >= 0.48 }
+        let minimumAnchorCount = min(2, min(cleanedEnhanced.count, local.count))
+        let comparableCoverage = Double(comparablePairs.count)
             / Double(max(cleanedEnhanced.count, local.count))
-        let meanSimilarity = matchedPairs.reduce(0) { $0 + $1.2 }
-            / Double(matchedPairs.count)
-        let recognizableRatio = Double(matchedPairs.filter { $0.2 >= 0.58 }.count)
-            / Double(cleanedEnhanced.count)
-        guard structuralCoverage >= 0.42,
-              meanSimilarity >= 0.16 || recognizableRatio >= 0.14 else {
+        guard anchors.count >= minimumAnchorCount,
+              comparableCoverage >= 0.40 else {
             return nil
         }
 
-        var onsets = [Double?](repeating: nil, count: cleanedEnhanced.count)
-        for (sourceIndex, targetIndex, _) in matchedPairs {
-            onsets[sourceIndex] = local[targetIndex].start
+        // Qwen burada metin düzelticisidir, zaman üreticisi değildir. Güvenilir
+        // eşleşmeler Whisper kelimesinin gerçek başlangıç/bitişini aynen korur.
+        // Düşük benzerlikli çapraz eşleşmeler sözün tamamını bozmasın.
+        var replacementByTarget: [Int: String] = [:]
+        for pair in comparablePairs {
+            let enhancedKeyLength = comparisonKey(cleanedEnhanced[pair.source]).count
+            let requiredSimilarity = enhancedKeyLength <= 3 ? 0.66 : 0.48
+            guard pair.similarity >= requiredSimilarity else { continue }
+            replacementByTarget[pair.target] = cleanedEnhanced[pair.source]
         }
 
-        let localSteps = zip(local, local.dropFirst())
-            .map { pair in max(0.05, pair.1.start - pair.0.start) }
-            .filter { $0 <= 2.5 }
-            .sorted()
-        let typicalStep = localSteps.isEmpty
-            ? 0.42
-            : localSteps[localSteps.count / 2]
-        let knownIndices = onsets.indices.filter { onsets[$0] != nil }
-        guard let firstKnown = knownIndices.first, let lastKnown = knownIndices.last else {
-            return nil
-        }
-
-        if firstKnown > 0, let anchor = onsets[firstKnown] {
-            for index in stride(from: firstKnown - 1, through: 0, by: -1) {
-                onsets[index] = max(0, anchor - (Double(firstKnown - index) * typicalStep))
+        // Bir kelime iki sağlam komşu tarafından aynı konumda çevreleniyorsa Qwen
+        // tamamen farklı yazılmış bir Whisper hatasını da düzeltebilir. Komşu
+        // bağlamı olmayan düşük benzerlikli kelimeler ise aynen bırakılır.
+        let sortedAnchors = anchors.sorted { $0.source < $1.source }
+        for pair in mappedPairs where pair.similarity < 0.48 {
+            guard let left = sortedAnchors.last(where: { $0.source < pair.source }),
+                  let right = sortedAnchors.first(where: { $0.source > pair.source }),
+                  pair.source - left.source == pair.target - left.target,
+                  right.source - pair.source == right.target - pair.target else {
+                continue
             }
+            replacementByTarget[pair.target] = cleanedEnhanced[pair.source]
         }
 
-        if knownIndices.count >= 2 {
-            for pairIndex in 0..<(knownIndices.count - 1) {
-                let left = knownIndices[pairIndex]
-                let right = knownIndices[pairIndex + 1]
-                guard right - left > 1,
-                      let leftTime = onsets[left],
-                      let rightTime = onsets[right] else { continue }
-                let step = max(0.035, (rightTime - leftTime) / Double(right - left))
-                for index in (left + 1)..<right {
-                    onsets[index] = leftTime + (Double(index - left) * step)
+        // Whisper'ın atladığı bir kelimeyi yalnız iki güvenilir kelimenin arasında
+        // gerçekten zaman bırakılmışsa ekle. Pencere başı/sonunda ekstrapolasyon
+        // yapılmaz; böylece Qwen'in "aaa/na" veya hayalî kelimeleri zaman çizelgesine
+        // zorla yerleştirilmez.
+        var insertionsAfterTarget: [Int: [(source: Int, text: String)]] = [:]
+        let anchorTargetBySource = Dictionary(
+            uniqueKeysWithValues: sortedAnchors.map { ($0.source, $0.target) }
+        )
+        let anchorSources = anchorTargetBySource.keys.sorted()
+        if anchorSources.count >= 2 {
+            for pairIndex in 0..<(anchorSources.count - 1) {
+                let leftSource = anchorSources[pairIndex]
+                let rightSource = anchorSources[pairIndex + 1]
+                guard rightSource - leftSource > 1,
+                      let leftTarget = anchorTargetBySource[leftSource],
+                      let rightTarget = anchorTargetBySource[rightSource],
+                      rightTarget == leftTarget + 1 else { continue }
+
+                let candidates = ((leftSource + 1)..<rightSource).compactMap {
+                    sourceIndex -> (source: Int, text: String)? in
+                    guard mapping[sourceIndex] == nil else { return nil }
+                    let text = cleanedEnhanced[sourceIndex]
+                    guard !isNonLexicalVocalization(text) else { return nil }
+                    return (sourceIndex, text)
                 }
-            }
-        }
+                guard !candidates.isEmpty else { continue }
 
-        if lastKnown + 1 < onsets.count, let anchor = onsets[lastKnown] {
-            for index in (lastKnown + 1)..<onsets.count {
-                onsets[index] = anchor + (Double(index - lastKnown) * typicalStep)
+                let gap = local[rightTarget].start - local[leftTarget].end
+                let requiredGap = Double(candidates.count) * 0.16
+                guard gap >= requiredGap else { continue }
+                insertionsAfterTarget[leftTarget] = candidates
             }
-        }
-
-        var monotonicOnsets = [Double]()
-        monotonicOnsets.reserveCapacity(onsets.count)
-        for index in onsets.indices {
-            let proposed = onsets[index] ?? (
-                (monotonicOnsets.last ?? max(0, local.first?.start ?? 0)) + typicalStep
-            )
-            let minimum = (monotonicOnsets.last ?? (proposed - 0.035)) + 0.035
-            monotonicOnsets.append(max(0, max(proposed, minimum)))
         }
 
         var result: [WordTimestamp] = []
-        for index in cleanedEnhanced.indices {
-            let start = monotonicOnsets[index]
-            let nextStart = index + 1 < monotonicOnsets.count
-                ? monotonicOnsets[index + 1]
-                : nil
-            let mappedLocal = mapping[index].flatMap { local.indices.contains($0) ? local[$0] : nil }
-            let desiredEnd = mappedLocal?.end
-                ?? nextStart
-                ?? max(start + typicalStep, local.last?.end ?? start + typicalStep)
-            let end = nextStart.map { min(desiredEnd, $0) } ?? desiredEnd
-            result.append(WordTimestamp(
-                text: cleanedEnhanced[index],
-                start: start,
-                end: max(start + 0.05, end)
-            ))
+        for targetIndex in local.indices {
+            var word = local[targetIndex]
+            if let replacement = replacementByTarget[targetIndex] {
+                word.text = replacement
+            }
+            result.append(word)
+
+            guard let insertions = insertionsAfterTarget[targetIndex],
+                  targetIndex + 1 < local.count else { continue }
+            let gapStart = local[targetIndex].end
+            let gapEnd = local[targetIndex + 1].start
+            let slot = (gapEnd - gapStart) / Double(insertions.count + 1)
+            for (offset, insertion) in insertions.enumerated() {
+                let center = gapStart + (Double(offset + 1) * slot)
+                let halfDuration = min(0.12, slot * 0.32)
+                result.append(WordTimestamp(
+                    text: insertion.text,
+                    start: max(gapStart, center - halfDuration),
+                    end: min(gapEnd, center + halfDuration)
+                ))
+            }
         }
         return normalizeRecognizedWords(result)
     }
@@ -1667,6 +1683,17 @@ class VideoProcessor: ObservableObject {
                 continue
             }
 
+            // Şarkıcının uzattığı ünlü Whisper/Qwen tarafından bazen "aaaa",
+            // "üüü" veya ayrı bir "a" kelimesi gibi döner. Yakındaysa önceki
+            // kelimenin karaoke süresini uzat; bağımsızsa söz olmadığı için at.
+            if isNonLexicalVocalization(word.text) {
+                if let previous = normalized.last,
+                   word.start - previous.end <= 0.22 {
+                    normalized[normalized.count - 1].end = max(previous.end, word.end)
+                }
+                continue
+            }
+
             // Tek vokal hattındaki sözcükler çakıştığında iki kelime arasındaki
             // sınırı ortalar. Bu, ASS animasyonunun geri sıçramasını engeller.
             if var previous = normalized.last, previous.end > word.start {
@@ -1682,6 +1709,26 @@ class VideoProcessor: ObservableObject {
             normalized.append(word)
         }
         return normalized
+    }
+
+    private func isNonLexicalVocalization(_ text: String) -> Bool {
+        let key = comparisonKey(text)
+        let characters = Array(key)
+        guard !characters.isEmpty else { return false }
+
+        let vowels = Set(Array("aeıioöuü"))
+        if characters.count == 1, let sound = characters.first {
+            // Türkçede "o" gerçek bir sözcüktür; öteki tek ünlüler şarkı
+            // deşifresinde neredeyse her zaman uzatma parçasıdır.
+            return sound != "o" && vowels.contains(sound)
+        }
+        let sustainedSounds = vowels.union(Set(Array("hmn")))
+        if Set(characters).count == 1,
+           let sound = characters.first,
+           sustainedSounds.contains(sound) {
+            return true
+        }
+        return characters.count >= 3 && characters.allSatisfy { vowels.contains($0) }
     }
 
     private func duplicateOverlapRatio(_ lhs: WordTimestamp, _ rhs: WordTimestamp) -> Double {
