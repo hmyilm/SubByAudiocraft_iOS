@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -13,6 +13,7 @@
 		078563F7E0E903067F8259FA /* StudioControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBCE77E0ED4765FF82DAF2E2 /* StudioControls.swift */; };
 		18B05D7D0C6E22C9DDC0D8D0 /* Pacifico-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 60298A0087E84E281D394654 /* Pacifico-Regular.ttf */; };
 		2756C9519E25B64C81F35550 /* VideoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B71A3B57520EFB67FD22CF2 /* VideoProcessor.swift */; };
+		29FCE0F726AAA997D895F6FC /* Poppins-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2A195484D01432DCC31659C7 /* Poppins-Light.ttf */; };
 		2A25E436CD4F7F66923BE7C2 /* Oswald-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9F65FDFA45888A124A3E7248 /* Oswald-Regular.ttf */; };
 		2B43AF25C426E1D3F4FB008C /* SuccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E9FEC4311A1F95D6E5EC42C /* SuccessView.swift */; };
 		2B581C5A3BB3750A50E0FCDA /* MarckScript-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5DD86D7137E070DF8D55104C /* MarckScript-Regular.ttf */; };
@@ -20,11 +21,11 @@
 		2EE2F7396D6AEEA577F63EE7 /* Bangers-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0A268C005DE7A124E872B76F /* Bangers-Regular.ttf */; };
 		2F460078F9DCC16B14A08DC9 /* libavformat.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 19B28A24855E8A11681D96C9 /* libavformat.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		33D46E9A1396D5C891E55EC0 /* Poppins-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D4A25FB64CFB9AF0F1AB39BD /* Poppins-Bold.ttf */; };
-		B11111111111111111111111 /* Poppins-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A11111111111111111111111 /* Poppins-Light.ttf */; };
 		355F8ABA3AD4D85CB90DF91A /* FrancoisOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 11710E54671D10C7361D53AD /* FrancoisOne-Regular.ttf */; };
 		3D09E46DFD0C47C8BAE7791B /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3D08729D95B235A5BDFF2B37 /* WhisperKit */; };
 		418A357AC2B0D23514DAD662 /* Oswald-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5F50CD942A25E6EBCFEBD880 /* Oswald-Bold.ttf */; };
 		4286977DAA049F856124B44A /* BlackOpsOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 370EA6FB80B019205FEE3E71 /* BlackOpsOne-Regular.ttf */; };
+		457219395F742ACC16330586 /* Montserrat-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 394985FBEC3C102BD9A0EC2A /* Montserrat-Light.ttf */; };
 		49B1A4A2F50951498AAA86FC /* libavfilter.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 8EEC960967E58E422FFC1038 /* libavfilter.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		4B11BA00BDA55B2EA6192950 /* libavutil.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = D27E4F574622C9D422180F65 /* libavutil.xcframework */; };
 		4D864D7A6FEF66B8046F8684 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81AEE50304E466C69765CFEF /* Components.swift */; };
@@ -35,12 +36,13 @@
 		5B437064CCA41E3BDB2732A9 /* PetitFormalScript-OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 0708CC2D5F97DE574CD05D5A /* PetitFormalScript-OFL.txt */; };
 		5C08E1482C32BF1C278E9942 /* libswresample.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 6150D722DA74C6C0C2AFC148 /* libswresample.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		5FF961CB18508D61E3E7F113 /* Courgette-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 19EC64064770C3F225A7C6BE /* Courgette-Regular.ttf */; };
+		6356205C109BBCF2074725DF /* Lato-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = BB59ABD13B83DF02DEA347B3 /* Lato-Light.ttf */; };
 		65275CFE533D2FEAF300DFA5 /* Montserrat-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 552515E989A56AA3E98BC3EA /* Montserrat-Regular.ttf */; };
-		B33333333333333333333333 /* Montserrat-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A33333333333333333333333 /* Montserrat-Light.ttf */; };
 		6C84883A2CC82A761EF485D8 /* PlayfairDisplay-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 561F84B75E2948AFC613963A /* PlayfairDisplay-Bold.ttf */; };
 		6F61B48E8EFC16C095BA8A3B /* EditWordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12F1ADCEBF523426B349851 /* EditWordsView.swift */; };
 		72C3E872AEA3158844DE96D5 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = E495773F7EBD20E5B13E88DF /* MLX */; };
 		77777C846EF9809A6792CA10 /* KaushanScript-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 258098735A78D7A0597AC810 /* KaushanScript-Regular.ttf */; };
+		7A573F4450FF621B2F3FA282 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 4F557C6B81A0F39E44D86502 /* PrivacyInfo.xcprivacy */; };
 		7BB1B42048498FB6D15E231E /* Sacramento-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1FB4FEDD00D90D879281AB4A /* Sacramento-Regular.ttf */; };
 		7C58F61034FEB40D79F34F77 /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3D1C3DF972E40CF547A5F6F /* ProjectStore.swift */; };
 		83A19C3ACCA5B227DACAD5D0 /* libavutil.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = D27E4F574622C9D422180F65 /* libavutil.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -53,7 +55,6 @@
 		921EE5A3D8B30A1B6BB4E686 /* Lobster-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4A1F3FC356AEE0D9D2EBC301 /* Lobster-Regular.ttf */; };
 		941F0717483F7D1775C2A501 /* BebasNeue-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D207364E29674FEF425A81DB /* BebasNeue-Regular.ttf */; };
 		975B512E6FE2CEC839FCECB7 /* Montserrat-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 433AB1A4C5B966257876A6F8 /* Montserrat-ExtraBold.ttf */; };
-		A20000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* PrivacyInfo.xcprivacy */; };
 		9DCE17EE4D2AE5285DB967A5 /* libavdevice.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3F999F1935C80EBD15B09267 /* libavdevice.xcframework */; };
 		9FA4C6079617F9FBC41A28C3 /* ProcessingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB3C7FBE2FAE3D100098111B /* ProcessingView.swift */; };
 		9FAAB366D67A10EABA76A0BA /* LeagueSpartan-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E00B3393F13F2EDC2D53DD31 /* LeagueSpartan-Regular.ttf */; };
@@ -84,7 +85,6 @@
 		ECC4DD306A28233562265B2F /* PlayfairDisplay-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3E6BAA95CDEDB30B5941D080 /* PlayfairDisplay-Regular.ttf */; };
 		ED8C26F8758D856D396F8242 /* FontCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E399A21BE07709C4F9AB4B /* FontCatalog.swift */; };
 		EF1C9A5AA4C41C17EBECE66D /* Lato-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B9B388193C059D6A26CDB421 /* Lato-Bold.ttf */; };
-		B22222222222222222222222 /* Lato-Light.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A22222222222222222222222 /* Lato-Light.ttf */; };
 		F085C4A02660D94144777ECD /* libavcodec.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 87D82DDAEDD9DD33B31F1EAE /* libavcodec.xcframework */; };
 		FA76F9316A0D32075CCCCC54 /* PlayfairDisplay-Black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8EF21A4372FF927E0AC21281 /* PlayfairDisplay-Black.ttf */; };
 		FA7CABD9F0DCDFB3A8FB43D6 /* libavdevice.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 3F999F1935C80EBD15B09267 /* libavdevice.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -130,7 +130,6 @@
 		078B42D941B2E8E7C599237E /* Parisienne-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Parisienne-Regular.ttf"; sourceTree = "<group>"; };
 		0A268C005DE7A124E872B76F /* Bangers-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Bangers-Regular.ttf"; sourceTree = "<group>"; };
 		0CDE5A05176C64BFFAE97835 /* Poppins-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Regular.ttf"; sourceTree = "<group>"; };
-		A11111111111111111111111 /* Poppins-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Light.ttf"; sourceTree = "<group>"; };
 		0D751ED37D5193E910C87452 /* AlfaSlabOne-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "AlfaSlabOne-Regular.ttf"; sourceTree = "<group>"; };
 		11710E54671D10C7361D53AD /* FrancoisOne-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "FrancoisOne-Regular.ttf"; sourceTree = "<group>"; };
 		19A3C7089D00F16934C15040 /* SubByAudiocraft.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SubByAudiocraft.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -139,9 +138,11 @@
 		1E9FEC4311A1F95D6E5EC42C /* SuccessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuccessView.swift; sourceTree = "<group>"; };
 		1FB4FEDD00D90D879281AB4A /* Sacramento-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Sacramento-Regular.ttf"; sourceTree = "<group>"; };
 		258098735A78D7A0597AC810 /* KaushanScript-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "KaushanScript-Regular.ttf"; sourceTree = "<group>"; };
+		2A195484D01432DCC31659C7 /* Poppins-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Light.ttf"; sourceTree = "<group>"; };
 		2C8E6B03283F4DA59087ABE8 /* PetitFormalScript-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PetitFormalScript-Regular.ttf"; sourceTree = "<group>"; };
 		30D9E9886B43922CC5449D39 /* Righteous-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Righteous-Regular.ttf"; sourceTree = "<group>"; };
 		370EA6FB80B019205FEE3E71 /* BlackOpsOne-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BlackOpsOne-Regular.ttf"; sourceTree = "<group>"; };
+		394985FBEC3C102BD9A0EC2A /* Montserrat-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Montserrat-Light.ttf"; sourceTree = "<group>"; };
 		3B71A3B57520EFB67FD22CF2 /* VideoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProcessor.swift; sourceTree = "<group>"; };
 		3BCDB529DBEC6F853170DF82 /* LineEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineEditView.swift; sourceTree = "<group>"; };
 		3E6BAA95CDEDB30B5941D080 /* PlayfairDisplay-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PlayfairDisplay-Regular.ttf"; sourceTree = "<group>"; };
@@ -150,8 +151,8 @@
 		4A1F3FC356AEE0D9D2EBC301 /* Lobster-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lobster-Regular.ttf"; sourceTree = "<group>"; };
 		4AA759F28053E8BDEB26594D /* SecureAPIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureAPIKeyStore.swift; sourceTree = "<group>"; };
 		4CC37AC4BE599FA23E9097CF /* LeagueSpartan-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "LeagueSpartan-Bold.ttf"; sourceTree = "<group>"; };
+		4F557C6B81A0F39E44D86502 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		552515E989A56AA3E98BC3EA /* Montserrat-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Montserrat-Regular.ttf"; sourceTree = "<group>"; };
-		A33333333333333333333333 /* Montserrat-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Montserrat-Light.ttf"; sourceTree = "<group>"; };
 		558A0123FAAF2047A2D90ED0 /* Allura-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Allura-Regular.ttf"; sourceTree = "<group>"; };
 		561F84B75E2948AFC613963A /* PlayfairDisplay-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PlayfairDisplay-Bold.ttf"; sourceTree = "<group>"; };
 		5B97F3177D7253EA0DB7B83B /* VocalIsolationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VocalIsolationService.swift; sourceTree = "<group>"; };
@@ -173,14 +174,13 @@
 		9A6FE1EE57D4D454EE23A634 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		9F65FDFA45888A124A3E7248 /* Oswald-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oswald-Regular.ttf"; sourceTree = "<group>"; };
 		A10088D29A03C4008436BD98 /* ffmpegkit.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = ffmpegkit.xcframework; path = FFmpegKitFrameworks/ffmpegkit.xcframework; sourceTree = "<group>"; };
-		A20000000000000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A30C76AB75260C6C0FC350F3 /* SpaceMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SpaceMono-Regular.ttf"; sourceTree = "<group>"; };
 		A31D88EFCD122F73CE0AFB98 /* ArchivoBlack-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ArchivoBlack-Regular.ttf"; sourceTree = "<group>"; };
 		AFE8AAF57993D8DC153EDFC8 /* GroqSpeechClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroqSpeechClient.swift; sourceTree = "<group>"; };
 		B3D1C3DF972E40CF547A5F6F /* ProjectStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStore.swift; sourceTree = "<group>"; };
 		B8421EF1DED4B9ECEE14DEA1 /* libswscale.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = libswscale.xcframework; path = FFmpegKitFrameworks/libswscale.xcframework; sourceTree = "<group>"; };
 		B9B388193C059D6A26CDB421 /* Lato-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lato-Bold.ttf"; sourceTree = "<group>"; };
-		A22222222222222222222222 /* Lato-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lato-Light.ttf"; sourceTree = "<group>"; };
+		BB59ABD13B83DF02DEA347B3 /* Lato-Light.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lato-Light.ttf"; sourceTree = "<group>"; };
 		BED87A240B3A8ABA8112E815 /* VideoProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProcessorTests.swift; sourceTree = "<group>"; };
 		C57C7415062AD339A8E2DA42 /* SelectVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectVideoView.swift; sourceTree = "<group>"; };
 		C792EF130CF658ABD6164F4F /* Lato-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lato-Regular.ttf"; sourceTree = "<group>"; };
@@ -267,7 +267,7 @@
 				FA55C9A5C3C1D992CFCDCA88 /* GreatVibes-Regular.ttf */,
 				258098735A78D7A0597AC810 /* KaushanScript-Regular.ttf */,
 				B9B388193C059D6A26CDB421 /* Lato-Bold.ttf */,
-				A22222222222222222222222 /* Lato-Light.ttf */,
+				BB59ABD13B83DF02DEA347B3 /* Lato-Light.ttf */,
 				C792EF130CF658ABD6164F4F /* Lato-Regular.ttf */,
 				4CC37AC4BE599FA23E9097CF /* LeagueSpartan-Bold.ttf */,
 				E00B3393F13F2EDC2D53DD31 /* LeagueSpartan-Regular.ttf */,
@@ -275,7 +275,7 @@
 				5DD86D7137E070DF8D55104C /* MarckScript-Regular.ttf */,
 				F09B11E6FC94017C2F7AD376 /* Montserrat-Bold.ttf */,
 				433AB1A4C5B966257876A6F8 /* Montserrat-ExtraBold.ttf */,
-				A33333333333333333333333 /* Montserrat-Light.ttf */,
+				394985FBEC3C102BD9A0EC2A /* Montserrat-Light.ttf */,
 				552515E989A56AA3E98BC3EA /* Montserrat-Regular.ttf */,
 				5F50CD942A25E6EBCFEBD880 /* Oswald-Bold.ttf */,
 				9F65FDFA45888A124A3E7248 /* Oswald-Regular.ttf */,
@@ -287,7 +287,7 @@
 				561F84B75E2948AFC613963A /* PlayfairDisplay-Bold.ttf */,
 				3E6BAA95CDEDB30B5941D080 /* PlayfairDisplay-Regular.ttf */,
 				D4A25FB64CFB9AF0F1AB39BD /* Poppins-Bold.ttf */,
-				A11111111111111111111111 /* Poppins-Light.ttf */,
+				2A195484D01432DCC31659C7 /* Poppins-Light.ttf */,
 				0CDE5A05176C64BFFAE97835 /* Poppins-Regular.ttf */,
 				30D9E9886B43922CC5449D39 /* Righteous-Regular.ttf */,
 				1FB4FEDD00D90D879281AB4A /* Sacramento-Regular.ttf */,
@@ -320,8 +320,8 @@
 				DA3E3AB26072848F57D3FC8B /* HistoryView.swift */,
 				EA7E7D37BF5C397545AC8337 /* Info.plist */,
 				3BCDB529DBEC6F853170DF82 /* LineEditView.swift */,
+				4F557C6B81A0F39E44D86502 /* PrivacyInfo.xcprivacy */,
 				DB3C7FBE2FAE3D100098111B /* ProcessingView.swift */,
-				A20000000000000000000002 /* PrivacyInfo.xcprivacy */,
 				B3D1C3DF972E40CF547A5F6F /* ProjectStore.swift */,
 				4AA759F28053E8BDEB26594D /* SecureAPIKeyStore.swift */,
 				C57C7415062AD339A8E2DA42 /* SelectVideoView.swift */,
@@ -352,10 +352,10 @@
 			buildConfigurationList = 0F69E3686167115C07209CCB /* Build configuration list for PBXNativeTarget "SubByAudiocraft" */;
 			buildPhases = (
 				9BBF9C8AF0F171162ECE95D2 /* Sources */,
-				69DACE16F3CD1A49C633840B /* Strip arm64e and Generate dSYMs */,
 				D3EACF707C1DB6636F392552 /* Resources */,
 				5A494348211BC7408A8BCC8F /* Frameworks */,
 				CF9CA6FD3A9C6824BF75BDE1 /* Embed Frameworks */,
+				6DF3421E1D30CE43995AC0A5 /* Install and Verify FFmpeg dSYMs */,
 			);
 			buildRules = (
 			);
@@ -408,7 +408,6 @@
 				};
 			};
 			buildConfigurationList = 8E12DA0F581BBF6E5EAC2A43 /* Build configuration list for PBXProject "SubByAudiocraft" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -416,11 +415,14 @@
 				en,
 			);
 			mainGroup = BFBE5054769E14619B15C9CC;
+			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				BA6D70EA1340A590E9E9B1C0 /* XCRemoteSwiftPackageReference "mlx-swift" */,
 				BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */,
 				17C0C575FC1459F7363C3D49 /* XCRemoteSwiftPackageReference "WhisperKit" */,
 			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5E485E1719048BD5E5F5C96A /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -451,7 +453,7 @@
 				57CBFDEE8D0B2AF3DCCA7B45 /* GreatVibes-Regular.ttf in Resources */,
 				77777C846EF9809A6792CA10 /* KaushanScript-Regular.ttf in Resources */,
 				EF1C9A5AA4C41C17EBECE66D /* Lato-Bold.ttf in Resources */,
-				B22222222222222222222222 /* Lato-Light.ttf in Resources */,
+				6356205C109BBCF2074725DF /* Lato-Light.ttf in Resources */,
 				FF5F927A3D7B11D29AFCB31A /* Lato-Regular.ttf in Resources */,
 				90A43BC3888A8FF993870A5A /* LeagueSpartan-Bold.ttf in Resources */,
 				9FAAB366D67A10EABA76A0BA /* LeagueSpartan-Regular.ttf in Resources */,
@@ -459,7 +461,7 @@
 				2B581C5A3BB3750A50E0FCDA /* MarckScript-Regular.ttf in Resources */,
 				BBB22150FB67E4F15D20574C /* Montserrat-Bold.ttf in Resources */,
 				975B512E6FE2CEC839FCECB7 /* Montserrat-ExtraBold.ttf in Resources */,
-				B33333333333333333333333 /* Montserrat-Light.ttf in Resources */,
+				457219395F742ACC16330586 /* Montserrat-Light.ttf in Resources */,
 				65275CFE533D2FEAF300DFA5 /* Montserrat-Regular.ttf in Resources */,
 				418A357AC2B0D23514DAD662 /* Oswald-Bold.ttf in Resources */,
 				2A25E436CD4F7F66923BE7C2 /* Oswald-Regular.ttf in Resources */,
@@ -470,10 +472,10 @@
 				FA76F9316A0D32075CCCCC54 /* PlayfairDisplay-Black.ttf in Resources */,
 				6C84883A2CC82A761EF485D8 /* PlayfairDisplay-Bold.ttf in Resources */,
 				ECC4DD306A28233562265B2F /* PlayfairDisplay-Regular.ttf in Resources */,
-				A20000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */,
 				33D46E9A1396D5C891E55EC0 /* Poppins-Bold.ttf in Resources */,
-				B11111111111111111111111 /* Poppins-Light.ttf in Resources */,
+				29FCE0F726AAA997D895F6FC /* Poppins-Light.ttf in Resources */,
 				862D821FF338E252A6B5B977 /* Poppins-Regular.ttf in Resources */,
+				7A573F4450FF621B2F3FA282 /* PrivacyInfo.xcprivacy in Resources */,
 				533443004327A9F5F4A6E15C /* Righteous-Regular.ttf in Resources */,
 				7BB1B42048498FB6D15E231E /* Sacramento-Regular.ttf in Resources */,
 				ABA66E3400B91BB06D822A13 /* Shrikhand-Regular.ttf in Resources */,
@@ -485,7 +487,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		69DACE16F3CD1A49C633840B /* Strip arm64e and Generate dSYMs */ = {
+		6DF3421E1D30CE43995AC0A5 /* Install and Verify FFmpeg dSYMs */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
@@ -495,14 +497,14 @@
 			);
 			inputPaths = (
 			);
-			name = "Strip arm64e and Generate dSYMs";
+			name = "Install and Verify FFmpeg dSYMs";
 			outputFileListPaths = (
 			);
 			outputPaths = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "# Embedded device slices are only relevant to App Store/Release builds.\n# Running dsymutil over simulator frameworks adds about a minute to every\n# local build and only produces \\\"no debug symbols\\\" warnings.\nif [ \\\"$PLATFORM_NAME\\\" != \\\"iphoneos\\\" ] || [ \\\"$CONFIGURATION\\\" != \\\"Release\\\" ]; then\n    echo \\\"Skipping embedded framework post-processing for $CONFIGURATION/$PLATFORM_NAME.\\\"\n    exit 0\nfi\n\necho \"Stripping arm64e and generating dSYMs for embedded frameworks...\"\nif [ -d \"$CODESIGNING_FOLDER_PATH/Frameworks\" ]; then\n    find \"$CODESIGNING_FOLDER_PATH/Frameworks\" -type f -name \"*\" | while read -r binary_path; do\n        if file \"$binary_path\" | grep -q \"Mach-O\"; then\n            # Strip arm64e\n            if lipo -info \"$binary_path\" | grep -q \"arm64e\"; then\n                echo \"Removing arm64e from $binary_path\"\n                lipo -remove arm64e -output \"$binary_path\" \"$binary_path\"\n                \n                # MUST re-sign the framework because lipo broke the original signature!\n                framework_dir=$(dirname \"$binary_path\")\n                codesign --force --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" --preserve-metadata=identifier,entitlements \"$framework_dir\"\n            fi\n            \n            # Generate dSYM for the framework to satisfy App Store Connect\n            binary_name=$(basename \"$binary_path\")\n            dsym_path=\"$DWARF_DSYM_FOLDER_PATH/$binary_name.dSYM\"\n            if [ ! -d \"$dsym_path\" ]; then\n                echo \"Generating dSYM for $binary_name\"\n                dsymutil \"$binary_path\" -o \"$dsym_path\"\n            fi\n        fi\n    done\nfi\n";
+			shellScript = "# The maintained FFmpegKitNext frameworks are device-arm64 only at archive\n# time and ship with matching, source-built dSYMs inside each XCFramework.\nif [ \"$PLATFORM_NAME\" != \"iphoneos\" ] || [ \"$CONFIGURATION\" != \"Release\" ]; then\n    echo \"Skipping FFmpeg dSYM installation for $CONFIGURATION/$PLATFORM_NAME.\"\n    exit 0\nfi\n\nframeworks=\"ffmpegkit libavcodec libavdevice libavfilter libavformat libavutil libswresample libswscale\"\nfor framework_name in $frameworks; do\n    binary_path=\"$CODESIGNING_FOLDER_PATH/Frameworks/$framework_name.framework/$framework_name\"\n    source_dsym=\"$SRCROOT/FFmpegKitFrameworks/$framework_name.xcframework/ios-arm64/dSYMs/$framework_name.framework.dSYM\"\n    destination_dsym=\"$DWARF_DSYM_FOLDER_PATH/$framework_name.framework.dSYM\"\n\n    if [ ! -f \"$binary_path\" ]; then\n        echo \"error: Embedded FFmpeg framework is missing: $binary_path\"\n        exit 1\n    fi\n    if [ ! -d \"$source_dsym\" ]; then\n        echo \"error: Prebuilt FFmpeg dSYM is missing: $source_dsym\"\n        exit 1\n    fi\n\n    ditto \"$source_dsym\" \"$destination_dsym\"\n    binary_uuid=$(dwarfdump --uuid \"$binary_path\" | awk '/arm64/ { print $2; exit }')\n    dsym_uuid=$(dwarfdump --uuid \"$destination_dsym\" | awk '/arm64/ { print $2; exit }')\n    if [ -z \"$binary_uuid\" ] || [ \"$binary_uuid\" != \"$dsym_uuid\" ]; then\n        echo \"error: dSYM UUID mismatch for $framework_name ($binary_uuid != $dsym_uuid)\"\n        exit 1\n    fi\n    echo \"Installed verified dSYM for $framework_name ($binary_uuid)\"\ndone\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -553,7 +555,55 @@
 		32058E62A7012D9109879494 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
@@ -562,8 +612,9 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 58;
+				CURRENT_PROJECT_VERSION = 59;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AHFN85GQX6;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -578,7 +629,9 @@
 				MARKETING_VERSION = 1.21.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hmyilm.SubByAudiocraft;
 				PRODUCT_NAME = SubByAudiocraft;
+				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
@@ -587,8 +640,9 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 58;
+				CURRENT_PROJECT_VERSION = 59;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = AHFN85GQX6;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
@@ -603,7 +657,9 @@
 				MARKETING_VERSION = 1.21.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.hmyilm.SubByAudiocraft;
 				PRODUCT_NAME = SubByAudiocraft;
+				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -613,10 +669,17 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hmyilm.SubByAudiocraftTests;
 				PRODUCT_NAME = SubByAudiocraftTests;
+				SDKROOT = iphoneos;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SubByAudiocraft.app/SubByAudiocraft";
 			};
 			name = Debug;
@@ -624,10 +687,62 @@
 		9FBC03398636B8E937959AF9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
 		};
@@ -637,10 +752,17 @@
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.hmyilm.SubByAudiocraftTests;
 				PRODUCT_NAME = SubByAudiocraftTests;
+				SDKROOT = iphoneos;
 				SWIFT_ENABLE_EXPLICIT_MODULES = NO;
 				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SubByAudiocraft.app/SubByAudiocraft";
 			};
 			name = Release;

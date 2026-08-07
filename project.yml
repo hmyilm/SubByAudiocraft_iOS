@@ -26,7 +26,7 @@ targets:
     platform: iOS
     deploymentTarget: "18.0"
     version: 1.21.5
-    build: 58
+    build: 59
     settings:
       base:
         INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen
@@ -41,7 +41,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: com.hmyilm.SubByAudiocraft
         MARKETING_VERSION: "1.21.5"
-        CURRENT_PROJECT_VERSION: "58"
+        CURRENT_PROJECT_VERSION: "59"
     sources: [SubByAudiocraft]
     dependencies:
       - package: WhisperKit
@@ -71,42 +71,41 @@ targets:
         embed: true
       - framework: FFmpegKitFrameworks/ffmpegkit.xcframework
         embed: true
-    postCompileScripts:
-      - name: Strip arm64e and Generate dSYMs
+    postBuildScripts:
+      - name: Install and Verify FFmpeg dSYMs
         basedOnDependencyAnalysis: false
         script: |
-          # Embedded device slices are only relevant to App Store/Release builds.
-          # Running dsymutil over simulator frameworks adds about a minute to every
-          # local build and only produces "no debug symbols" warnings.
+          # The maintained FFmpegKitNext frameworks are device-arm64 only at archive
+          # time and ship with matching, source-built dSYMs inside each XCFramework.
           if [ "$PLATFORM_NAME" != "iphoneos" ] || [ "$CONFIGURATION" != "Release" ]; then
-              echo "Skipping embedded framework post-processing for $CONFIGURATION/$PLATFORM_NAME."
+              echo "Skipping FFmpeg dSYM installation for $CONFIGURATION/$PLATFORM_NAME."
               exit 0
           fi
 
-          echo "Stripping arm64e and generating dSYMs for embedded frameworks..."
-          if [ -d "$CODESIGNING_FOLDER_PATH/Frameworks" ]; then
-              find "$CODESIGNING_FOLDER_PATH/Frameworks" -type f -name "*" | while read -r binary_path; do
-                  if file "$binary_path" | grep -q "Mach-O"; then
-                      # Strip arm64e
-                      if lipo -info "$binary_path" | grep -q "arm64e"; then
-                          echo "Removing arm64e from $binary_path"
-                          lipo -remove arm64e -output "$binary_path" "$binary_path"
-                          
-                          # MUST re-sign the framework because lipo broke the original signature!
-                          framework_dir=$(dirname "$binary_path")
-                          codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --preserve-metadata=identifier,entitlements "$framework_dir"
-                      fi
-                      
-                      # Generate dSYM for the framework to satisfy App Store Connect
-                      binary_name=$(basename "$binary_path")
-                      dsym_path="$DWARF_DSYM_FOLDER_PATH/$binary_name.dSYM"
-                      if [ ! -d "$dsym_path" ]; then
-                          echo "Generating dSYM for $binary_name"
-                          dsymutil "$binary_path" -o "$dsym_path"
-                      fi
-                  fi
-              done
-          fi
+          frameworks="ffmpegkit libavcodec libavdevice libavfilter libavformat libavutil libswresample libswscale"
+          for framework_name in $frameworks; do
+              binary_path="$CODESIGNING_FOLDER_PATH/Frameworks/$framework_name.framework/$framework_name"
+              source_dsym="$SRCROOT/FFmpegKitFrameworks/$framework_name.xcframework/ios-arm64/dSYMs/$framework_name.framework.dSYM"
+              destination_dsym="$DWARF_DSYM_FOLDER_PATH/$framework_name.framework.dSYM"
+
+              if [ ! -f "$binary_path" ]; then
+                  echo "error: Embedded FFmpeg framework is missing: $binary_path"
+                  exit 1
+              fi
+              if [ ! -d "$source_dsym" ]; then
+                  echo "error: Prebuilt FFmpeg dSYM is missing: $source_dsym"
+                  exit 1
+              fi
+
+              ditto "$source_dsym" "$destination_dsym"
+              binary_uuid=$(dwarfdump --uuid "$binary_path" | awk '/arm64/ { print $2; exit }')
+              dsym_uuid=$(dwarfdump --uuid "$destination_dsym" | awk '/arm64/ { print $2; exit }')
+              if [ -z "$binary_uuid" ] || [ "$binary_uuid" != "$dsym_uuid" ]; then
+                  echo "error: dSYM UUID mismatch for $framework_name ($binary_uuid != $dsym_uuid)"
+                  exit 1
+              fi
+              echo "Installed verified dSYM for $framework_name ($binary_uuid)"
+          done
     info:
       path: SubByAudiocraft/Info.plist
       properties:
@@ -156,7 +155,7 @@ targets:
         CFBundleIconName: AppIcon
         CFBundleDisplayName: Sub by Audiocraft
         CFBundleShortVersionString: "1.21.5"
-        CFBundleVersion: "58"
+        CFBundleVersion: "59"
         ITSAppUsesNonExemptEncryption: false
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
