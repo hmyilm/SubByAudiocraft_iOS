@@ -331,7 +331,7 @@
 			);
 			mainGroup = BFBE5054769E14619B15C9CC;
 			packageReferences = (
-				BDA38EA6F64D22B46D720012 /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */,
+				F8A3697BC056C59C3606CC08 /* XCRemoteSwiftPackageReference "FFmpegKit" */,
 				BA6D70EA1340A590E9E9B1C0 /* XCRemoteSwiftPackageReference "mlx-swift" */,
 				BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */,
 				17C0C575FC1459F7363C3D49 /* XCRemoteSwiftPackageReference "WhisperKit" */,
@@ -550,20 +550,20 @@
 				version = 0.31.4;
 			};
 		};
-		BDA38EA6F64D22B46D720012 /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/tylerjonesio/ffmpeg-kit-spm.git";
-			requirement = {
-				kind = exactVersion;
-				version = 6.0.0;
-			};
-		};
 		BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/soniqo/speech-swift";
 			requirement = {
 				kind = exactVersion;
 				version = 0.0.23;
+			};
+		};
+		F8A3697BC056C59C3606CC08 /* XCRemoteSwiftPackageReference "FFmpegKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kingslay/FFmpegKit.git";
+			requirement = {
+				kind = exactVersion;
+				version = 6.0.0;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -596,7 +596,7 @@
 		};
 		D80B848106C6367A4C869B07 /* ffmpegkit */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = BDA38EA6F64D22B46D720012 /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */;
+			package = F8A3697BC056C59C3606CC08 /* XCRemoteSwiftPackageReference "FFmpegKit" */;
 			productName = ffmpegkit;
 		};
 		E495773F7EBD20E5B13E88DF /* MLX */ = {
