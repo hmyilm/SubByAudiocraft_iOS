@@ -20,9 +20,6 @@ packages:
   MLXSwift:
     url: https://github.com/ml-explore/mlx-swift
     exactVersion: 0.31.4
-  FFmpegKit:
-    url: https://github.com/kingslay/FFmpegKit.git
-    exactVersion: 6.1.4
 targets:
   SubByAudiocraft:
     type: application
@@ -48,7 +45,6 @@ targets:
     sources: [SubByAudiocraft]
     dependencies:
       - package: WhisperKit
-        product: WhisperKit
       - package: Qwen3Speech
         product: Qwen3ASR
       - package: Qwen3Speech
@@ -59,8 +55,58 @@ targets:
         product: MLX
       - package: MLXSwift
         product: MLXNN
-      - package: FFmpegKit
-        product: ffmpegkit
+      - framework: FFmpegKitFrameworks/libavdevice.xcframework
+        embed: true
+      - framework: FFmpegKitFrameworks/libavformat.xcframework
+        embed: true
+      - framework: FFmpegKitFrameworks/libavutil.xcframework
+        embed: true
+      - framework: FFmpegKitFrameworks/libavcodec.xcframework
+        embed: true
+      - framework: FFmpegKitFrameworks/libswresample.xcframework
+        embed: true
+      - framework: FFmpegKitFrameworks/libswscale.xcframework
+        embed: true
+      - framework: FFmpegKitFrameworks/libavfilter.xcframework
+        embed: true
+      - framework: FFmpegKitFrameworks/ffmpegkit.xcframework
+        embed: true
+    postCompileScripts:
+      - name: Strip arm64e and Generate dSYMs
+        basedOnDependencyAnalysis: false
+        script: |
+          # Embedded device slices are only relevant to App Store/Release builds.
+          # Running dsymutil over simulator frameworks adds about a minute to every
+          # local build and only produces "no debug symbols" warnings.
+          if [ "$PLATFORM_NAME" != "iphoneos" ] || [ "$CONFIGURATION" != "Release" ]; then
+              echo "Skipping embedded framework post-processing for $CONFIGURATION/$PLATFORM_NAME."
+              exit 0
+          fi
+
+          echo "Stripping arm64e and generating dSYMs for embedded frameworks..."
+          if [ -d "$CODESIGNING_FOLDER_PATH/Frameworks" ]; then
+              find "$CODESIGNING_FOLDER_PATH/Frameworks" -type f -name "*" | while read -r binary_path; do
+                  if file "$binary_path" | grep -q "Mach-O"; then
+                      # Strip arm64e
+                      if lipo -info "$binary_path" | grep -q "arm64e"; then
+                          echo "Removing arm64e from $binary_path"
+                          lipo -remove arm64e -output "$binary_path" "$binary_path"
+                          
+                          # MUST re-sign the framework because lipo broke the original signature!
+                          framework_dir=$(dirname "$binary_path")
+                          codesign --force --sign "$EXPANDED_CODE_SIGN_IDENTITY" --preserve-metadata=identifier,entitlements "$framework_dir"
+                      fi
+                      
+                      # Generate dSYM for the framework to satisfy App Store Connect
+                      binary_name=$(basename "$binary_path")
+                      dsym_path="$DWARF_DSYM_FOLDER_PATH/$binary_name.dSYM"
+                      if [ ! -d "$dsym_path" ]; then
+                          echo "Generating dSYM for $binary_name"
+                          dsymutil "$binary_path" -o "$dsym_path"
+                      fi
+                  fi
+              done
+          fi
     info:
       path: SubByAudiocraft/Info.plist
       properties:

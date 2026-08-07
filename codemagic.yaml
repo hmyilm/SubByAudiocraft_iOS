@@ -13,9 +13,6 @@ workflows:
         script: |
           which xcodegen || brew install xcodegen
           xcodegen generate
-      - name: Install Dependencies
-        script: |
-          pod install
       - name: Install Metal Toolchain
         script: |
           set -euo pipefail
@@ -90,7 +87,7 @@ workflows:
 
           mkdir -p build/ios/test
           xcodebuild test \
-            -workspace SubByAudiocraft.xcworkspace \
+            -project SubByAudiocraft.xcodeproj \
             -scheme SubByAudiocraft \
             -sdk iphonesimulator \
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
@@ -114,7 +111,7 @@ workflows:
           xcode-project use-profiles
       - name: Build App for TestFlight
         script: |
-          xcode-project build-ipa --workspace SubByAudiocraft.xcworkspace --scheme SubByAudiocraft
+          xcode-project build-ipa --project SubByAudiocraft.xcodeproj --scheme SubByAudiocraft
     artifacts:
       - build/ios/ipa/*.ipa
       - build/ios/test/*.xcresult
