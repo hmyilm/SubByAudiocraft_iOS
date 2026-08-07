@@ -982,7 +982,7 @@ struct SubtitlePreviewPlayer: View {
                                     Array(classicPreviewRows.enumerated()),
                                     id: \.offset
                                 ) { row in
-                                    HStack(spacing: max(1, viewport.height / 100)) {
+                                    HStack(spacing: max(2, CGFloat(fontSize) * 0.28 * previewScale)) {
                                         ForEach(row.element) { word in
                                             if lyricTrackingMode == .karaoke {
                                                 ClassicCharacterTrackingWord(
@@ -996,6 +996,19 @@ struct SubtitlePreviewPlayer: View {
                                                     && playbackTime >= word.start
                                                     && playbackTime < word.end
                                                 Text(word.text)
+                                                    .font(
+                                                        .custom(
+                                                            lyricTrackingMode == .boldWord
+                                                                ? thinPreviewFontName
+                                                                : fontName,
+                                                            size: CGFloat(fontSize) * previewScale
+                                                        )
+                                                    )
+                                                    .fontWeight(
+                                                        lyricTrackingMode == .boldWord
+                                                            ? (hasRealThinPreviewFace ? nil : .light)
+                                                            : nil
+                                                    )
                                                     .foregroundColor(
                                                         isBoldActive ? .clear : .white
                                                     )
@@ -1031,10 +1044,15 @@ struct SubtitlePreviewPlayer: View {
                         .font(
                             .custom(
                                 lyricTrackingMode == .boldWord
-                                    ? regularPreviewFontName
+                                    ? thinPreviewFontName
                                     : fontName,
                                 size: CGFloat(fontSize) * previewScale
                             )
+                        )
+                        .fontWeight(
+                            lyricTrackingMode == .boldWord && !hasRealThinPreviewFace
+                                ? .light
+                                : nil
                         )
                         .lineLimit(1)
                         .minimumScaleFactor(0.45)
@@ -1077,6 +1095,19 @@ struct SubtitlePreviewPlayer: View {
 
     private var boldPreviewFontName: String {
         FontCatalog.boldPSName(for: fontName) ?? regularPreviewFontName
+    }
+
+    private var thinPreviewFontName: String {
+        FontCatalog.thinPSName(for: fontName) ?? regularPreviewFontName
+    }
+
+    private var hasRealBoldPreviewFace: Bool {
+        FontCatalog.boldPSName(for: fontName) != nil
+    }
+
+    private var hasRealThinPreviewFace: Bool {
+        FontCatalog.thinPSName(for: fontName) != nil
+    }rPreviewFontName
     }
 
     private var hasRealBoldPreviewFace: Bool {

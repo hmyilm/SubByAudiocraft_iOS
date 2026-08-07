@@ -4478,29 +4478,32 @@ class VideoProcessor: ObservableObject {
                 let wordStartText = formatASSTime(wordStart)
                 let wordEndText = formatASSTime(wordEnd)
                 let hasActiveInterval = wordStartText != wordEndText
-                let regularTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fs\(fontSize)\\b0\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
+                let thinFontName = FontCatalog.thinPSName(for: fontName) ?? FontCatalog.regularPSName(for: fontName)
+                let boldFontName = FontCatalog.boldPSName(for: fontName) ?? FontCatalog.regularPSName(for: fontName)
+
+                let unactiveTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
+                    "\\fn\(thinFontName)\\fs\(fontSize)\\b100\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
 
                 if !hasActiveInterval {
                     result += "Dialogue: 1,\(segmentStartText)," +
                         "\(segmentEndText),Default,,0,0,0,," +
-                        "\(regularTags)\(item.text)\n"
+                        "\(unactiveTags)\(item.text)\n"
                     continue
                 }
 
                 if segmentStartText != wordStartText {
                     result += "Dialogue: 1,\(segmentStartText)," +
                         "\(wordStartText),Default,,0,0,0,," +
-                        "\(regularTags)\(item.text)\n"
+                        "\(unactiveTags)\(item.text)\n"
                 }
                 if wordEndText != segmentEndText {
                     result += "Dialogue: 1,\(wordEndText)," +
                         "\(segmentEndText),Default,,0,0,0,," +
-                        "\(regularTags)\(item.text)\n"
+                        "\(unactiveTags)\(item.text)\n"
                 }
 
                 let boldTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fs\(fontSize)\\b1\\c&H\(resolvedAccent.assColor)&" +
+                    "\\fn\(boldFontName)\\fs\(fontSize)\\b1\\c&H\(resolvedAccent.assColor)&" +
                     "\(extraTags)\\bord0\\shad0\\fscx104\\fscy104}"
                 result += "Dialogue: 2,\(wordStartText)," +
                     "\(wordEndText),Default,,0,0,0,," +
@@ -5181,36 +5184,31 @@ class VideoProcessor: ObservableObject {
             let t0 = formatASSTime(segStart)
             let t1 = formatASSTime(segEnd)
 
-            if bitisikFont {
-                let metin = plainText.trimmingCharacters(in: .whitespaces)
-                // El yazısında harf takibi KAYAN KIRPMA SINIRIYLA (karaoke süpürmesi) yapılır:
-                // metnin içine tek etiket bile girmediği için satır tek parça şekillenir,
-                // harf bağları ve yerleşim hiçbir karede DEĞİŞEMEZ. Alt katman satırın soluk
-                // bitişik kopyası; üstteki opak kopyayı \clip penceresi soldan sağa eritir.
-                // Sınır her harfi tam kendi zaman aralığında geçer (CoreText ölçümü).
-                if let olcum = harfSinirlariniOlc(metin: metin, fontName: fontName, assFontSize: lineFontSize),
-                   olcum.genislik <= Double(virtualWidth - 40) {
-                    let x0 = (Double(virtualWidth) - olcum.genislik) / 2
-                    var tags = "{\\clip(0,0,\(virtualWidth),\(virtualHeight))"
-                    var cursorMs = 0
-                    for h in harfZamanlar where h.sonUTF16 - 1 < olcum.sinirlar.count {
-                        let s = max(h.s, cursorMs)
-                        let e = max(s + 10, h.e)
-                        cursorMs = e
-                        let x = min(max(0, Int((x0 + olcum.sinirlar[h.sonUTF16 - 1]).rounded())), virtualWidth)
-                        tags += "\\t(\(s),\(e),\\clip(\(x),0,\(virtualWidth),\(virtualHeight)))"
-                    }
-                    tags += "}"
-                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)\\alpha&HA0&}\(metin)\n"
-                    assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)}\(tags)\(metin)\n"
-                } else {
-                    // Ölçüm yapılamadı veya satır ekrana sığmayıp sarılacak: yedek yöntem
-                    // (altta bitişik soluk kopya + üstte harf harf eriyen opak kopya)
-                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)\\alpha&HA0&}\(metin)\n"
-                    assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,\(effectText)\n"
+            let metin = plainText.trimmingCharacters(in: .whitespaces)
+            // Harf takibinde harf bağlarını ve orijinal font kerning verisini korumak için
+            // KAYAN KIRPMA SINIRI (\clip) kullanılır. Metnin içine harf etiketleri sokulmadığı
+            // için satır tek parça şekillenir ve harf boşlukları bozulmaz.
+            if let olcum = harfSinirlariniOlc(metin: metin, fontName: fontName, assFontSize: lineFontSize),
+               olcum.genislik <= Double(virtualWidth - 40) {
+                let x0 = (Double(virtualWidth) - olcum.genislik) / 2
+                var tags = "{\\clip(0,0,\(virtualWidth),\(virtualHeight))"
+                var cursorMs = 0
+                for h in harfZamanlar where h.sonUTF16 - 1 < olcum.sinirlar.count {
+                    let s = max(h.s, cursorMs)
+                    let e = max(s + 10, h.e)
+                    cursorMs = e
+                    let x = min(max(0, Int((x0 + olcum.sinirlar[h.sonUTF16 - 1]).rounded())), virtualWidth)
+                    tags += "\\t(\(s),\(e),\\clip(\(x),0,\(virtualWidth),\(virtualHeight)))"
                 }
+                tags += "}"
+                assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)\\alpha&HA0&}\(metin)\n"
+                assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)}\(tags)\(metin)\n"
             } else {
-                assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,\(effectText)\n"
+                // Ölçüm yapılamadı veya satır sığmayıp sarılacak: harf harf eriyen kopya
+                if bitisikFont {
+                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)\\alpha&HA0&}\(metin)\n"
+                }
+                assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,\(effectText)\n"
             }
         }
         

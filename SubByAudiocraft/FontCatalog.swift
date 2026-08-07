@@ -38,12 +38,15 @@ struct FontOption: Identifiable, Hashable {
     let category: FontCategory
     var regularPSName: String? = nil
     var boldPSName: String? = nil
+    var thinPSName: String? = nil
     var bitisik: Bool = false
 
     var id: String { psName }
 
     var regularFaceName: String { regularPSName ?? psName }
+    var thinFaceName: String { thinPSName ?? regularFaceName }
     var hasRealBoldFace: Bool { boldPSName != nil }
+    var hasRealThinFace: Bool { thinPSName != nil }
 }
 
 enum FontCatalog {
@@ -86,27 +89,27 @@ enum FontCatalog {
     // iOS sistem fontları uygulama boyutunu artırmaz. Georgia da paket fontu değil,
     // sistem fontu olduğu için burada tutulur.
     static let sistem: [FontOption] = [
-        FontOption(psName: "AvenirNext-Bold", display: "Avenir Next", assFamily: "Avenir Next", kalin: true, category: .modern, regularPSName: "AvenirNext-Regular", boldPSName: "AvenirNext-Bold"),
+        FontOption(psName: "AvenirNext-Bold", display: "Avenir Next", assFamily: "Avenir Next", kalin: true, category: .modern, regularPSName: "AvenirNext-Regular", boldPSName: "AvenirNext-Bold", thinPSName: "AvenirNext-UltraLight"),
         FontOption(psName: "ArialRoundedMTBold", display: "Arial Rounded", assFamily: "Arial Rounded MT Bold", kalin: false, category: .modern),
         FontOption(psName: "Futura-Bold", display: "Futura", assFamily: "Futura", kalin: true, category: .modern, regularPSName: "Futura-Medium", boldPSName: "Futura-Bold"),
-        FontOption(psName: "GillSans-Bold", display: "Gill Sans", assFamily: "Gill Sans", kalin: true, category: .modern, regularPSName: "GillSans", boldPSName: "GillSans-Bold"),
+        FontOption(psName: "GillSans-Bold", display: "Gill Sans", assFamily: "Gill Sans", kalin: true, category: .modern, regularPSName: "GillSans", boldPSName: "GillSans-Bold", thinPSName: "GillSans-Light"),
         FontOption(psName: "TrebuchetMS-Bold", display: "Trebuchet", assFamily: "Trebuchet MS", kalin: true, category: .modern, regularPSName: "TrebuchetMS", boldPSName: "TrebuchetMS-Bold"),
         FontOption(psName: "Verdana-Bold", display: "Verdana", assFamily: "Verdana", kalin: true, category: .modern, regularPSName: "Verdana", boldPSName: "Verdana-Bold"),
 
-        FontOption(psName: "Copperplate-Bold", display: "Copperplate", assFamily: "Copperplate", kalin: true, category: .poster, regularPSName: "Copperplate", boldPSName: "Copperplate-Bold"),
+        FontOption(psName: "Copperplate-Bold", display: "Copperplate", assFamily: "Copperplate", kalin: true, category: .poster, regularPSName: "Copperplate", boldPSName: "Copperplate-Bold", thinPSName: "Copperplate-Light"),
         FontOption(psName: "Chalkduster", display: "Chalkduster", assFamily: "Chalkduster", kalin: false, category: .poster),
 
         FontOption(psName: "Georgia", display: "Georgia", assFamily: "Georgia", kalin: false, category: .serif, regularPSName: "Georgia", boldPSName: "Georgia-Bold"),
         FontOption(psName: "Baskerville-Bold", display: "Baskerville", assFamily: "Baskerville", kalin: true, category: .serif, regularPSName: "Baskerville", boldPSName: "Baskerville-Bold"),
         FontOption(psName: "Didot-Bold", display: "Didot", assFamily: "Didot", kalin: true, category: .serif, regularPSName: "Didot", boldPSName: "Didot-Bold"),
         FontOption(psName: "TimesNewRomanPS-BoldMT", display: "Times New Roman", assFamily: "Times New Roman", kalin: true, category: .serif, regularPSName: "TimesNewRomanPSMT", boldPSName: "TimesNewRomanPS-BoldMT"),
-        FontOption(psName: "AmericanTypewriter-Bold", display: "Typewriter", assFamily: "American Typewriter", kalin: true, category: .serif, regularPSName: "AmericanTypewriter", boldPSName: "AmericanTypewriter-Bold"),
+        FontOption(psName: "AmericanTypewriter-Bold", display: "Typewriter", assFamily: "American Typewriter", kalin: true, category: .serif, regularPSName: "AmericanTypewriter", boldPSName: "AmericanTypewriter-Bold", thinPSName: "AmericanTypewriter-Light"),
 
-        FontOption(psName: "ChalkboardSE-Bold", display: "Chalkboard", assFamily: "Chalkboard SE", kalin: true, category: .handwriting, regularPSName: "ChalkboardSE-Regular", boldPSName: "ChalkboardSE-Bold"),
-        FontOption(psName: "MarkerFelt-Wide", display: "Marker Felt", assFamily: "Marker Felt", kalin: true, category: .handwriting, regularPSName: "MarkerFelt-Thin", boldPSName: "MarkerFelt-Wide"),
-        FontOption(psName: "Noteworthy-Bold", display: "Noteworthy", assFamily: "Noteworthy", kalin: true, category: .handwriting, regularPSName: "Noteworthy-Light", boldPSName: "Noteworthy-Bold"),
+        FontOption(psName: "ChalkboardSE-Bold", display: "Chalkboard", assFamily: "Chalkboard SE", kalin: true, category: .handwriting, regularPSName: "ChalkboardSE-Regular", boldPSName: "ChalkboardSE-Bold", thinPSName: "ChalkboardSE-Light"),
+        FontOption(psName: "MarkerFelt-Wide", display: "Marker Felt", assFamily: "Marker Felt", kalin: true, category: .handwriting, regularPSName: "MarkerFelt-Thin", boldPSName: "MarkerFelt-Wide", thinPSName: "MarkerFelt-Thin"),
+        FontOption(psName: "Noteworthy-Bold", display: "Noteworthy", assFamily: "Noteworthy", kalin: true, category: .handwriting, regularPSName: "Noteworthy-Light", boldPSName: "Noteworthy-Bold", thinPSName: "Noteworthy-Light"),
         FontOption(psName: "SavoyeLetPlain", display: "Savoye", assFamily: "Savoye LET", kalin: false, category: .handwriting, bitisik: true),
-        FontOption(psName: "SnellRoundhand-Bold", display: "Snell Roundhand", assFamily: "Snell Roundhand", kalin: true, category: .handwriting, regularPSName: "SnellRoundhand", boldPSName: "SnellRoundhand-Bold", bitisik: true),
+        FontOption(psName: "SnellRoundhand-Bold", display: "Snell Roundhand", assFamily: "Snell Roundhand", kalin: true, category: .handwriting, regularPSName: "SnellRoundhand", boldPSName: "SnellRoundhand-Bold", thinPSName: "SnellRoundhand", bitisik: true),
         FontOption(psName: "Zapfino", display: "Zapfino", assFamily: "Zapfino", kalin: false, category: .handwriting, bitisik: true)
     ]
 
@@ -117,6 +120,7 @@ enum FontCatalog {
             $0.psName == psName
                 || $0.regularPSName == psName
                 || $0.boldPSName == psName
+                || $0.thinPSName == psName
         }
     }
 
@@ -128,11 +132,18 @@ enum FontCatalog {
         secenek(selection)?.boldPSName
     }
 
+    static func thinPSName(for selection: String) -> String? {
+        secenek(selection)?.thinPSName
+    }
+
     static func renderPSNames(for selection: String) -> [String] {
         guard let option = secenek(selection) else { return [selection] }
         var names = [option.regularFaceName]
         if let bold = option.boldPSName, bold != option.regularFaceName {
             names.append(bold)
+        }
+        if let thin = option.thinPSName, thin != option.regularFaceName && thin != option.boldPSName {
+            names.append(thin)
         }
         return names
     }
