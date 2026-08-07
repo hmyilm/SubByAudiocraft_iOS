@@ -28,12 +28,21 @@
       }
     },
     {
+      "identity": "ffmpeg-kit-spm",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/tylerjonesio/ffmpeg-kit-spm.git",
+      "state": {
+        "revision": "b3a2c365e89c5ec8fdc0debd7b7030152b572620",
+        "version": "5.1.2"
+      }
+    },
+    {
       "identity": "ffmpegkit",
       "kind": "remoteSourceControl",
-      "location": "https://github.com/kingslay/FFmpegKit.git",
+      "location": "https://github.com/tylerjonesio/ffmpeg-kit-spm.git",
       "state": {
-        "revision": "d643dbdcc97b7d82842a24324d3e0a342ec08bfd",
-        "version": "6.0.0"
+        "revision": "b3a2c365e89c5ec8fdc0debd7b7030152b572620",
+        "version": "5.1.2"
       }
     },
     {
@@ -46,21 +55,12 @@
       }
     },
     {
-      "identity": "hummingbird-websocket",
-      "kind": "remoteSourceControl",
-      "location": "https://github.com/hummingbird-project/hummingbird-websocket.git",
-      "state": {
-        "revision": "716c54294152c6d3301a6239a1d74db57cbcd6dc",
-        "version": "2.6.0"
-      }
-    },
-    {
       "identity": "mlx-swift",
       "kind": "remoteSourceControl",
       "location": "https://github.com/ml-explore/mlx-swift",
       "state": {
-        "revision": "dc43e62d7055353c7f99fa071a4e71d29dfddc44",
-        "version": "0.31.4"
+        "revision": "0bb916c67f4b9e5c682cbe02a42c701c93ab5021",
+        "version": "0.31.6"
       }
     },
     {
@@ -68,8 +68,8 @@
       "kind": "remoteSourceControl",
       "location": "https://github.com/ml-explore/mlx-swift",
       "state": {
-        "revision": "dc43e62d7055353c7f99fa071a4e71d29dfddc44",
-        "version": "0.31.4"
+        "revision": "0bb916c67f4b9e5c682cbe02a42c701c93ab5021",
+        "version": "0.31.6"
       }
     },
     {
@@ -199,15 +199,6 @@
       }
     },
     {
-      "identity": "swift-jinja",
-      "kind": "remoteSourceControl",
-      "location": "https://github.com/huggingface/swift-jinja.git",
-      "state": {
-        "revision": "7d0b8880ef8e567dd4e0089f8b99fb354129017c",
-        "version": "2.4.2"
-      }
-    },
-    {
       "identity": "swift-log",
       "kind": "remoteSourceControl",
       "location": "https://github.com/apple/swift-log.git",
@@ -313,15 +304,6 @@
       "state": {
         "revision": "2fa33e1f5e7131a7fc64c28e6d161dcec0d24820",
         "version": "1.3.3"
-      }
-    },
-    {
-      "identity": "swift-websocket",
-      "kind": "remoteSourceControl",
-      "location": "https://github.com/hummingbird-project/swift-websocket.git",
-      "state": {
-        "revision": "ca48d46c25f8fa948d37eaa480c73172182cf90f",
-        "version": "1.5.0"
       }
     },
     {
