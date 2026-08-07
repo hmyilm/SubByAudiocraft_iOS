@@ -15,8 +15,8 @@ packages:
     url: https://github.com/ml-explore/mlx-swift
     exactVersion: 0.31.4
   FFmpegKit:
-    url: https://github.com/tylerjonesio/ffmpeg-kit-spm.git
-    exactVersion: 5.1.2
+    url: https://github.com/kingslay/FFmpegKit.git
+    branch: main
 targets:
   SubByAudiocraft:
     type: application
@@ -40,10 +40,16 @@ targets:
         product: WhisperKit
       - package: Qwen3Speech
         product: Qwen3ASR
+      - package: Qwen3Speech
+        product: SourceSeparation
+      - package: Qwen3Speech
+        product: AudioCommon
       - package: MLXSwift
         product: MLX
+      - package: MLXSwift
+        product: MLXNN
       - package: FFmpegKit
-        product: FFmpeg-Kit
+        product: ffmpegkit
     info:
       path: SubByAudiocraft/Info.plist
       properties:
