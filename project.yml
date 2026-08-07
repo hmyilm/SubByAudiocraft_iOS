@@ -22,6 +22,9 @@ targets:
     version: 1.21.5
     build: 57
     settings:
+      PRODUCT_NAME: SubByAudiocraft
+      SWIFT_VERSION: "5.0"
+      ALWAYS_SEARCH_USER_PATHS: NO
       ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       PRODUCT_BUNDLE_IDENTIFIER: com.hmyilm.SubByAudiocraft
       MARKETING_VERSION: "1.21.5"
