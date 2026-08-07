@@ -1,0 +1,41 @@
+{
+  "pins" : [
+    {
+      "identity" : "ffmpegkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/kingslay/FFmpegKit.git",
+      "state" : {
+        "revision" : "d643dbdcc97b7d82842a24324d3e0a342ec08bfd",
+        "version" : "6.0.0"
+      }
+    },
+    {
+      "identity" : "mlx-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/ml-explore/mlx-swift",
+      "state" : {
+        "revision" : "dc43e62d7055353c7f99fa071a4e71d29dfddc44",
+        "version" : "0.31.4"
+      }
+    },
+    {
+      "identity" : "speech-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/soniqo/speech-swift",
+      "state" : {
+        "revision" : "c1aa219bc2284239ff6917d675a3e1978c840260",
+        "version" : "0.0.23"
+      }
+    },
+    {
+      "identity" : "whisperkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/argmaxinc/WhisperKit",
+      "state" : {
+        "revision" : "4a42b10ca42df9be327bc6eb96ff7a2ed586c073",
+        "version" : "1.0.0"
+      }
+    }
+  ],
+  "version" : 2
+}
