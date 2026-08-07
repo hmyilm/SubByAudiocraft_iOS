@@ -4,38 +4,58 @@ import UIKit
 
 // Tasarım ekranının hızlı başlangıç seçenekleri. Bunlar yeni bir render modu
 // oluşturmaz; mevcut ve test edilmiş ayarları anlaşılır paketler halinde uygular.
-private enum StudioPreset: String, CaseIterable, Identifiable {
-    case automatic
-    case clean
+enum StudioPreset: String, CaseIterable, Identifiable {
+    case smart
+    case minimal
+    case karaoke
+    case viral
+    case podcast
     case cinematic
-    case energetic
-    case shadow
+    case neon
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .automatic: return "Akıllı"
-        case .clean: return "Temiz"
+        case .smart: return "Akıllı"
+        case .minimal: return "Minimal"
+        case .karaoke: return "Karaoke"
+        case .viral: return "Viral Pop"
+        case .podcast: return "Podcast"
         case .cinematic: return "Sinematik"
-        case .energetic: return "Enerjik"
-        case .shadow: return "Alt Gölge"
+        case .neon: return "Neon"
         }
     }
 
     var icon: String {
         switch self {
-        case .automatic: return "wand.and.stars"
-        case .clean: return "captions.bubble"
+        case .smart: return "wand.and.stars"
+        case .minimal: return "captions.bubble"
+        case .karaoke: return "music.note"
+        case .viral: return "bolt.fill"
+        case .podcast: return "mic.fill"
         case .cinematic: return "film"
-        case .energetic: return "bolt.fill"
-        case .shadow: return "shadow"
+        case .neon: return "sparkles"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .smart: return "Parçanın bölümlerine göre kendi sahne akışını kurar."
+        case .minimal: return "Temiz, sabit ve her videoda kolay okunan altyazı."
+        case .karaoke: return "Söylenen harfi altın renkle klasik biçimde takip eder."
+        case .viral: return "Kısa video için büyük, hızlı ve kelime odaklı görünüm."
+        case .podcast: return "Cümleyi korur, aktif kelimeyi kalın ve renkli gösterir."
+        case .cinematic: return "Sakin hareket, serif başlık ve film bandı dengesi."
+        case .neon: return "Modern cam katman ve mor renkli kinetik vurgu."
         }
     }
 }
 
 struct StudioTypographyControls: View {
-    let fontName: String
+    @Binding var fontName: String
+    @Binding var fontSize: Double
+    @Binding var marginV: Double
     @Binding var karaokeMode: KaraokeMode
     @Binding var lyricTrackingMode: LyricTrackingMode
     @Binding var kineticStyle: KineticStyle
@@ -66,8 +86,8 @@ struct StudioTypographyControls: View {
                 advancedControls
             }
         }
-        .onChange(of: lyricTrackingMode) { mode in
-            if mode != .karaoke, kineticOverlayStyle.requiresKaraokeTracking {
+        .onChange(of: lyricTrackingMode) {
+            if lyricTrackingMode != .karaoke, kineticOverlayStyle.requiresKaraokeTracking {
                 kineticOverlayStyle = .none
             }
         }
@@ -105,7 +125,7 @@ struct StudioTypographyControls: View {
                 }
             }
 
-            Text("Akıllı görünüm parçanın bölümlerine göre uyumlu kompozisyonları otomatik yönetir.")
+            Text(selectedPreset?.detail ?? "Bir hazır görünüm seç; istersen aşağıdaki ayarlarla kendine göre değiştir.")
                 .font(.caption2)
                 .foregroundColor(.gray)
                 .fixedSize(horizontal: false, vertical: true)
@@ -386,68 +406,136 @@ struct StudioTypographyControls: View {
     }
 
     private var selectedPreset: StudioPreset? {
-        if karaokeMode == .classic && lyricTrackingMode == .karaoke {
-            return .clean
-        }
-        guard karaokeMode == .kinetic, lyricTrackingMode == .karaoke else { return nil }
-        if kineticStyle == .automatic &&
+        if karaokeMode == .kinetic &&
+            lyricTrackingMode == .karaoke &&
+            kineticStyle == .automatic &&
             kineticIntensity == .balanced &&
             kineticLetterStyle == .automatic &&
-            kineticOverlayStyle == .automatic {
-            return .automatic
+            kineticOverlayStyle == .automatic &&
+            kineticAccent == .gold &&
+            fontName == "Montserrat-ExtraBold" {
+            return .smart
         }
-        if kineticStyle == .cinematic &&
-            kineticIntensity == .subtle &&
-            kineticLetterStyle == .clean &&
-            kineticOverlayStyle == .cinematicBand {
-            return .cinematic
+        if karaokeMode == .classic &&
+            lyricTrackingMode == .off &&
+            fontName == "Lato-Bold" {
+            return .minimal
         }
-        if kineticStyle == .impact &&
+        if karaokeMode == .classic &&
+            lyricTrackingMode == .karaoke &&
+            kineticAccent == .gold &&
+            fontName == "Montserrat-ExtraBold" {
+            return .karaoke
+        }
+        if karaokeMode == .kinetic &&
+            lyricTrackingMode == .karaoke &&
+            kineticStyle == .impact &&
             kineticIntensity == .energetic &&
             kineticLetterStyle == .rhythm &&
-            kineticOverlayStyle == .spotlight {
-            return .energetic
+            kineticOverlayStyle == .spotlight &&
+            kineticAccent == .coral &&
+            fontName == "ArchivoBlack-Regular" {
+            return .viral
         }
-        if kineticStyle == .cinematic &&
+        if lyricTrackingMode == .boldWord &&
+            kineticAccent == .gold &&
+            fontName == "Poppins-Bold" {
+            return .podcast
+        }
+        if karaokeMode == .kinetic &&
+            lyricTrackingMode == .off &&
+            kineticStyle == .cinematic &&
             kineticIntensity == .subtle &&
             kineticLetterStyle == .clean &&
-            kineticOverlayStyle == .underShadow {
-            return .shadow
+            kineticOverlayStyle == .cinematicBand &&
+            fontName == "PlayfairDisplayRoman-Black" {
+            return .cinematic
+        }
+        if karaokeMode == .kinetic &&
+            lyricTrackingMode == .karaoke &&
+            kineticStyle == .editorial &&
+            kineticOverlayStyle == .glass &&
+            kineticAccent == .violet &&
+            fontName == "Poppins-Bold" {
+            return .neon
         }
         return nil
     }
 
     private func apply(_ preset: StudioPreset) {
-        lyricTrackingMode = .karaoke
         switch preset {
-        case .automatic:
+        case .smart:
+            fontName = "Montserrat-ExtraBold"
+            fontSize = 72
+            marginV = 120
             karaokeMode = .kinetic
+            lyricTrackingMode = .karaoke
             kineticStyle = .automatic
+            kineticAccent = .gold
             kineticIntensity = .balanced
             kineticLetterStyle = .automatic
             kineticOverlayStyle = .automatic
-        case .clean:
+        case .minimal:
+            fontName = "Lato-Bold"
+            fontSize = 58
+            marginV = 100
             karaokeMode = .classic
+            lyricTrackingMode = .off
+            kineticAccent = .ice
             kineticLetterStyle = .clean
             kineticOverlayStyle = .none
-        case .cinematic:
-            karaokeMode = .kinetic
-            kineticStyle = .cinematic
-            kineticIntensity = .subtle
+        case .karaoke:
+            fontName = "Montserrat-ExtraBold"
+            fontSize = 68
+            marginV = 120
+            karaokeMode = .classic
+            lyricTrackingMode = .karaoke
+            kineticAccent = .gold
             kineticLetterStyle = .clean
-            kineticOverlayStyle = .cinematicBand
-        case .energetic:
+            kineticOverlayStyle = .none
+        case .viral:
+            fontName = "ArchivoBlack-Regular"
+            fontSize = 84
+            marginV = 180
             karaokeMode = .kinetic
+            lyricTrackingMode = .karaoke
             kineticStyle = .impact
+            kineticAccent = .coral
             kineticIntensity = .energetic
             kineticLetterStyle = .rhythm
             kineticOverlayStyle = .spotlight
-        case .shadow:
+        case .podcast:
+            fontName = "Poppins-Bold"
+            fontSize = 72
+            marginV = 210
+            karaokeMode = .classic
+            lyricTrackingMode = .boldWord
+            kineticAccent = .gold
+            kineticIntensity = .balanced
+            kineticLetterStyle = .clean
+            kineticOverlayStyle = .none
+        case .cinematic:
+            fontName = "PlayfairDisplayRoman-Black"
+            fontSize = 64
+            marginV = 145
             karaokeMode = .kinetic
+            lyricTrackingMode = .off
             kineticStyle = .cinematic
+            kineticAccent = .ice
             kineticIntensity = .subtle
             kineticLetterStyle = .clean
-            kineticOverlayStyle = .underShadow
+            kineticOverlayStyle = .cinematicBand
+        case .neon:
+            fontName = "Poppins-Bold"
+            fontSize = 76
+            marginV = 165
+            karaokeMode = .kinetic
+            lyricTrackingMode = .karaoke
+            kineticStyle = .editorial
+            kineticAccent = .violet
+            kineticIntensity = .balanced
+            kineticLetterStyle = .poster
+            kineticOverlayStyle = .glass
         }
     }
 

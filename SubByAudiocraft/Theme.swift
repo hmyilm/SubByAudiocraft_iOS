@@ -57,8 +57,8 @@ struct PrimaryButtonStyle: ButtonStyle {
             .foregroundColor(enabled ? .black : .gray)
             .scaleEffect(!reduceMotion && configuration.isPressed ? 0.97 : 1.0)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { pressed in
-                if pressed && enabled { Theme.haptic() }
+            .onChange(of: configuration.isPressed) {
+                if configuration.isPressed && enabled { Theme.haptic() }
             }
     }
 }

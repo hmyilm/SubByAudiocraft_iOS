@@ -4482,7 +4482,7 @@ class VideoProcessor: ObservableObject {
                 let boldFontName = FontCatalog.boldPSName(for: fontName) ?? FontCatalog.regularPSName(for: fontName)
 
                 let unactiveTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fn\(thinFontName)\\fs\(fontSize)\\b100\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
+                    "\\fn\(thinFontName)\\fs\(fontSize)\\b0\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
 
                 if !hasActiveInterval {
                     result += "Dialogue: 1,\(segmentStartText)," +
@@ -4842,7 +4842,7 @@ class VideoProcessor: ObservableObject {
         kineticEmphasisWordIDs: Set<UUID> = [],
         videoURL: URL
     ) async -> URL? {
-        let asset = AVAsset(url: videoURL)
+        let asset = AVURLAsset(url: videoURL)
         
         // Modern async API'ler ile video izlerini yükleme
         guard let tracks = try? await asset.loadTracks(withMediaType: .video),

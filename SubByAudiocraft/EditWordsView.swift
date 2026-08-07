@@ -131,7 +131,9 @@ struct EditWordsView: View {
                         SectionHeader(icon: "paintbrush.fill", title: "Tasarım Ayarları")
 
                         StudioTypographyControls(
-                            fontName: fontName,
+                            fontName: $fontName,
+                            fontSize: $fontSize,
+                            marginV: $marginV,
                             karaokeMode: $karaokeMode,
                             lyricTrackingMode: $lyricTrackingMode,
                             kineticStyle: $kineticStyle,
@@ -296,10 +298,10 @@ struct EditWordsView: View {
         .onAppear {
             normalizeEmphasisSelection()
         }
-        .onChange(of: breaks) { _ in
+        .onChange(of: breaks) {
             normalizeEmphasisSelection()
         }
-        .onChange(of: inlineBreaks) { _ in
+        .onChange(of: inlineBreaks) {
             updatePreviewLine()
         }
         .alert("Kelime Ekle", isPresented: $showsAddWordAlert) {

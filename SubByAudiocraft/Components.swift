@@ -679,8 +679,8 @@ struct KaraokeModePicker: View {
                     .padding(.top, 2)
             }
         }
-        .onChange(of: lyricTrackingMode) { mode in
-            if mode != .karaoke, kineticOverlayStyle.requiresKaraokeTracking {
+        .onChange(of: lyricTrackingMode) {
+            if lyricTrackingMode != .karaoke, kineticOverlayStyle.requiresKaraokeTracking {
                 kineticOverlayStyle = .none
             }
         }

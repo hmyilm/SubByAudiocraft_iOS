@@ -148,8 +148,8 @@ struct ContentView: View {
         .sheet(isPresented: $showHistory) {
             HistoryView(store: store, protectedProjectID: currentProjectID, onOpen: openProject)
         }
-        .onChange(of: selectedItem) { newValue in
-            selectedVideoItemDidChange(newValue)
+        .onChange(of: selectedItem) {
+            selectedVideoItemDidChange(selectedItem)
         }
         // Döngüsel oynatma (observer sızıntısı yaratmadan)
         .onReceive(NotificationCenter.default.publisher(for: .AVPlayerItemDidPlayToEndTime)) { note in
@@ -160,21 +160,21 @@ struct ContentView: View {
     private var editorObservedContent: some View {
         presentationObservedContent
         // Uzun süren analiz/kodlama sırasında ekranın kilitlenip işlemin kesilmesini önler
-        .onChange(of: isProcessing) { processing in
-            UIApplication.shared.isIdleTimerDisabled = processing
+        .onChange(of: isProcessing) {
+            UIApplication.shared.isIdleTimerDisabled = isProcessing
         }
-        .onChange(of: transcriptAutosaveToken) { _ in
+        .onChange(of: transcriptAutosaveToken) {
             editorContentDidChange()
         }
-        .onChange(of: styleAutosaveToken) { _ in
+        .onChange(of: styleAutosaveToken) {
             editorContentDidChange()
         }
     }
 
     private var lifecycleObservedContent: some View {
         editorObservedContent
-        .onChange(of: scenePhase) { phase in
-            scenePhaseDidChange(phase)
+        .onChange(of: scenePhase) {
+            scenePhaseDidChange(scenePhase)
         }
         .onDisappear(perform: cleanupViewState)
     }

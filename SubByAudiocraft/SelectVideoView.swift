@@ -277,8 +277,8 @@ struct SelectVideoView: View {
                         lineWidth: 1
                     )
             )
-            .onChange(of: groqAPIKey) { newValue in
-                SecureAPIKeyStore.saveGroqAPIKey(newValue)
+            .onChange(of: groqAPIKey) {
+                SecureAPIKeyStore.saveGroqAPIKey(groqAPIKey)
             }
 
             if GroqSpeechClient.isPlausibleAPIKey(groqAPIKey) {

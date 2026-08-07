@@ -211,7 +211,7 @@ final class VocalIsolationService: @unchecked Sendable {
             hiddenSize: OpenUnmixConfig.umxhq.hiddenSize
         )
         let weights = try MLX.loadArrays(url: weightsURL)
-        try model.update(
+        model.update(
             parameters: ModuleParameters.unflattened(weights)
         )
         model.train(false)

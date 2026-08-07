@@ -315,14 +315,14 @@ final class ProjectStore: ObservableObject {
 
     // Liste için küçük kapak görseli (videonun ilk yarım saniyesinden bir kare)
     private func kapakOlustur(_ proje: SavedProject) {
-        let asset = AVAsset(url: videoURL(proje))
+        let asset = AVURLAsset(url: videoURL(proje))
         let uretici = AVAssetImageGenerator(asset: asset)
         uretici.appliesPreferredTrackTransform = true
         uretici.maximumSize = CGSize(width: 320, height: 320)
         let hedef = kapakURL(proje)
-        DispatchQueue.global(qos: .utility).async {
+        Task {
             let zaman = CMTime(seconds: 0.5, preferredTimescale: 600)
-            if let cg = try? uretici.copyCGImage(at: zaman, actualTime: nil),
+            if let (cg, _) = try? await uretici.image(at: zaman),
                let data = UIImage(cgImage: cg).jpegData(compressionQuality: 0.7) {
                 try? data.write(to: hedef)
             }
