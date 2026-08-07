@@ -16,7 +16,7 @@ packages:
     exactVersion: 0.31.4
   FFmpegKit:
     url: https://github.com/kingslay/FFmpegKit.git
-    branch: main
+    exactVersion: 6.1.4
 targets:
   SubByAudiocraft:
     type: application
