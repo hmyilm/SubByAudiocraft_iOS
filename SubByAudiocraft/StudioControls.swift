@@ -799,7 +799,7 @@ struct CompactFontPicker: View {
     ) -> Font.Weight? {
         guard !font.hasRealFace(for: weight) else { return nil }
         switch weight {
-        case .thin: return .thin
+        case .thin: return .light
         case .regular: return .regular
         case .bold: return .bold
         }
@@ -1097,7 +1097,7 @@ private struct FontLibrarySheet: View {
     ) -> Font.Weight? {
         guard !font.hasRealFace(for: weight) else { return nil }
         switch weight {
-        case .thin: return .thin
+        case .thin: return .light
         case .regular: return .regular
         case .bold: return .bold
         }

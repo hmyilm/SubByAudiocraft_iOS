@@ -2069,7 +2069,63 @@ class VideoProcessor: ObservableObject {
             }
             normalized.append(word)
         }
-        return normalized
+        return addingTurkishQuestionPunctuation(to: normalized)
+    }
+
+    // ASR bazı Türkçe soru cümlelerinde kelimeleri doğru bulup soru işaretini
+    // üretmeyebiliyor. Soru sözcüğü/eki bulunan konuşma grubunun sonuna güvenli
+    // biçimde `?` ekler; var olan . ! ? işaretlerine dokunmaz.
+    func addingTurkishQuestionPunctuation(
+        to words: [WordTimestamp]
+    ) -> [WordTimestamp] {
+        guard !words.isEmpty else { return [] }
+
+        var result = words
+        var phraseStart = 0
+        for index in result.indices {
+            let text = result[index].text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let hasTerminalMark = text.last.map { ".!?".contains($0) } ?? false
+            let isLast = index == result.index(before: result.endIndex)
+            let nextGap = isLast
+                ? 0
+                : max(0, result[result.index(after: index)].start - result[index].end)
+            let endsPhrase = hasTerminalMark || nextGap >= 0.62 || isLast
+
+            guard endsPhrase else { continue }
+            let phrase = result[phraseStart...index]
+            if !hasTerminalMark,
+               phrase.contains(where: { isTurkishQuestionToken($0.text) }) {
+                result[index].text = mergingTrailingPunctuation(
+                    from: "?",
+                    into: result[index].text
+                )
+            }
+            phraseStart = result.index(after: index)
+        }
+        return result
+    }
+
+    private func isTurkishQuestionToken(_ text: String) -> Bool {
+        let key = comparisonKey(text)
+            .replacingOccurrences(of: "ı", with: "i")
+        guard !key.isEmpty else { return false }
+
+        let questionWords = Set([
+            "ne", "neden", "niye", "nicin", "kim", "kimi", "kime", "kimden", "kimin",
+            "nerede", "neresi", "nereye", "nereden", "kac", "kacinci",
+            "hangi", "hangisi", "hangileri"
+        ])
+        if questionWords.contains(key) || key.hasPrefix("nasil") {
+            return true
+        }
+
+        let questionParticles = Set([
+            "mi", "miyim", "miyiz", "misin", "misiniz", "miydi", "miydin",
+            "miydiniz", "midir", "midirlar", "miyse",
+            "mu", "muyum", "muyuz", "musun", "musunuz", "muydu", "muydun",
+            "muydunuz", "mudur", "mudurlar", "muysa"
+        ])
+        return questionParticles.contains(key)
     }
 
     private func mergingTrailingPunctuation(
@@ -4545,9 +4601,11 @@ class VideoProcessor: ObservableObject {
                 let hasActiveInterval = wordStartText != wordEndText
                 let thinFontName = FontCatalog.faceName(for: fontName, weight: .thin)
                 let boldFontName = FontCatalog.faceName(for: fontName, weight: .bold)
+                let thinWeightTag = FontCatalog.assTag(for: fontName, weight: .thin)
+                let boldWeightTag = FontCatalog.assTag(for: fontName, weight: .bold)
 
                 let unactiveTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fn\(thinFontName)\\fs\(fontSize)\(SubtitleFontWeight.thin.assTag)\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
+                    "\\fn\(thinFontName)\\fs\(fontSize)\(thinWeightTag)\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
 
                 if !hasActiveInterval {
                     result += "Dialogue: 1,\(segmentStartText)," +
@@ -4568,7 +4626,7 @@ class VideoProcessor: ObservableObject {
                 }
 
                 let boldTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fn\(boldFontName)\\fs\(fontSize)\(SubtitleFontWeight.bold.assTag)\\c&H\(resolvedAccent.assColor)&" +
+                    "\\fn\(boldFontName)\\fs\(fontSize)\(boldWeightTag)\\c&H\(resolvedAccent.assColor)&" +
                     "\(extraTags)\\bord0\\shad0}"
                 result += "Dialogue: 2,\(wordStartText)," +
                     "\(wordEndText),Default,,0,0,0,," +
@@ -4858,6 +4916,8 @@ class VideoProcessor: ObservableObject {
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
         let thinFontName = FontCatalog.faceName(for: fontName, weight: .thin)
         let boldFontName = FontCatalog.faceName(for: fontName, weight: .bold)
+        let thinWeightTag = FontCatalog.assTag(for: fontName, weight: .thin)
+        let boldWeightTag = FontCatalog.assTag(for: fontName, weight: .bold)
         let centerX = virtualWidth / 2
         let halfHeight = max(12, fontSize / 2)
         let centerY = min(
@@ -4876,8 +4936,8 @@ class VideoProcessor: ObservableObject {
             let durationMs = max(10, Int((eventEnd - eventStart) * 1000))
             let settleMs = min(110, durationMs)
             let baseTags = "{\\an5\\pos(\(centerX),\(centerY))" +
-                "\\fs\(fontSize)\\fn\(thinFontName)\(SubtitleFontWeight.thin.assTag)\\c&HFFFFFF&\\bord0\\shad0}"
-            let latestTags = "{\\fn\(boldFontName)\(SubtitleFontWeight.bold.assTag)\\c&H\(resolvedAccent.assColor)&\\alpha&H18&" +
+                "\\fs\(fontSize)\\fn\(thinFontName)\(thinWeightTag)\\c&HFFFFFF&\\bord0\\shad0}"
+            let latestTags = "{\\fn\(boldFontName)\(boldWeightTag)\\c&H\(resolvedAccent.assColor)&\\alpha&H18&" +
                 "\\blur0.7" +
                 "\\t(0,\(settleMs),1.5,\\c&HFFFFFF&\\alpha&H00&" +
                 "\\blur0.2)}"

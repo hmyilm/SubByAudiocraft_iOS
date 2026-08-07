@@ -997,43 +997,48 @@ struct SubtitlePreviewPlayer: View {
                                                 let isBoldActive = lyricTrackingMode == .boldWord
                                                     && playbackTime >= word.start
                                                     && playbackTime < word.end
-                                                Text(word.text)
-                                                    .font(
-                                                        .custom(
-                                                            lyricTrackingMode == .boldWord
-                                                                ? thinPreviewFontName
-                                                                : fontName,
-                                                            size: CGFloat(fontSize) * previewScale
-                                                        )
-                                                    )
-                                                    .fontWeight(
-                                                        lyricTrackingMode == .boldWord
-                                                            ? (hasRealThinPreviewFace ? nil : .thin)
-                                                            : nil
-                                                    )
-                                                    .foregroundColor(
-                                                        isBoldActive ? .clear : .white
-                                                    )
-                                                    .overlay {
-                                                        if isBoldActive {
-                                                            Text(word.text)
-                                                                .font(
-                                                                    .custom(
-                                                                        boldPreviewFontName,
-                                                                        size: CGFloat(fontSize)
-                                                                            * previewScale
-                                                                    )
+                                                if lyricTrackingMode == .boldWord {
+                                                    // Thin metnin ölçüsüne kurulan overlay, Georgia-Bold
+                                                    // daha geniş olduğunda yazıyı sıkıştırıyordu. İki yüz
+                                                    // aynı ZStack'te ölçülür; kutu büyük olan yüze göre sabit
+                                                    // kalır ve yalnız görünürlük değişir.
+                                                    ZStack {
+                                                        Text(word.text)
+                                                            .font(
+                                                                .custom(
+                                                                    thinPreviewFontName,
+                                                                    size: CGFloat(fontSize) * previewScale
                                                                 )
-                                                                .fontWeight(
-                                                                    hasRealBoldPreviewFace
-                                                                        ? nil
-                                                                        : .bold
+                                                            )
+                                                            .fontWeight(
+                                                                hasRealThinPreviewFace ? nil : .light
+                                                            )
+                                                            .foregroundColor(.white)
+                                                            .opacity(isBoldActive ? 0 : 1)
+
+                                                        Text(word.text)
+                                                            .font(
+                                                                .custom(
+                                                                    boldPreviewFontName,
+                                                                    size: CGFloat(fontSize) * previewScale
                                                                 )
-                                                                .foregroundColor(
-                                                                    resolvedPreviewAccent
-                                                                )
-                                                        }
+                                                            )
+                                                            .fontWeight(
+                                                                hasRealBoldPreviewFace ? nil : .bold
+                                                            )
+                                                            .foregroundColor(resolvedPreviewAccent)
+                                                            .opacity(isBoldActive ? 1 : 0)
                                                     }
+                                                } else {
+                                                    Text(word.text)
+                                                        .font(
+                                                            .custom(
+                                                                fontName,
+                                                                size: CGFloat(fontSize) * previewScale
+                                                            )
+                                                        )
+                                                        .foregroundColor(.white)
+                                                }
                                             }
                                         }
                                     }
@@ -1049,11 +1054,6 @@ struct SubtitlePreviewPlayer: View {
                                     : fontName,
                                 size: CGFloat(fontSize) * previewScale
                             )
-                        )
-                        .fontWeight(
-                            lyricTrackingMode == .boldWord && !hasRealThinPreviewFace
-                                ? .thin
-                                : nil
                         )
                         .lineLimit(1)
                         .minimumScaleFactor(0.45)
@@ -1331,7 +1331,7 @@ private struct CenteredWordRevealPreview: View {
         if isLatest {
             return FontCatalog.boldPSName(for: fontName) == nil ? .bold : nil
         }
-        return FontCatalog.thinPSName(for: fontName) == nil ? .thin : nil
+        return FontCatalog.thinPSName(for: fontName) == nil ? .light : nil
     }
 }
 

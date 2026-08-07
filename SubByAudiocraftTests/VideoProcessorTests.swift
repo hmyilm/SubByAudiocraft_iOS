@@ -496,6 +496,45 @@ final class VideoProcessorTests: XCTestCase {
         )
     }
 
+    func testTurkishQuestionWordsAddQuestionMarkToPhraseEnding() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "merhaba", start: 0.0, end: 0.35),
+            VideoProcessor.WordTimestamp(text: "nasılsın", start: 0.42, end: 0.85)
+        ]
+
+        let normalized = VideoProcessor.shared.normalizeRecognizedWords(words)
+
+        XCTAssertEqual(normalized.map(\.text), ["merhaba", "nasılsın?"])
+    }
+
+    func testQuestionMarkMovesToLastWordAndRespectsPauseBoundary() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "neden", start: 0.0, end: 0.25),
+            VideoProcessor.WordTimestamp(text: "böyle", start: 0.30, end: 0.60),
+            VideoProcessor.WordTimestamp(text: "yaptın", start: 0.66, end: 1.0),
+            VideoProcessor.WordTimestamp(text: "hava", start: 1.80, end: 2.05),
+            VideoProcessor.WordTimestamp(text: "güzel", start: 2.10, end: 2.42)
+        ]
+
+        let normalized = VideoProcessor.shared.normalizeRecognizedWords(words)
+
+        XCTAssertEqual(
+            normalized.map(\.text),
+            ["neden", "böyle", "yaptın?", "hava", "güzel"]
+        )
+    }
+
+    func testExistingQuestionPunctuationIsNotDuplicated() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "nasılsın?", start: 0.0, end: 0.5)
+        ]
+
+        XCTAssertEqual(
+            VideoProcessor.shared.normalizeRecognizedWords(words).map(\.text),
+            ["nasılsın?"]
+        )
+    }
+
     func testRecognitionNormalizationRemovesMusicMarkersAndRepairsOverlap() {
         let words = [
             VideoProcessor.WordTimestamp(text: "[MÜZİK]", start: 0.0, end: 0.4),
@@ -1619,7 +1658,7 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(classicDialogues.count, 9)
         XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 1,") }.count, 6)
         XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 2,") }.count, 3)
-        XCTAssertTrue(classic.contains("\\fs70\\b100"))
+        XCTAssertTrue(classic.contains("\\fs70\\b300"))
         XCTAssertTrue(classic.contains("\\fs70\\b700"))
         XCTAssertTrue(classicDialogues.contains { $0.hasSuffix("}kara") })
         XCTAssertFalse(classic.contains("kara sevda içimde"))
@@ -1695,7 +1734,8 @@ final class VideoProcessorTests: XCTestCase {
             let dialogues = ass.split(separator: "\n")
 
             XCTAssertEqual(dialogues.count, 6, font.display)
-            XCTAssertTrue(ass.contains("\\b100\\c&HFFFFFF&"), font.display)
+            let expectedThinTag = font.hasRealThinFace ? "\\b100" : "\\b300"
+            XCTAssertTrue(ass.contains("\(expectedThinTag)\\c&HFFFFFF&"), font.display)
             XCTAssertTrue(ass.contains("\\b700\\c&HA5E654&"), font.display)
             XCTAssertFalse(ass.contains("\\fscx104"), font.display)
             XCTAssertFalse(ass.contains("\\bord0.8"), font.display)
@@ -2185,6 +2225,9 @@ final class FontCatalogTests: XCTestCase {
         XCTAssertEqual(georgia.faceName(for: .regular), "Georgia")
         XCTAssertEqual(georgia.faceName(for: .bold), "Georgia-Bold")
         XCTAssertTrue(georgia.hasRealFace(for: .bold))
+        XCTAssertEqual(georgia.assTag(for: .thin), "\\b300")
+        XCTAssertEqual(georgia.assTag(for: .regular), "\\b400")
+        XCTAssertEqual(georgia.assTag(for: .bold), "\\b700")
         XCTAssertEqual(
             FontCatalog.renderPSNames(for: georgia.psName),
             ["Georgia", "Georgia-Bold"]

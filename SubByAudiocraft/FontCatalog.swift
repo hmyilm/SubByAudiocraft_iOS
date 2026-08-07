@@ -100,6 +100,17 @@ struct FontOption: Identifiable, Hashable {
         case .bold: return boldPSName != nil
         }
     }
+
+    // Gerçek Thin/Light yüzü bulunmayan ailelerde 100 ağırlığı sentetik olarak
+    // fazla incelip Bold yüzden başka bir yazı tipiymiş gibi görünebiliyor.
+    // Aynı Regular yüz üzerinde 300 kullanmak harf yapısını korurken yeterli
+    // ağırlık farkını verir. Gerçek Light dosyası olan fontlar 100'ü korur.
+    func assTag(for weight: SubtitleFontWeight) -> String {
+        if weight == .thin, !hasRealThinFace {
+            return "\\b300"
+        }
+        return weight.assTag
+    }
 }
 
 enum FontCatalog {
@@ -203,6 +214,13 @@ enum FontCatalog {
         weight: SubtitleFontWeight
     ) -> Bool {
         secenek(selection)?.hasRealFace(for: weight) ?? (weight == .regular)
+    }
+
+    static func assTag(
+        for selection: String,
+        weight: SubtitleFontWeight
+    ) -> String {
+        secenek(selection)?.assTag(for: weight) ?? weight.assTag
     }
 
     static func renderPSNames(for selection: String) -> [String] {
