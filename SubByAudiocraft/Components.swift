@@ -1107,11 +1107,6 @@ struct SubtitlePreviewPlayer: View {
 
     private var hasRealThinPreviewFace: Bool {
         FontCatalog.thinPSName(for: fontName) != nil
-    }rPreviewFontName
-    }
-
-    private var hasRealBoldPreviewFace: Bool {
-        FontCatalog.boldPSName(for: fontName) != nil
     }
 
     private var resolvedPreviewAccent: Color {

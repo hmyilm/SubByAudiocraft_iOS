@@ -21,6 +21,7 @@
 		3D09E46DFD0C47C8BAE7791B /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3D08729D95B235A5BDFF2B37 /* WhisperKit */; };
 		418A357AC2B0D23514DAD662 /* Oswald-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5F50CD942A25E6EBCFEBD880 /* Oswald-Bold.ttf */; };
 		4286977DAA049F856124B44A /* BlackOpsOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 370EA6FB80B019205FEE3E71 /* BlackOpsOne-Regular.ttf */; };
+		43FF4FC720D21C49B4ED3617 /* ffmpegkit in Frameworks */ = {isa = PBXBuildFile; productRef = D80B848106C6367A4C869B07 /* ffmpegkit */; };
 		4D864D7A6FEF66B8046F8684 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81AEE50304E466C69765CFEF /* Components.swift */; };
 		533443004327A9F5F4A6E15C /* Righteous-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 30D9E9886B43922CC5449D39 /* Righteous-Regular.ttf */; };
 		57CBFDEE8D0B2AF3DCCA7B45 /* GreatVibes-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = FA55C9A5C3C1D992CFCDCA88 /* GreatVibes-Regular.ttf */; };
@@ -158,6 +159,7 @@
 				E772582D9FD6B500F1C2149F /* AudioCommon in Frameworks */,
 				72C3E872AEA3158844DE96D5 /* MLX in Frameworks */,
 				C263A69607DF640E9DEFC244 /* MLXNN in Frameworks */,
+				43FF4FC720D21C49B4ED3617 /* ffmpegkit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -286,6 +288,7 @@
 				ADB562BAB379CCE9603C668E /* AudioCommon */,
 				E495773F7EBD20E5B13E88DF /* MLX */,
 				02BD014D1358A24FF8462380 /* MLXNN */,
+				D80B848106C6367A4C869B07 /* ffmpegkit */,
 			);
 			productName = SubByAudiocraft;
 			productReference = 19A3C7089D00F16934C15040 /* SubByAudiocraft.app */;
@@ -328,6 +331,7 @@
 			);
 			mainGroup = BFBE5054769E14619B15C9CC;
 			packageReferences = (
+				BDA38EA6F64D22B46D720012 /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */,
 				BA6D70EA1340A590E9E9B1C0 /* XCRemoteSwiftPackageReference "mlx-swift" */,
 				BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */,
 				17C0C575FC1459F7363C3D49 /* XCRemoteSwiftPackageReference "WhisperKit" */,
@@ -546,6 +550,14 @@
 				version = 0.31.4;
 			};
 		};
+		BDA38EA6F64D22B46D720012 /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/tylerjonesio/ffmpeg-kit-spm.git";
+			requirement = {
+				kind = exactVersion;
+				version = 6.0.0;
+			};
+		};
 		BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/soniqo/speech-swift";
@@ -581,6 +593,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */;
 			productName = AudioCommon;
+		};
+		D80B848106C6367A4C869B07 /* ffmpegkit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BDA38EA6F64D22B46D720012 /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */;
+			productName = ffmpegkit;
 		};
 		E495773F7EBD20E5B13E88DF /* MLX */ = {
 			isa = XCSwiftPackageProductDependency;
