@@ -1740,27 +1740,67 @@ class VideoProcessor: ObservableObject {
         return normalizeRecognizedWords(result)
     }
 
-    private func lyricWords(from transcript: String) -> [String] {
+    func lyricWords(from transcript: String) -> [String] {
         let markerPattern = #"(?i)\[(music|müzik|instrumental|applause|alkış)[^\]]*\]|\((music|müzik|instrumental|applause|alkış)[^\)]*\)"#
         let withoutMarkers = transcript.replacingOccurrences(
             of: markerPattern,
             with: " ",
             options: .regularExpression
         )
+        let wrapperCharacters = CharacterSet(
+            charactersIn: "\"“”«»()[]{}"
+        )
+        let markerKeys = Set([
+            "muzik", "music", "instrumental", "applause", "alkis"
+        ])
         return withoutMarkers
             .components(separatedBy: .whitespacesAndNewlines)
             .compactMap { token -> String? in
-                let trimmed = token.trimmingCharacters(
-                    in: CharacterSet.punctuationCharacters
-                        .union(.symbols)
-                        .subtracting(CharacterSet(charactersIn: "'’"))
-                )
+                // Yalnız dış tırnak/parantezleri kaldır. Kelimeye ait virgül,
+                // nokta, soru ve ünlem işaretleri zaman damgasıyla birlikte kalır.
+                let trimmed = token.trimmingCharacters(in: wrapperCharacters)
                 let clean = cleanRecognizedText(trimmed)
+                let key = comparisonKey(clean)
                 guard !clean.isEmpty,
+                      !key.isEmpty,
+                      !markerKeys.contains(key),
                       !clean.hasPrefix("<"),
                       !clean.hasSuffix(">") else { return nil }
                 return clean
             }
+    }
+
+    // Bazı servisler tam cümlede noktalama döndürürken `words` alanında yalnız
+    // çıplak kelimeleri verir. Tam metni sözcük zamanlarıyla sıralı biçimde
+    // eşleştirip yalnız noktalama ekini geri taşır; zaman ve tanınan kelime değişmez.
+    func applyTranscriptPunctuation(
+        _ transcript: String,
+        to timedWords: [WordTimestamp]
+    ) -> [WordTimestamp] {
+        let transcriptWords = lyricWords(from: transcript)
+        let normalizedTiming = normalizeRecognizedWords(timedWords)
+        guard !transcriptWords.isEmpty, !normalizedTiming.isEmpty else {
+            return normalizedTiming
+        }
+
+        let mapping = sequenceMapping(
+            source: transcriptWords,
+            target: normalizedTiming.map(\.text)
+        )
+        var result = normalizedTiming
+        for (sourceIndex, targetIndex) in mapping.enumerated() {
+            guard let targetIndex,
+                  result.indices.contains(targetIndex),
+                  tokenSimilarity(
+                    transcriptWords[sourceIndex],
+                    result[targetIndex].text
+                  ) >= 0.62 else { continue }
+            result[targetIndex].text = mergingTrailingPunctuation(
+                from: transcriptWords[sourceIndex],
+                into: result[targetIndex].text
+            )
+        }
+        return result
     }
 
     private func sequenceMapping(
@@ -1955,7 +1995,11 @@ class VideoProcessor: ObservableObject {
         text.replacingOccurrences(of: "\u{00A0}", with: " ")
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: "[.,!?;:]+$", with: "", options: .regularExpression)
+            .replacingOccurrences(
+                of: #"\s+([.,!?;:…])"#,
+                with: "$1",
+                options: .regularExpression
+            )
     }
 
     // VAD sınırlarında oluşabilen yinelenen kelimeleri temizler, bozuk/çakışan
@@ -1988,8 +2032,12 @@ class VideoProcessor: ObservableObject {
         var normalized: [WordTimestamp] = []
         for var word in sorted {
             if let previous = normalized.last,
-               previous.text.compare(word.text, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame,
+               comparisonKey(previous.text) == comparisonKey(word.text),
                duplicateOverlapRatio(previous, word) >= 0.6 {
+                normalized[normalized.count - 1].text = mergingTrailingPunctuation(
+                    from: word.text,
+                    into: previous.text
+                )
                 if word.end > previous.end {
                     normalized[normalized.count - 1].end = word.end
                 }
@@ -2022,6 +2070,23 @@ class VideoProcessor: ObservableObject {
             normalized.append(word)
         }
         return normalized
+    }
+
+    private func mergingTrailingPunctuation(
+        from source: String,
+        into destination: String
+    ) -> String {
+        let terminalCharacters = CharacterSet(
+            charactersIn: ".,!?;:…\"”’»"
+        )
+        let sourceSuffix = String(
+            source.reversed().prefix { character in
+                character.unicodeScalars.allSatisfy(terminalCharacters.contains)
+            }.reversed()
+        )
+        guard !sourceSuffix.isEmpty else { return destination }
+        let base = destination.trimmingCharacters(in: terminalCharacters)
+        return base + sourceSuffix
     }
 
     private func isNonLexicalVocalization(_ text: String) -> Bool {

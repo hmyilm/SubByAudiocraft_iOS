@@ -166,7 +166,14 @@ final class GroqSpeechClient {
         guard !words.isEmpty else {
             throw ClientError.missingWordTimestamps
         }
-        return words
+        guard let transcript = response.text,
+              !transcript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return words
+        }
+        return VideoProcessor.shared.applyTranscriptPunctuation(
+            transcript,
+            to: words
+        )
     }
 
     private func makeMultipartBodyFile(

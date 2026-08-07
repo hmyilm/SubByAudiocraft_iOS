@@ -454,9 +454,19 @@ final class VideoProcessorTests: XCTestCase {
         }
     }
 
+    func testGroqRestoresFullTranscriptPunctuationToTimedWords() throws {
+        let data = Data(
+            #"{"text":"Merhaba, nasılsın? İyiyim!","words":[{"word":"Merhaba","start":0.1,"end":0.5},{"word":"nasılsın","start":0.6,"end":1.0},{"word":"İyiyim","start":1.1,"end":1.5}]}"#.utf8
+        )
+
+        let words = try GroqSpeechClient.shared.decodeWordTimestamps(from: data)
+
+        XCTAssertEqual(words.map(\.text), ["Merhaba,", "nasılsın?", "İyiyim!"])
+    }
+
     func testRecognitionNormalizationMergesOnlyOverlappingDuplicates() {
         let duplicateA = VideoProcessor.WordTimestamp(text: "Sevda", start: 0.0, end: 0.5)
-        let duplicateB = VideoProcessor.WordTimestamp(text: "sevda", start: 0.05, end: 0.55)
+        let duplicateB = VideoProcessor.WordTimestamp(text: "sevda,", start: 0.05, end: 0.55)
         let intentionalRepeat = VideoProcessor.WordTimestamp(text: "sevda", start: 0.7, end: 1.0)
 
         let normalized = VideoProcessor.shared.normalizeRecognizedWords([
@@ -465,15 +475,24 @@ final class VideoProcessorTests: XCTestCase {
             intentionalRepeat
         ])
 
-        XCTAssertEqual(normalized.map(\.text), ["Sevda", "sevda"])
+        XCTAssertEqual(normalized.map(\.text), ["Sevda,", "sevda"])
         XCTAssertEqual(normalized[0].end, 0.55, accuracy: 0.0001)
         XCTAssertEqual(normalized[1].start, 0.7, accuracy: 0.0001)
     }
 
     func testRecognizedTextCleanupNormalizesWhitespaceAndPunctuation() {
         XCTAssertEqual(
-            VideoProcessor.shared.cleanRecognizedText("  Kara\u{00A0}   Sevda!!!  "),
-            "Kara Sevda"
+            VideoProcessor.shared.cleanRecognizedText("  Kara\u{00A0}   Sevda !!!  "),
+            "Kara Sevda!!!"
+        )
+    }
+
+    func testLyricTokenizationKeepsTurkishPunctuationAndDropsMarkers() {
+        XCTAssertEqual(
+            VideoProcessor.shared.lyricWords(
+                from: #"[MÜZİK] “Merhaba,” nasılsın? İyiyim! ♪"#
+            ),
+            ["Merhaba,", "nasılsın?", "İyiyim!"]
         )
     }
 
