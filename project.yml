@@ -40,14 +40,8 @@ targets:
         product: WhisperKit
       - package: Qwen3Speech
         product: Qwen3ASR
-      - package: Qwen3Speech
-        product: SourceSeparation
-      - package: Qwen3Speech
-        product: AudioCommon
       - package: MLXSwift
         product: MLX
-      - package: MLXSwift
-        product: MLXNN
       - package: FFmpegKit
         product: ffmpegkit
     info:

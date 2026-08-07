@@ -21,7 +21,6 @@
 		3D09E46DFD0C47C8BAE7791B /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3D08729D95B235A5BDFF2B37 /* WhisperKit */; };
 		418A357AC2B0D23514DAD662 /* Oswald-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5F50CD942A25E6EBCFEBD880 /* Oswald-Bold.ttf */; };
 		4286977DAA049F856124B44A /* BlackOpsOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 370EA6FB80B019205FEE3E71 /* BlackOpsOne-Regular.ttf */; };
-		43FF4FC720D21C49B4ED3617 /* ffmpegkit in Frameworks */ = {isa = PBXBuildFile; productRef = D80B848106C6367A4C869B07 /* ffmpegkit */; };
 		4D864D7A6FEF66B8046F8684 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81AEE50304E466C69765CFEF /* Components.swift */; };
 		533443004327A9F5F4A6E15C /* Righteous-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 30D9E9886B43922CC5449D39 /* Righteous-Regular.ttf */; };
 		57CBFDEE8D0B2AF3DCCA7B45 /* GreatVibes-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = FA55C9A5C3C1D992CFCDCA88 /* GreatVibes-Regular.ttf */; };
@@ -31,7 +30,6 @@
 		65275CFE533D2FEAF300DFA5 /* Montserrat-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 552515E989A56AA3E98BC3EA /* Montserrat-Regular.ttf */; };
 		6C84883A2CC82A761EF485D8 /* PlayfairDisplay-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 561F84B75E2948AFC613963A /* PlayfairDisplay-Bold.ttf */; };
 		6F61B48E8EFC16C095BA8A3B /* EditWordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12F1ADCEBF523426B349851 /* EditWordsView.swift */; };
-		72C3E872AEA3158844DE96D5 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = E495773F7EBD20E5B13E88DF /* MLX */; };
 		77777C846EF9809A6792CA10 /* KaushanScript-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 258098735A78D7A0597AC810 /* KaushanScript-Regular.ttf */; };
 		7BB1B42048498FB6D15E231E /* Sacramento-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1FB4FEDD00D90D879281AB4A /* Sacramento-Regular.ttf */; };
 		7C58F61034FEB40D79F34F77 /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3D1C3DF972E40CF547A5F6F /* ProjectStore.swift */; };
@@ -47,11 +45,10 @@
 		9FAAB366D67A10EABA76A0BA /* LeagueSpartan-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E00B3393F13F2EDC2D53DD31 /* LeagueSpartan-Regular.ttf */; };
 		ABA66E3400B91BB06D822A13 /* Shrikhand-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E38C37964FFF704A2B4D024B /* Shrikhand-Regular.ttf */; };
 		AFBB874AE251E4EC82333546 /* SecureAPIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AA759F28053E8BDEB26594D /* SecureAPIKeyStore.swift */; };
-		B06334680C68458934786BC9 /* SourceSeparation in Frameworks */ = {isa = PBXBuildFile; productRef = AC74CD4AC93E7E0A8047390F /* SourceSeparation */; };
+		B06334680C68458934786BC9 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = E495773F7EBD20E5B13E88DF /* MLX */; };
 		B8574CC8B6C3F653BC9E5A1A /* SpaceMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A30C76AB75260C6C0FC350F3 /* SpaceMono-Regular.ttf */; };
 		BBB22150FB67E4F15D20574C /* Montserrat-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F09B11E6FC94017C2F7AD376 /* Montserrat-Bold.ttf */; };
 		BD38AFD2C025B24DD277CB02 /* PetitFormalScript-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2C8E6B03283F4DA59087ABE8 /* PetitFormalScript-Regular.ttf */; };
-		C263A69607DF640E9DEFC244 /* MLXNN in Frameworks */ = {isa = PBXBuildFile; productRef = 02BD014D1358A24FF8462380 /* MLXNN */; };
 		C3706EB1B5C146C4FD797519 /* VocalIsolationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B97F3177D7253EA0DB7B83B /* VocalIsolationService.swift */; };
 		C42FA5134A00E918AEBB6F31 /* Qwen3ASR in Frameworks */ = {isa = PBXBuildFile; productRef = 9E6DF0C1D2A135131EFB3256 /* Qwen3ASR */; };
 		CBA643A7CCDDC0FE70CA7471 /* Caveat-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E4E9FDDC49538BB91F4BEE9A /* Caveat-Regular.ttf */; };
@@ -62,7 +59,7 @@
 		E3A72AB95FDBA7F439E5DCF9 /* SpaceMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F7D599528C193490C0C39D81 /* SpaceMono-Bold.ttf */; };
 		E5944D9B78D8BA3BAE0AD588 /* Parisienne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 078B42D941B2E8E7C599237E /* Parisienne-Regular.ttf */; };
 		E6BBCF82D190998B4553D6D7 /* LineEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BCDB529DBEC6F853170DF82 /* LineEditView.swift */; };
-		E772582D9FD6B500F1C2149F /* AudioCommon in Frameworks */ = {isa = PBXBuildFile; productRef = ADB562BAB379CCE9603C668E /* AudioCommon */; };
+		E772582D9FD6B500F1C2149F /* ffmpegkit in Frameworks */ = {isa = PBXBuildFile; productRef = D80B848106C6367A4C869B07 /* ffmpegkit */; };
 		E7CC75183A69D10E416F97DB /* SubByAudiocraftApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5DB468C6A126CAABA252B2 /* SubByAudiocraftApp.swift */; };
 		EA97193F25A56A462C9654DC /* AlfaSlabOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0D751ED37D5193E910C87452 /* AlfaSlabOne-Regular.ttf */; };
 		ECC4DD306A28233562265B2F /* PlayfairDisplay-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3E6BAA95CDEDB30B5941D080 /* PlayfairDisplay-Regular.ttf */; };
@@ -155,11 +152,8 @@
 			files = (
 				3D09E46DFD0C47C8BAE7791B /* WhisperKit in Frameworks */,
 				C42FA5134A00E918AEBB6F31 /* Qwen3ASR in Frameworks */,
-				B06334680C68458934786BC9 /* SourceSeparation in Frameworks */,
-				E772582D9FD6B500F1C2149F /* AudioCommon in Frameworks */,
-				72C3E872AEA3158844DE96D5 /* MLX in Frameworks */,
-				C263A69607DF640E9DEFC244 /* MLXNN in Frameworks */,
-				43FF4FC720D21C49B4ED3617 /* ffmpegkit in Frameworks */,
+				B06334680C68458934786BC9 /* MLX in Frameworks */,
+				E772582D9FD6B500F1C2149F /* ffmpegkit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -284,10 +278,7 @@
 			packageProductDependencies = (
 				3D08729D95B235A5BDFF2B37 /* WhisperKit */,
 				9E6DF0C1D2A135131EFB3256 /* Qwen3ASR */,
-				AC74CD4AC93E7E0A8047390F /* SourceSeparation */,
-				ADB562BAB379CCE9603C668E /* AudioCommon */,
 				E495773F7EBD20E5B13E88DF /* MLX */,
-				02BD014D1358A24FF8462380 /* MLXNN */,
 				D80B848106C6367A4C869B07 /* ffmpegkit */,
 			);
 			productName = SubByAudiocraft;
@@ -577,11 +568,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		02BD014D1358A24FF8462380 /* MLXNN */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BA6D70EA1340A590E9E9B1C0 /* XCRemoteSwiftPackageReference "mlx-swift" */;
-			productName = MLXNN;
-		};
 		3D08729D95B235A5BDFF2B37 /* WhisperKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 17C0C575FC1459F7363C3D49 /* XCRemoteSwiftPackageReference "WhisperKit" */;
@@ -591,16 +577,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */;
 			productName = Qwen3ASR;
-		};
-		AC74CD4AC93E7E0A8047390F /* SourceSeparation */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */;
-			productName = SourceSeparation;
-		};
-		ADB562BAB379CCE9603C668E /* AudioCommon */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */;
-			productName = AudioCommon;
 		};
 		D80B848106C6367A4C869B07 /* ffmpegkit */ = {
 			isa = XCSwiftPackageProductDependency;
