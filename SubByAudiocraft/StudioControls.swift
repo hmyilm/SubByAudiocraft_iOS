@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 // Tasarım ekranının hızlı başlangıç seçenekleri. Bunlar yeni bir render modu
 // oluşturmaz; mevcut ve test edilmiş ayarları anlaşılır paketler halinde uygular.
@@ -637,8 +638,11 @@ struct CompactFontPicker: View {
     @Binding var selection: String
     let karaokeMode: KaraokeMode
     let kineticStyle: KineticStyle
+    var sampleText: String = "Sesini görünür kıl"
 
     @State private var showsLibrary = false
+    @AppStorage("subtitle.favoriteFontIDs") private var favoriteFontIDsRaw = ""
+    @AppStorage("subtitle.recentFontIDs") private var recentFontIDsRaw = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -656,33 +660,50 @@ struct CompactFontPicker: View {
                 Theme.haptic()
                 showsLibrary = true
             } label: {
-                HStack(spacing: 12) {
-                    Text("AaŞ")
-                        .font(.custom(selectedFont.psName, size: 28))
-                        .foregroundColor(Theme.yellow)
-                        .frame(width: 56)
-                        .frame(minHeight: 44)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(previewSample)
+                        .font(.custom(selectedFont.psName, size: 24))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.55)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 7) {
+                        ForEach(SubtitleFontWeight.allCases) { weight in
+                            Text(weight.title)
+                                .font(
+                                    .custom(
+                                        selectedFont.faceName(for: weight),
+                                        size: 11
+                                    )
+                                )
+                                .fontWeight(previewWeight(for: selectedFont, weight: weight))
+                                .foregroundColor(weight == .bold ? Theme.yellow : .gray)
+                                .padding(.horizontal, 7)
+                                .frame(minHeight: 28)
+                                .background(
+                                    Capsule().fill(Color.white.opacity(0.06))
+                                )
+                        }
+                    }
+
+                    HStack(spacing: 8) {
                         Text(selectedFont.display)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(.white)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(Theme.yellow)
                         Text(selectedFont.category.title)
                             .font(.caption2)
                             .foregroundColor(.gray)
+                        Spacer()
+                        Text("Kütüphaneyi Aç")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(Theme.yellow)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.gray)
                     }
-
-                    Spacer()
-
-                    Text("Değiştir")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(Theme.yellow)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(.gray)
                 }
-                .padding(.horizontal, 12)
-                .frame(minHeight: 58)
+                .padding(12)
+                .frame(maxWidth: .infinity, minHeight: 108, alignment: .leading)
                 .background(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Color.white.opacity(0.06))
@@ -694,39 +715,53 @@ struct CompactFontPicker: View {
             .accessibilityHint("Font kütüphanesini açar.")
 
             if !recommendedFonts.isEmpty {
-                HStack(spacing: 8) {
-                    Text("Önerilen")
-                        .font(.caption2)
-                        .foregroundColor(.gray)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        Text("Önerilen")
+                            .font(.caption2)
+                            .foregroundColor(.gray)
 
-                    ForEach(recommendedFonts.prefix(3)) { font in
-                        Button {
-                            Theme.haptic()
-                            selection = font.psName
-                        } label: {
-                            Text(font.display)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundColor(selection == font.psName ? .black : .white)
-                                .padding(.horizontal, 10)
-                                .frame(minHeight: 44)
-                                .background(
-                                    Capsule()
-                                        .fill(selection == font.psName ? Theme.yellow : Color.white.opacity(0.08))
-                                )
+                        ForEach(recommendedFonts.prefix(4)) { font in
+                            Button {
+                                Theme.haptic()
+                                selection = font.psName
+                                recordRecent(font.psName)
+                            } label: {
+                                Text(font.display)
+                                    .font(.custom(font.psName, size: 13))
+                                    .foregroundColor(selection == font.psName ? .black : .white)
+                                    .padding(.horizontal, 10)
+                                    .frame(minHeight: 44)
+                                    .background(
+                                        Capsule()
+                                            .fill(selection == font.psName ? Theme.yellow : Color.white.opacity(0.08))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(selection == font.psName ? .isSelected : [])
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(selection == font.psName ? .isSelected : [])
                     }
                 }
             }
         }
         .sheet(isPresented: $showsLibrary) {
-            FontLibrarySheet(fonts: fonts, selection: $selection)
+            FontLibrarySheet(
+                selection: $selection,
+                favoriteFontIDsRaw: $favoriteFontIDsRaw,
+                recentFontIDsRaw: $recentFontIDsRaw,
+                sampleText: previewSample,
+                karaokeMode: karaokeMode,
+                kineticStyle: kineticStyle
+            )
+        }
+        .onChange(of: selection) {
+            recordRecent(selection)
         }
     }
 
     private var selectedFont: FontOption {
         fonts.first(where: { $0.psName == selection })
+            ?? FontCatalog.secenek(selection)
             ?? fonts.first
             ?? FontOption(
                 psName: "Helvetica-Bold",
@@ -737,20 +772,93 @@ struct CompactFontPicker: View {
             )
     }
 
+    private var previewSample: String {
+        let clean = sampleText
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return clean.isEmpty ? "Sesini görünür kıl" : String(clean.prefix(34))
+    }
+
     private var recommendedFonts: [FontOption] {
         let allowed = Set(fonts.map(\.psName))
         return FontCatalog.onerilen(karaokeMode: karaokeMode, kineticStyle: kineticStyle)
             .filter { allowed.contains($0.psName) }
     }
+
+    private func recordRecent(_ id: String) {
+        guard !id.isEmpty else { return }
+        var ids = recentFontIDsRaw.split(separator: "|").map(String.init)
+        ids.removeAll { $0 == id }
+        ids.insert(id, at: 0)
+        recentFontIDsRaw = ids.prefix(8).joined(separator: "|")
+    }
+
+    private func previewWeight(
+        for font: FontOption,
+        weight: SubtitleFontWeight
+    ) -> Font.Weight? {
+        guard !font.hasRealFace(for: weight) else { return nil }
+        switch weight {
+        case .thin: return .thin
+        case .regular: return .regular
+        case .bold: return .bold
+        }
+    }
+}
+
+private enum FontLibraryFilter: String, CaseIterable, Identifiable {
+    case recommended
+    case favorites
+    case recent
+    case all
+    case modern
+    case poster
+    case serif
+    case handwriting
+    case custom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .recommended: return "Önerilen"
+        case .favorites: return "Favoriler"
+        case .recent: return "Son"
+        case .all: return "Tümü"
+        case .modern: return FontCategory.modern.title
+        case .poster: return FontCategory.poster.title
+        case .serif: return FontCategory.serif.title
+        case .handwriting: return FontCategory.handwriting.title
+        case .custom: return FontCategory.custom.title
+        }
+    }
+
+    var category: FontCategory? {
+        switch self {
+        case .modern: return .modern
+        case .poster: return .poster
+        case .serif: return .serif
+        case .handwriting: return .handwriting
+        case .custom: return .custom
+        case .recommended, .favorites, .recent, .all: return nil
+        }
+    }
 }
 
 private struct FontLibrarySheet: View {
-    let fonts: [FontOption]
     @Binding var selection: String
+    @Binding var favoriteFontIDsRaw: String
+    @Binding var recentFontIDsRaw: String
+    let sampleText: String
+    let karaokeMode: KaraokeMode
+    let kineticStyle: KineticStyle
 
     @Environment(\.dismiss) private var dismiss
-    @State private var filter: FontCategory?
+    @ObservedObject private var customFonts = CustomFontStore.shared
+    @State private var filter: FontLibraryFilter = .recommended
     @State private var searchText = ""
+    @State private var showsFontImporter = false
+    @State private var importMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -761,25 +869,43 @@ private struct FontLibrarySheet: View {
                     VStack(alignment: .leading, spacing: 14) {
                         categoryFilters
 
-                        LazyVGrid(
-                            columns: [
-                                GridItem(.flexible(), spacing: 10),
-                                GridItem(.flexible(), spacing: 10)
-                            ],
-                            spacing: 10
-                        ) {
-                            ForEach(filteredFonts) { font in
-                                fontCard(font)
+                        if filteredFonts.isEmpty {
+                            ContentUnavailableView(
+                                emptyTitle,
+                                systemImage: filter == .custom ? "text.badge.plus" : "text.magnifyingglass",
+                                description: Text(emptyDetail)
+                            )
+                            .foregroundStyle(.white, .gray)
+                            .frame(maxWidth: .infinity, minHeight: 260)
+                        } else {
+                            LazyVGrid(
+                                columns: [
+                                    GridItem(.flexible(), spacing: 10),
+                                    GridItem(.flexible(), spacing: 10)
+                                ],
+                                spacing: 10
+                            ) {
+                                ForEach(filteredFonts) { font in
+                                    fontCard(font)
+                                }
                             }
                         }
                     }
                     .padding(16)
                 }
             }
-            .navigationTitle("Font Seç")
+            .navigationTitle("Font Kütüphanesi")
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $searchText, prompt: "Font ara")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        showsFontImporter = true
+                    } label: {
+                        Label("Font Ekle", systemImage: "plus")
+                    }
+                    .foregroundColor(Theme.yellow)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Bitti") { dismiss() }
                         .foregroundColor(Theme.yellow)
@@ -787,75 +913,226 @@ private struct FontLibrarySheet: View {
             }
         }
         .preferredColorScheme(.dark)
+        .fileImporter(
+            isPresented: $showsFontImporter,
+            allowedContentTypes: allowedFontTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            importFont(result)
+        }
+        .alert("Font Kütüphanesi", isPresented: Binding(
+            get: { importMessage != nil },
+            set: { if !$0 { importMessage = nil } }
+        )) {
+            Button("Tamam", role: .cancel) { importMessage = nil }
+        } message: {
+            Text(importMessage ?? "")
+        }
     }
 
     private var categoryFilters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                categoryButton(title: "Tümü", category: nil)
-                ForEach(FontCategory.allCases) { category in
-                    categoryButton(title: category.title, category: category)
+                ForEach(FontLibraryFilter.allCases) { value in
+                    let selected = filter == value
+                    Button {
+                        Theme.haptic()
+                        filter = value
+                    } label: {
+                        Text(value.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(selected ? .black : .white)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 44)
+                            .background(
+                                Capsule()
+                                    .fill(selected ? Theme.yellow : Color.white.opacity(0.08))
+                            )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
     }
 
-    private func categoryButton(title: String, category: FontCategory?) -> some View {
-        let selected = filter == category
-        return Button {
-            Theme.haptic()
-            filter = category
-        } label: {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundColor(selected ? .black : .white)
-                .padding(.horizontal, 12)
-                .frame(minHeight: 44)
-                .background(
-                    Capsule()
-                        .fill(selected ? Theme.yellow : Color.white.opacity(0.08))
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
     private func fontCard(_ font: FontOption) -> some View {
         let selected = selection == font.psName
-        return Button {
-            Theme.haptic()
-            selection = font.psName
-        } label: {
-            VStack(spacing: 7) {
-                Text("AaŞğ")
-                    .font(.custom(font.psName, size: 28))
-                    .foregroundColor(selected ? Theme.yellow : .white)
-                Text(font.display)
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(selected ? Theme.yellow : .gray)
-                    .lineLimit(1)
+        let favorite = favoriteIDs.contains(font.psName)
+        return ZStack(alignment: .topTrailing) {
+            Button {
+                Theme.haptic()
+                selection = font.psName
+                recordRecent(font.psName)
+            } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(sampleText)
+                        .font(.custom(font.psName, size: 20))
+                        .foregroundColor(selected ? Theme.yellow : .white)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.55)
+                        .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+
+                    HStack(spacing: 5) {
+                        Text(font.display)
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(selected ? Theme.yellow : .gray)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                        HStack(spacing: 4) {
+                            ForEach(SubtitleFontWeight.allCases) { weight in
+                                Text(weight == .thin ? "T" : (weight == .regular ? "R" : "B"))
+                                    .font(.custom(font.faceName(for: weight), size: 10))
+                                    .fontWeight(previewWeight(for: font, weight: weight))
+                                    .foregroundColor(
+                                        weight == .bold ? Theme.yellow : .gray
+                                    )
+                            }
+                        }
+                    }
+                }
+                .padding(11)
+                .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(Color.white.opacity(selected ? 0.10 : 0.05))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .stroke(selected ? Theme.yellow : Theme.cardStroke, lineWidth: selected ? 2 : 1)
+                )
             }
-            .frame(maxWidth: .infinity, minHeight: 88)
-            .background(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .fill(Color.white.opacity(selected ? 0.10 : 0.05))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke(selected ? Theme.yellow : Theme.cardStroke, lineWidth: selected ? 2 : 1)
-            )
+            .buttonStyle(.plain)
+            .accessibilityLabel(font.display)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+
+            HStack(spacing: 0) {
+                if font.sourceFileName != nil {
+                    Button(role: .destructive) {
+                        if selection == font.psName { selection = "Montserrat-ExtraBold" }
+                        customFonts.remove(font)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.red)
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Özel fontu sil")
+                }
+
+                Button {
+                    toggleFavorite(font.psName)
+                } label: {
+                    Image(systemName: favorite ? "star.fill" : "star")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(favorite ? Theme.yellow : .gray)
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(favorite ? "Favorilerden çıkar" : "Favorilere ekle")
+            }
+            .padding(3)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(font.display)
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    private var allFonts: [FontOption] { FontCatalog.hepsi }
+
     private var filteredFonts: [FontOption] {
-        fonts.filter { font in
-            let categoryMatches = filter == nil || font.category == filter
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let searchMatches = query.isEmpty ||
-                font.display.localizedCaseInsensitiveContains(query)
-            return categoryMatches && searchMatches
+        let base: [FontOption]
+        switch filter {
+        case .recommended:
+            let ids = FontCatalog.onerilen(
+                karaokeMode: karaokeMode,
+                kineticStyle: kineticStyle
+            ).map(\.psName)
+            base = orderedFonts(ids: ids)
+        case .favorites:
+            base = orderedFonts(ids: Array(favoriteIDs))
+        case .recent:
+            base = orderedFonts(ids: recentIDs)
+        case .all:
+            base = allFonts
+        case .modern, .poster, .serif, .handwriting, .custom:
+            base = allFonts.filter { $0.category == filter.category }
         }
+
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return base }
+        return base.filter {
+            $0.display.localizedCaseInsensitiveContains(query)
+                || $0.psName.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    private var favoriteIDs: Set<String> {
+        Set(favoriteFontIDsRaw.split(separator: "|").map(String.init))
+    }
+
+    private var recentIDs: [String] {
+        recentFontIDsRaw.split(separator: "|").map(String.init)
+    }
+
+    private func orderedFonts(ids: [String]) -> [FontOption] {
+        let byID = Dictionary(uniqueKeysWithValues: allFonts.map { ($0.psName, $0) })
+        return ids.compactMap { byID[$0] }
+    }
+
+    private func toggleFavorite(_ id: String) {
+        var ids = favoriteIDs
+        if ids.contains(id) { ids.remove(id) } else { ids.insert(id) }
+        favoriteFontIDsRaw = ids.sorted().joined(separator: "|")
+        Theme.haptic()
+    }
+
+    private func recordRecent(_ id: String) {
+        var ids = recentIDs
+        ids.removeAll { $0 == id }
+        ids.insert(id, at: 0)
+        recentFontIDsRaw = ids.prefix(8).joined(separator: "|")
+    }
+
+    private func previewWeight(
+        for font: FontOption,
+        weight: SubtitleFontWeight
+    ) -> Font.Weight? {
+        guard !font.hasRealFace(for: weight) else { return nil }
+        switch weight {
+        case .thin: return .thin
+        case .regular: return .regular
+        case .bold: return .bold
+        }
+    }
+
+    private var allowedFontTypes: [UTType] {
+        ["ttf", "otf"].compactMap { UTType(filenameExtension: $0) }
+    }
+
+    private func importFont(_ result: Result<[URL], Error>) {
+        do {
+            guard let url = try result.get().first else {
+                throw CustomFontStoreError.unreadableFont
+            }
+            let imported = try customFonts.importFont(from: url)
+            selection = imported.psName
+            recordRecent(imported.psName)
+            filter = .custom
+            importMessage = "\(imported.display) eklendi. Ön izleme ve final videoda aynı font kullanılacak."
+        } catch {
+            importMessage = error.localizedDescription
+        }
+    }
+
+    private var emptyTitle: String {
+        if filter == .favorites { return "Favori font yok" }
+        if filter == .recent { return "Son kullanılan font yok" }
+        if filter == .custom { return "Özel font eklenmedi" }
+        return "Font bulunamadı"
+    }
+
+    private var emptyDetail: String {
+        if filter == .custom {
+            return "Kullanım hakkına sahip olduğun .ttf veya .otf dosyasını Font Ekle ile içe aktar."
+        }
+        return "Aramayı veya filtreyi değiştir."
     }
 }

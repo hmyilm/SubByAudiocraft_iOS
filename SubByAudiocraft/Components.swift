@@ -936,7 +936,9 @@ struct SubtitlePreviewPlayer: View {
                                     words: previewWords,
                                     inlineLineBreaks: inlineLineBreaks,
                                     playbackTime: revealPlaybackTime,
-                                    accent: revealAccent
+                                    accent: revealAccent,
+                                    fontName: fontName,
+                                    fontSize: CGFloat(fontSize) * previewScale
                                 )
                             } else {
                                 CenteredRevealPreview(
@@ -1006,7 +1008,7 @@ struct SubtitlePreviewPlayer: View {
                                                     )
                                                     .fontWeight(
                                                         lyricTrackingMode == .boldWord
-                                                            ? (hasRealThinPreviewFace ? nil : .light)
+                                                            ? (hasRealThinPreviewFace ? nil : .thin)
                                                             : nil
                                                     )
                                                     .foregroundColor(
@@ -1032,7 +1034,6 @@ struct SubtitlePreviewPlayer: View {
                                                                 )
                                                         }
                                                     }
-                                                    .scaleEffect(isBoldActive ? 1.04 : 1)
                                             }
                                         }
                                     }
@@ -1051,7 +1052,7 @@ struct SubtitlePreviewPlayer: View {
                         )
                         .fontWeight(
                             lyricTrackingMode == .boldWord && !hasRealThinPreviewFace
-                                ? .light
+                                ? .thin
                                 : nil
                         )
                         .lineLimit(1)
@@ -1098,7 +1099,7 @@ struct SubtitlePreviewPlayer: View {
     }
 
     private var thinPreviewFontName: String {
-        FontCatalog.thinPSName(for: fontName) ?? regularPreviewFontName
+        FontCatalog.faceName(for: fontName, weight: .thin)
     }
 
     private var hasRealBoldPreviewFace: Bool {
@@ -1264,17 +1265,22 @@ private struct CenteredWordRevealPreview: View {
     let inlineLineBreaks: Set<UUID>
     let playbackTime: Double
     let accent: Color
+    let fontName: String
+    let fontSize: CGFloat
 
     var body: some View {
         VStack(spacing: 3) {
             ForEach(Array(revealedRows.enumerated()), id: \.offset) { row in
                 HStack(spacing: 5) {
                     ForEach(row.element) { word in
+                        let isLatest = word.id == revealedWords.last?.id
                         Text(word.text)
-                            .foregroundColor(word.id == revealedWords.last?.id ? accent : .white)
+                            .font(.custom(isLatest ? boldFaceName : thinFaceName, size: fontSize))
+                            .fontWeight(fallbackWeight(isLatest: isLatest))
+                            .foregroundColor(isLatest ? accent : .white)
                             .transition(
                                 .asymmetric(
-                                    insertion: .scale(scale: 1.12).combined(with: .opacity),
+                                    insertion: .opacity,
                                     removal: .opacity
                                 )
                             )
@@ -1311,6 +1317,21 @@ private struct CenteredWordRevealPreview: View {
         }
         if !current.isEmpty { rows.append(current) }
         return rows
+    }
+
+    private var thinFaceName: String {
+        FontCatalog.faceName(for: fontName, weight: .thin)
+    }
+
+    private var boldFaceName: String {
+        FontCatalog.faceName(for: fontName, weight: .bold)
+    }
+
+    private func fallbackWeight(isLatest: Bool) -> Font.Weight? {
+        if isLatest {
+            return FontCatalog.boldPSName(for: fontName) == nil ? .bold : nil
+        }
+        return FontCatalog.thinPSName(for: fontName) == nil ? .thin : nil
     }
 }
 

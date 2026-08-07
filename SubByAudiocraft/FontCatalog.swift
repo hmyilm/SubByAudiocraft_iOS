@@ -1,10 +1,39 @@
 import Foundation
+import Combine
+import CoreText
+
+enum SubtitleFontWeight: String, CaseIterable, Identifiable {
+    case thin
+    case regular
+    case bold
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .thin: return "Thin"
+        case .regular: return "Regular"
+        case .bold: return "Bold"
+        }
+    }
+
+    // Libass'ta 0/1 kullanmak stilin varsayılan Bold değerine geri dönebilir.
+    // Sayısal ağırlıklar her fontta Thin/Regular/Bold sonucunu açıkça sabitler.
+    var assTag: String {
+        switch self {
+        case .thin: return "\\b100"
+        case .regular: return "\\b400"
+        case .bold: return "\\b700"
+        }
+    }
+}
 
 enum FontCategory: String, CaseIterable, Identifiable {
     case modern
     case poster
     case serif
     case handwriting
+    case custom
 
     var id: String { rawValue }
 
@@ -14,6 +43,7 @@ enum FontCategory: String, CaseIterable, Identifiable {
         case .poster: return "Afiş"
         case .serif: return "Sinematik"
         case .handwriting: return "El Yazısı"
+        case .custom: return "Benim Fontlarım"
         }
     }
 
@@ -23,6 +53,7 @@ enum FontCategory: String, CaseIterable, Identifiable {
         case .poster: return "rectangle.portrait"
         case .serif: return "film"
         case .handwriting: return "pencil.line"
+        case .custom: return "square.and.arrow.down"
         }
     }
 }
@@ -40,6 +71,7 @@ struct FontOption: Identifiable, Hashable {
     var boldPSName: String? = nil
     var thinPSName: String? = nil
     var bitisik: Bool = false
+    var sourceFileName: String? = nil
 
     var id: String { psName }
 
@@ -47,15 +79,36 @@ struct FontOption: Identifiable, Hashable {
     var thinFaceName: String { thinPSName ?? regularFaceName }
     var hasRealBoldFace: Bool { boldPSName != nil }
     var hasRealThinFace: Bool { thinPSName != nil }
+    var usesDistinctPrimaryFace: Bool {
+        psName != regularFaceName && psName != boldPSName && psName != thinPSName
+    }
+    var assRenderName: String { usesDistinctPrimaryFace ? psName : assFamily }
+    var assUsesBoldStyle: Bool { kalin && !usesDistinctPrimaryFace }
+
+    func faceName(for weight: SubtitleFontWeight) -> String {
+        switch weight {
+        case .thin: return thinPSName ?? regularFaceName
+        case .regular: return regularFaceName
+        case .bold: return boldPSName ?? regularFaceName
+        }
+    }
+
+    func hasRealFace(for weight: SubtitleFontWeight) -> Bool {
+        switch weight {
+        case .thin: return thinPSName != nil
+        case .regular: return true
+        case .bold: return boldPSName != nil
+        }
+    }
 }
 
 enum FontCatalog {
     // Paket fontlarının tamamı açık lisanslıdır ve Türkçe ÇĞİÖŞÜçğıöşü glifleri
     // dosya düzeyinde doğrulanmıştır.
     static let gomulu: [FontOption] = [
-        FontOption(psName: "Montserrat-ExtraBold", display: "Montserrat", assFamily: "Montserrat", kalin: true, category: .modern, regularPSName: "Montserrat-Regular", boldPSName: "Montserrat-Bold"),
-        FontOption(psName: "Poppins-Bold", display: "Poppins", assFamily: "Poppins", kalin: true, category: .modern, regularPSName: "Poppins-Regular", boldPSName: "Poppins-Bold"),
-        FontOption(psName: "Lato-Bold", display: "Lato", assFamily: "Lato", kalin: true, category: .modern, regularPSName: "Lato-Regular", boldPSName: "Lato-Bold"),
+        FontOption(psName: "Montserrat-ExtraBold", display: "Montserrat", assFamily: "Montserrat", kalin: true, category: .modern, regularPSName: "Montserrat-Regular", boldPSName: "Montserrat-Bold", thinPSName: "Montserrat-Light"),
+        FontOption(psName: "Poppins-Bold", display: "Poppins", assFamily: "Poppins", kalin: true, category: .modern, regularPSName: "Poppins-Regular", boldPSName: "Poppins-Bold", thinPSName: "Poppins-Light"),
+        FontOption(psName: "Lato-Bold", display: "Lato", assFamily: "Lato", kalin: true, category: .modern, regularPSName: "Lato-Regular", boldPSName: "Lato-Bold", thinPSName: "Lato-Light"),
         FontOption(psName: "SpaceMono-Bold", display: "Space Mono", assFamily: "Space Mono", kalin: true, category: .modern, regularPSName: "SpaceMono-Regular", boldPSName: "SpaceMono-Bold"),
         FontOption(psName: "Righteous-Regular", display: "Righteous", assFamily: "Righteous", kalin: false, category: .modern),
         FontOption(psName: "FrancoisOne-Regular", display: "Francois One", assFamily: "Francois One", kalin: false, category: .modern),
@@ -113,7 +166,9 @@ enum FontCatalog {
         FontOption(psName: "Zapfino", display: "Zapfino", assFamily: "Zapfino", kalin: false, category: .handwriting, bitisik: true)
     ]
 
-    static let hepsi: [FontOption] = gomulu + sistem
+    static var hepsi: [FontOption] {
+        gomulu + sistem + CustomFontStore.shared.fonts
+    }
 
     static func secenek(_ psName: String) -> FontOption? {
         hepsi.first {
@@ -136,16 +191,37 @@ enum FontCatalog {
         secenek(selection)?.thinPSName
     }
 
+    static func faceName(
+        for selection: String,
+        weight: SubtitleFontWeight
+    ) -> String {
+        secenek(selection)?.faceName(for: weight) ?? selection
+    }
+
+    static func hasRealFace(
+        for selection: String,
+        weight: SubtitleFontWeight
+    ) -> Bool {
+        secenek(selection)?.hasRealFace(for: weight) ?? (weight == .regular)
+    }
+
     static func renderPSNames(for selection: String) -> [String] {
         guard let option = secenek(selection) else { return [selection] }
+        // Seçilen yüzü (ör. ExtraBold/Black) mutlaka kopyala. Önceki sürüm yalnız
+        // Regular + Bold dosyalarını libass'a verdiği için Montserrat ExtraBold ve
+        // Playfair Black ön izlemede doğru, dışa aktarımda daha ince görünüyordu.
         var names = [option.regularFaceName]
+        if option.psName != option.regularFaceName {
+            names.append(option.psName)
+        }
         if let bold = option.boldPSName, bold != option.regularFaceName {
             names.append(bold)
         }
         if let thin = option.thinPSName, thin != option.regularFaceName && thin != option.boldPSName {
             names.append(thin)
         }
-        return names
+        var seen = Set<String>()
+        return names.filter { seen.insert($0).inserted }
     }
 
     static func onerilen(
@@ -202,5 +278,152 @@ enum FontCatalog {
         }
 
         return ids.compactMap(secenek)
+    }
+}
+
+enum CustomFontStoreError: LocalizedError {
+    case unsupportedFile
+    case unreadableFont
+    case copyFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedFile:
+            return "Yalnız .ttf ve .otf font dosyaları eklenebilir."
+        case .unreadableFont:
+            return "Font dosyası okunamadı veya geçerli bir yazı tipi içermiyor."
+        case .copyFailed:
+            return "Font uygulama klasörüne kopyalanamadı. Cihazdaki boş alanı kontrol edin."
+        }
+    }
+}
+
+// Kullanıcının lisansına sahip olduğu TTF/OTF dosyalarını kalıcı olarak saklar.
+// CoreText kaydı hem SwiftUI ön izlemesinin hem de VideoProcessor'ın aynı gerçek
+// font dosyasını kullanmasını sağlar; böylece özel font final videoda da korunur.
+final class CustomFontStore: ObservableObject {
+    static let shared = CustomFontStore()
+
+    @Published private(set) var fonts: [FontOption] = []
+
+    private let directoryURL: URL
+    private let fileManager = FileManager.default
+
+    private init() {
+        let documents = fileManager.urls(for: .documentDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
+        directoryURL = documents.appendingPathComponent("CustomFonts", isDirectory: true)
+        try? fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        reload()
+    }
+
+    @discardableResult
+    func importFont(from sourceURL: URL) throws -> FontOption {
+        let ext = sourceURL.pathExtension.lowercased()
+        guard ext == "ttf" || ext == "otf" else {
+            throw CustomFontStoreError.unsupportedFile
+        }
+
+        let hasSecurityScope = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if hasSecurityScope { sourceURL.stopAccessingSecurityScopedResource() }
+        }
+
+        let destination = uniqueDestination(for: sourceURL)
+        do {
+            try fileManager.copyItem(at: sourceURL, to: destination)
+        } catch {
+            throw CustomFontStoreError.copyFailed
+        }
+
+        let options = describeAndRegister(destination)
+        guard let first = options.first else {
+            try? fileManager.removeItem(at: destination)
+            throw CustomFontStoreError.unreadableFont
+        }
+
+        reload()
+        return fonts.first(where: { $0.psName == first.psName }) ?? first
+    }
+
+    func remove(_ font: FontOption) {
+        guard let sourceFileName = font.sourceFileName else { return }
+        let url = directoryURL.appendingPathComponent(sourceFileName)
+        CTFontManagerUnregisterFontsForURL(url as CFURL, .process, nil)
+        try? fileManager.removeItem(at: url)
+        reload()
+    }
+
+    private func reload() {
+        let urls = (try? fileManager.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )) ?? []
+
+        fonts = urls
+            .filter { ["ttf", "otf"].contains($0.pathExtension.lowercased()) }
+            .flatMap(describeAndRegister)
+            .sorted { $0.display.localizedCaseInsensitiveCompare($1.display) == .orderedAscending }
+    }
+
+    private func describeAndRegister(_ url: URL) -> [FontOption] {
+        guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL)
+            as? [CTFontDescriptor], !descriptors.isEmpty else {
+            return []
+        }
+
+        // Zaten kayıtlı olması hata sayılmaz; descriptor bilgisi geçerliyse font
+        // kullanılabilir. Bu durum uygulama yeniden öne geldiğinde normaldir.
+        CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+
+        return descriptors.compactMap { descriptor in
+            guard let postScriptName = CTFontDescriptorCopyAttribute(
+                descriptor,
+                kCTFontNameAttribute
+            ) as? String, !postScriptName.isEmpty else {
+                return nil
+            }
+
+            let family = (CTFontDescriptorCopyAttribute(
+                descriptor,
+                kCTFontFamilyNameAttribute
+            ) as? String) ?? postScriptName
+            let display = (CTFontDescriptorCopyAttribute(
+                descriptor,
+                kCTFontDisplayNameAttribute
+            ) as? String) ?? family
+            let font = CTFontCreateWithFontDescriptor(descriptor, 24, nil)
+            let traits = CTFontGetSymbolicTraits(font)
+            let isBold = traits.contains(.traitBold)
+
+            return FontOption(
+                psName: postScriptName,
+                display: display,
+                assFamily: family,
+                kalin: isBold,
+                category: .custom,
+                regularPSName: postScriptName,
+                boldPSName: isBold ? postScriptName : nil,
+                sourceFileName: url.lastPathComponent
+            )
+        }
+    }
+
+    private func uniqueDestination(for sourceURL: URL) -> URL {
+        let base = sourceURL.deletingPathExtension().lastPathComponent
+            .replacingOccurrences(of: "/", with: "-")
+        let ext = sourceURL.pathExtension.lowercased()
+        var destination = directoryURL
+            .appendingPathComponent(base)
+            .appendingPathExtension(ext)
+        var suffix = 2
+        while fileManager.fileExists(atPath: destination.path) {
+            destination = directoryURL
+                .appendingPathComponent("\(base)-\(suffix)")
+                .appendingPathExtension(ext)
+            suffix += 1
+        }
+        return destination
     }
 }

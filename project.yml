@@ -116,9 +116,11 @@ targets:
           - BebasNeue-Regular.ttf
           - Lato-Regular.ttf
           - Lato-Bold.ttf
+          - Lato-Light.ttf
           - Pacifico-Regular.ttf
           - Poppins-Regular.ttf
           - Poppins-Bold.ttf
+          - Poppins-Light.ttf
           - Lobster-Regular.ttf
           - AbrilFatface-Regular.ttf
           - AlfaSlabOne-Regular.ttf
@@ -137,6 +139,7 @@ targets:
           - Montserrat-Regular.ttf
           - Montserrat-Bold.ttf
           - Montserrat-ExtraBold.ttf
+          - Montserrat-Light.ttf
           - ArchivoBlack-Regular.ttf
           - LeagueSpartan-Regular.ttf
           - LeagueSpartan-Bold.ttf

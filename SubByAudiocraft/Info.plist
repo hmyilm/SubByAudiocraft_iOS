@@ -39,9 +39,11 @@
 		<string>BebasNeue-Regular.ttf</string>
 		<string>Lato-Regular.ttf</string>
 		<string>Lato-Bold.ttf</string>
+		<string>Lato-Light.ttf</string>
 		<string>Pacifico-Regular.ttf</string>
 		<string>Poppins-Regular.ttf</string>
 		<string>Poppins-Bold.ttf</string>
+		<string>Poppins-Light.ttf</string>
 		<string>Lobster-Regular.ttf</string>
 		<string>AbrilFatface-Regular.ttf</string>
 		<string>AlfaSlabOne-Regular.ttf</string>
@@ -60,6 +62,7 @@
 		<string>Montserrat-Regular.ttf</string>
 		<string>Montserrat-Bold.ttf</string>
 		<string>Montserrat-ExtraBold.ttf</string>
+		<string>Montserrat-Light.ttf</string>
 		<string>ArchivoBlack-Regular.ttf</string>
 		<string>LeagueSpartan-Regular.ttf</string>
 		<string>LeagueSpartan-Bold.ttf</string>

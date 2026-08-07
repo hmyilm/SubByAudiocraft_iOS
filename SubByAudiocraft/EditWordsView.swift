@@ -149,7 +149,8 @@ struct EditWordsView: View {
                             fonts: FontCatalog.hepsi,
                             selection: $fontName,
                             karaokeMode: karaokeMode,
-                            kineticStyle: kineticStyle
+                            kineticStyle: kineticStyle,
+                            sampleText: previewLine
                         )
 
                         ViewThatFits(in: .horizontal) {

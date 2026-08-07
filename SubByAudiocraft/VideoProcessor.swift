@@ -2076,7 +2076,7 @@ class VideoProcessor: ObservableObject {
     
     // Font PostScript isimlerini libass/fontconfig'in tanıyacağı Font Family isimlerine dönüştürür.
     private func getFontFamilyName(for fontName: String) -> String {
-        if let secenek = FontCatalog.secenek(fontName) { return secenek.assFamily }
+        if let secenek = FontCatalog.secenek(fontName) { return secenek.assRenderName }
         return fontName.replacingOccurrences(of: "-Bold", with: "").replacingOccurrences(of: "-Heavy", with: "").replacingOccurrences(of: "-Regular", with: "")
     }
 
@@ -4478,11 +4478,11 @@ class VideoProcessor: ObservableObject {
                 let wordStartText = formatASSTime(wordStart)
                 let wordEndText = formatASSTime(wordEnd)
                 let hasActiveInterval = wordStartText != wordEndText
-                let thinFontName = FontCatalog.thinPSName(for: fontName) ?? FontCatalog.regularPSName(for: fontName)
-                let boldFontName = FontCatalog.boldPSName(for: fontName) ?? FontCatalog.regularPSName(for: fontName)
+                let thinFontName = FontCatalog.faceName(for: fontName, weight: .thin)
+                let boldFontName = FontCatalog.faceName(for: fontName, weight: .bold)
 
                 let unactiveTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fn\(thinFontName)\\fs\(fontSize)\\b0\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
+                    "\\fn\(thinFontName)\\fs\(fontSize)\(SubtitleFontWeight.thin.assTag)\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
 
                 if !hasActiveInterval {
                     result += "Dialogue: 1,\(segmentStartText)," +
@@ -4503,8 +4503,8 @@ class VideoProcessor: ObservableObject {
                 }
 
                 let boldTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fn\(boldFontName)\\fs\(fontSize)\\b1\\c&H\(resolvedAccent.assColor)&" +
-                    "\(extraTags)\\bord0\\shad0\\fscx104\\fscy104}"
+                    "\\fn\(boldFontName)\\fs\(fontSize)\(SubtitleFontWeight.bold.assTag)\\c&H\(resolvedAccent.assColor)&" +
+                    "\(extraTags)\\bord0\\shad0}"
                 result += "Dialogue: 2,\(wordStartText)," +
                     "\(wordEndText),Default,,0,0,0,," +
                     "\(boldTags)\(item.text)\n"
@@ -4751,6 +4751,7 @@ class VideoProcessor: ObservableObject {
         group: [WordTimestamp],
         segStart: Double,
         segEnd: Double,
+        fontName: String = "Montserrat-ExtraBold",
         fontSize: Int,
         marginV: Int,
         virtualWidth: Int,
@@ -4790,6 +4791,8 @@ class VideoProcessor: ObservableObject {
         guard !events.isEmpty else { return "" }
 
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
+        let thinFontName = FontCatalog.faceName(for: fontName, weight: .thin)
+        let boldFontName = FontCatalog.faceName(for: fontName, weight: .bold)
         let centerX = virtualWidth / 2
         let halfHeight = max(12, fontSize / 2)
         let centerY = min(
@@ -4806,13 +4809,13 @@ class VideoProcessor: ObservableObject {
             guard eventEnd > eventStart + 0.008 else { continue }
 
             let durationMs = max(10, Int((eventEnd - eventStart) * 1000))
-            let settleMs = min(130, durationMs)
+            let settleMs = min(110, durationMs)
             let baseTags = "{\\an5\\pos(\(centerX),\(centerY))" +
-                "\\fs\(fontSize)\\c&HFFFFFF&\\bord0\\shad0}"
-            let latestTags = "{\\c&H\(resolvedAccent.assColor)&\\alpha&H18&" +
-                "\\fscx112\\fscy112\\blur0.9" +
+                "\\fs\(fontSize)\\fn\(thinFontName)\(SubtitleFontWeight.thin.assTag)\\c&HFFFFFF&\\bord0\\shad0}"
+            let latestTags = "{\\fn\(boldFontName)\(SubtitleFontWeight.bold.assTag)\\c&H\(resolvedAccent.assColor)&\\alpha&H18&" +
+                "\\blur0.7" +
                 "\\t(0,\(settleMs),1.5,\\c&HFFFFFF&\\alpha&H00&" +
-                "\\fscx100\\fscy100\\blur0.2)}"
+                "\\blur0.2)}"
             result += "Dialogue: 2,\(formatASSTime(eventStart))," +
                 "\(formatASSTime(eventEnd)),Default,,0,0,0,," +
                 "\(baseTags)\(event.leading)\(latestTags)\(event.latest)\n"
@@ -4874,7 +4877,10 @@ class VideoProcessor: ObservableObject {
         // Bold bayrağı yalnız gerçekten kalın kesimi olan fontlarda açılır. Eskiden her font
         // için -1 (açık) yazılıyordu; kalın kesimi olmayan fontlarda libass yapay kalınlaştırma
         // uyguluyor ve gömülen yazı ön izlemedekinden farklı ("font değişmiş gibi") görünüyordu.
-        let boldFlag = (FontCatalog.secenek(fontName)?.kalin ?? fontName.contains("Bold")) ? -1 : 0
+        let boldFlag = (
+            FontCatalog.secenek(fontName)?.assUsesBoldStyle
+                ?? fontName.contains("Bold")
+        ) ? -1 : 0
 
         // Bitişik (el yazısı) fontlarda harf başına etiket bloğu, animasyon sırasında harf
         // bağlarını/konturu koparıp harfi "normal" gösteriyordu. Çözüm iki katman hilesi:
@@ -5000,6 +5006,7 @@ class VideoProcessor: ObservableObject {
                     group: seg.group,
                     segStart: segStart,
                     segEnd: segEnd,
+                    fontName: fontName,
                     fontSize: lineFontSize,
                     marginV: marginV,
                     virtualWidth: virtualWidth,
@@ -5056,7 +5063,10 @@ class VideoProcessor: ObservableObject {
                 continue
             }
 
-            if karaokeMode == .kinetic && bitisikFont && visualRows.count == 1 {
+            if karaokeMode == .kinetic
+                && renderPath != .boldWord
+                && bitisikFont
+                && visualRows.count == 1 {
                 let fittedLineWidth = harfSinirlariniOlc(
                     metin: lineText,
                     fontName: fontName,
@@ -5082,7 +5092,7 @@ class VideoProcessor: ObservableObject {
             // bozabilir. Bu fontlarda mevcut kusursuz süpürme korunur, kinetik mod yalnız
             // bütün satıra kontrollü bir giriş hareketi uygular.
             let lineMotionTags: String
-            if karaokeMode == .kinetic {
+            if karaokeMode == .kinetic && renderPath != .boldWord {
                 lineMotionTags = kineticWholeLineTags(
                     plan: kineticPlans[index],
                     style: kineticStyle,
@@ -5117,7 +5127,10 @@ class VideoProcessor: ObservableObject {
                 continue
             }
 
-            if bitisikFont && visualRows.count > 1 {
+            // İki görsel satırı tek bir \N metninde ölçmek CoreText/ASS koordinatlarını
+            // karıştırıyordu. Her fontta satırlar ayrı süpürme katmanı olarak üretilir;
+            // ikinci satır artık ilk satırın clip alanını yeniden açamaz.
+            if visualRows.count > 1 {
                 assContent += makeConnectedKaraokeRowsDialogues(
                     group: seg.group,
                     inlineLineBreaks: inlineLineBreaks,

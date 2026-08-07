@@ -1433,6 +1433,7 @@ final class VideoProcessorTests: XCTestCase {
             group: words,
             segStart: 0.1,
             segEnd: 2.6,
+            fontName: "Poppins-Bold",
             fontSize: 70,
             marginV: 120,
             virtualWidth: 608,
@@ -1446,12 +1447,14 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(dialogues.count, words.count)
         XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\an5\\pos(304,925)") })
         XCTAssertTrue(dialogues[0].hasSuffix("}Kara"))
-        XCTAssertTrue(dialogues[1].contains("Kara {\\c&H"))
+        XCTAssertTrue(dialogues[1].contains("Kara {\\fnPoppins-Bold\\b700\\c&H"))
         XCTAssertTrue(dialogues[1].hasSuffix("}Sevda"))
-        XCTAssertTrue(dialogues[2].contains("Kara Sevda {\\c&H"))
+        XCTAssertTrue(dialogues[2].contains("Kara Sevda {\\fnPoppins-Bold\\b700\\c&H"))
         XCTAssertTrue(dialogues[2].hasSuffix("}İçimde"))
         XCTAssertFalse(dialogues.contains { $0.hasSuffix("}K") || $0.hasSuffix("}Ka") })
         XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\bord0\\shad0") })
+        XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\fnPoppins-Light\\b100") })
+        XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\fnPoppins-Bold\\b700") })
         XCTAssertFalse(ass.contains("\\shad1.5"))
     }
 
@@ -1597,8 +1600,8 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(classicDialogues.count, 9)
         XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 1,") }.count, 6)
         XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 2,") }.count, 3)
-        XCTAssertTrue(classic.contains("\\fs70\\b0"))
-        XCTAssertTrue(classic.contains("\\fs70\\b1"))
+        XCTAssertTrue(classic.contains("\\fs70\\b100"))
+        XCTAssertTrue(classic.contains("\\fs70\\b700"))
         XCTAssertTrue(classicDialogues.contains { $0.hasSuffix("}kara") })
         XCTAssertFalse(classic.contains("kara sevda içimde"))
         XCTAssertTrue(
@@ -1608,7 +1611,8 @@ final class VideoProcessorTests: XCTestCase {
             classic.contains("Dialogue: 2,0:00:00.10,0:00:00.55")
         )
         XCTAssertTrue(classic.contains("\\c&H7A5CFF&"))
-        XCTAssertTrue(classic.contains("\\bord0\\shad0\\fscx104\\fscy104"))
+        XCTAssertTrue(classic.contains("\\bord0\\shad0"))
+        XCTAssertFalse(classic.contains("\\fscx104"))
         XCTAssertFalse(classic.contains("\\bord0.8"))
         XCTAssertFalse(classic.contains("\\alpha&"))
 
@@ -1623,7 +1627,9 @@ final class VideoProcessorTests: XCTestCase {
             virtualHeight: 1080,
             accent: .violet
         )
-        XCTAssertTrue(boldFaceClassic.contains("\\b1\\c&HFA8BA7&"))
+        XCTAssertTrue(boldFaceClassic.contains("\\b700\\c&HFA8BA7&"))
+        XCTAssertTrue(boldFaceClassic.contains("\\fnMontserrat-Light\\fs70\\b100"))
+        XCTAssertTrue(boldFaceClassic.contains("\\fnMontserrat-Bold\\fs70\\b700"))
         XCTAssertFalse(boldFaceClassic.contains("\\bord0.8"))
 
         let kinetic = VideoProcessor.shared.makeKineticDialogues(
@@ -1670,9 +1676,9 @@ final class VideoProcessorTests: XCTestCase {
             let dialogues = ass.split(separator: "\n")
 
             XCTAssertEqual(dialogues.count, 6, font.display)
-            XCTAssertTrue(ass.contains("\\b0\\c&HFFFFFF&"), font.display)
-            XCTAssertTrue(ass.contains("\\b1\\c&HA5E654&"), font.display)
-            XCTAssertTrue(ass.contains("\\fscx104\\fscy104"), font.display)
+            XCTAssertTrue(ass.contains("\\b100\\c&HFFFFFF&"), font.display)
+            XCTAssertTrue(ass.contains("\\b700\\c&HA5E654&"), font.display)
+            XCTAssertFalse(ass.contains("\\fscx104"), font.display)
             XCTAssertFalse(ass.contains("\\bord0.8"), font.display)
             XCTAssertFalse(ass.contains("kara sevda"), font.display)
         }
@@ -2132,6 +2138,40 @@ final class VideoProcessorTests: XCTestCase {
 }
 
 final class FontCatalogTests: XCTestCase {
+    func testEveryFontProvidesThinRegularAndBoldWithinItsOwnFamily() {
+        for font in FontCatalog.hepsi {
+            for weight in SubtitleFontWeight.allCases {
+                XCTAssertFalse(font.faceName(for: weight).isEmpty, "\(font.display) / \(weight.title)")
+            }
+            XCTAssertEqual(font.faceName(for: .regular), font.regularFaceName)
+            XCTAssertEqual(
+                FontCatalog.faceName(for: font.psName, weight: .thin),
+                font.thinPSName ?? font.regularFaceName
+            )
+            XCTAssertEqual(
+                FontCatalog.faceName(for: font.psName, weight: .bold),
+                font.boldPSName ?? font.regularFaceName
+            )
+        }
+        XCTAssertEqual(SubtitleFontWeight.thin.assTag, "\\b100")
+        XCTAssertEqual(SubtitleFontWeight.regular.assTag, "\\b400")
+        XCTAssertEqual(SubtitleFontWeight.bold.assTag, "\\b700")
+    }
+
+    func testGeorgiaKeepsItsOwnFamilyForAllWeights() {
+        let georgia = try! XCTUnwrap(FontCatalog.secenek("Georgia"))
+
+        XCTAssertEqual(georgia.faceName(for: .thin), "Georgia")
+        XCTAssertFalse(georgia.hasRealFace(for: .thin))
+        XCTAssertEqual(georgia.faceName(for: .regular), "Georgia")
+        XCTAssertEqual(georgia.faceName(for: .bold), "Georgia-Bold")
+        XCTAssertTrue(georgia.hasRealFace(for: .bold))
+        XCTAssertEqual(
+            FontCatalog.renderPSNames(for: georgia.psName),
+            ["Georgia", "Georgia-Bold"]
+        )
+    }
+
     func testCatalogUsesUniquePostScriptNamesAndExcludesUnsafeLegacyFonts() {
         let names = FontCatalog.hepsi.map(\.psName)
 
@@ -2179,25 +2219,33 @@ final class FontCatalogTests: XCTestCase {
         }
     }
 
-    func testBundledFamiliesWithPublishedWeightsUseRealRegularBoldPairs() {
-        let expectedPairs = [
-            "Montserrat-ExtraBold": ("Montserrat-Regular", "Montserrat-Bold"),
-            "Poppins-Bold": ("Poppins-Regular", "Poppins-Bold"),
-            "Lato-Bold": ("Lato-Regular", "Lato-Bold"),
-            "SpaceMono-Bold": ("SpaceMono-Regular", "SpaceMono-Bold"),
-            "LeagueSpartan-Bold": ("LeagueSpartan-Regular", "LeagueSpartan-Bold"),
-            "Oswald-Bold": ("Oswald-Regular", "Oswald-Bold"),
+    func testBundledFamiliesWithPublishedWeightsUseRealFontFaces() {
+        let expectedFaces: [String: (regular: String, bold: String, thin: String?)] = [
+            "Montserrat-ExtraBold": ("Montserrat-Regular", "Montserrat-Bold", "Montserrat-Light"),
+            "Poppins-Bold": ("Poppins-Regular", "Poppins-Bold", "Poppins-Light"),
+            "Lato-Bold": ("Lato-Regular", "Lato-Bold", "Lato-Light"),
+            "SpaceMono-Bold": ("SpaceMono-Regular", "SpaceMono-Bold", nil),
+            "LeagueSpartan-Bold": ("LeagueSpartan-Regular", "LeagueSpartan-Bold", nil),
+            "Oswald-Bold": ("Oswald-Regular", "Oswald-Bold", nil),
             "PlayfairDisplayRoman-Black": (
                 "PlayfairDisplayRoman-Regular",
-                "PlayfairDisplayRoman-Bold"
+                "PlayfairDisplayRoman-Bold",
+                nil
             ),
-            "CaveatRoman-Bold": ("CaveatRoman-Regular", "CaveatRoman-Bold")
+            "CaveatRoman-Bold": ("CaveatRoman-Regular", "CaveatRoman-Bold", nil)
         ]
 
-        for (selection, pair) in expectedPairs {
-            XCTAssertEqual(FontCatalog.regularPSName(for: selection), pair.0)
-            XCTAssertEqual(FontCatalog.boldPSName(for: selection), pair.1)
-            XCTAssertEqual(FontCatalog.renderPSNames(for: selection), [pair.0, pair.1])
+        for (selection, faces) in expectedFaces {
+            XCTAssertEqual(FontCatalog.regularPSName(for: selection), faces.regular)
+            XCTAssertEqual(FontCatalog.boldPSName(for: selection), faces.bold)
+            XCTAssertEqual(FontCatalog.thinPSName(for: selection), faces.thin)
+            let renderNames = FontCatalog.renderPSNames(for: selection)
+            XCTAssertEqual(renderNames.first, faces.regular)
+            XCTAssertTrue(renderNames.contains(selection))
+            XCTAssertTrue(renderNames.contains(faces.bold))
+            if let thin = faces.thin {
+                XCTAssertTrue(renderNames.contains(thin))
+            }
         }
     }
 

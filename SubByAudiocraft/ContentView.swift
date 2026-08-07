@@ -801,7 +801,9 @@ struct ContentView: View {
         let renderLineBreaks = lineBreaks
         let renderInlineLineBreaks = inlineLineBreaks
         let renderFontSelection = fontName
-        let renderFontName = FontCatalog.regularPSName(for: fontName)
+        // Seçilen gerçek yüzü (ExtraBold/Black/özel font) ASS üretimine taşı.
+        // Regular'a erken dönmek canlı ön izleme ile final videoyu farklılaştırıyordu.
+        let renderFontName = fontName
         let renderFontSize = Int(fontSize)
         let renderMarginV = Int(marginV)
         let renderKaraokeMode = KaraokeMode.resolved(karaokeModeRaw)
