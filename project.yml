@@ -13,7 +13,7 @@ packages:
   # bekliyor. Qwen3Speech 0.0.23 ile uyumlu son eklentisiz sürümü sabit tut.
   MLXSwift:
     url: https://github.com/ml-explore/mlx-swift
-    exactVersion: 0.31.6
+    exactVersion: 0.31.4
   FFmpegKit:
     url: https://github.com/tylerjonesio/ffmpeg-kit-spm.git
     exactVersion: 5.1.2
