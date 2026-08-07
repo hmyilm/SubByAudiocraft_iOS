@@ -1,0 +1,587 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		06CF4585C8E95537027A16DB /* AbrilFatface-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 94F074860155AC52E35838BD /* AbrilFatface-Regular.ttf */; };
+		078563F7E0E903067F8259FA /* StudioControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBCE77E0ED4765FF82DAF2E2 /* StudioControls.swift */; };
+		18B05D7D0C6E22C9DDC0D8D0 /* Pacifico-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 60298A0087E84E281D394654 /* Pacifico-Regular.ttf */; };
+		2756C9519E25B64C81F35550 /* VideoProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B71A3B57520EFB67FD22CF2 /* VideoProcessor.swift */; };
+		2A25E436CD4F7F66923BE7C2 /* Oswald-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 9F65FDFA45888A124A3E7248 /* Oswald-Regular.ttf */; };
+		2B43AF25C426E1D3F4FB008C /* SuccessView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E9FEC4311A1F95D6E5EC42C /* SuccessView.swift */; };
+		2B581C5A3BB3750A50E0FCDA /* MarckScript-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5DD86D7137E070DF8D55104C /* MarckScript-Regular.ttf */; };
+		2DF83863C53F08ED7EEA10C5 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA3E3AB26072848F57D3FC8B /* HistoryView.swift */; };
+		2EE2F7396D6AEEA577F63EE7 /* Bangers-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0A268C005DE7A124E872B76F /* Bangers-Regular.ttf */; };
+		33D46E9A1396D5C891E55EC0 /* Poppins-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D4A25FB64CFB9AF0F1AB39BD /* Poppins-Bold.ttf */; };
+		355F8ABA3AD4D85CB90DF91A /* FrancoisOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 11710E54671D10C7361D53AD /* FrancoisOne-Regular.ttf */; };
+		3D09E46DFD0C47C8BAE7791B /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3D08729D95B235A5BDFF2B37 /* WhisperKit */; };
+		418A357AC2B0D23514DAD662 /* Oswald-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 5F50CD942A25E6EBCFEBD880 /* Oswald-Bold.ttf */; };
+		4286977DAA049F856124B44A /* BlackOpsOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 370EA6FB80B019205FEE3E71 /* BlackOpsOne-Regular.ttf */; };
+		4D864D7A6FEF66B8046F8684 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81AEE50304E466C69765CFEF /* Components.swift */; };
+		533443004327A9F5F4A6E15C /* Righteous-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 30D9E9886B43922CC5449D39 /* Righteous-Regular.ttf */; };
+		57CBFDEE8D0B2AF3DCCA7B45 /* GreatVibes-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = FA55C9A5C3C1D992CFCDCA88 /* GreatVibes-Regular.ttf */; };
+		5ADFB279965C057BB4D0D302 /* VideoProcessorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BED87A240B3A8ABA8112E815 /* VideoProcessorTests.swift */; };
+		5B437064CCA41E3BDB2732A9 /* PetitFormalScript-OFL.txt in Resources */ = {isa = PBXBuildFile; fileRef = 0708CC2D5F97DE574CD05D5A /* PetitFormalScript-OFL.txt */; };
+		5FF961CB18508D61E3E7F113 /* Courgette-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 19EC64064770C3F225A7C6BE /* Courgette-Regular.ttf */; };
+		65275CFE533D2FEAF300DFA5 /* Montserrat-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 552515E989A56AA3E98BC3EA /* Montserrat-Regular.ttf */; };
+		6C84883A2CC82A761EF485D8 /* PlayfairDisplay-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 561F84B75E2948AFC613963A /* PlayfairDisplay-Bold.ttf */; };
+		6F61B48E8EFC16C095BA8A3B /* EditWordsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12F1ADCEBF523426B349851 /* EditWordsView.swift */; };
+		72C3E872AEA3158844DE96D5 /* MLX in Frameworks */ = {isa = PBXBuildFile; productRef = E495773F7EBD20E5B13E88DF /* MLX */; };
+		77777C846EF9809A6792CA10 /* KaushanScript-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 258098735A78D7A0597AC810 /* KaushanScript-Regular.ttf */; };
+		7BB1B42048498FB6D15E231E /* Sacramento-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 1FB4FEDD00D90D879281AB4A /* Sacramento-Regular.ttf */; };
+		7C58F61034FEB40D79F34F77 /* ProjectStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3D1C3DF972E40CF547A5F6F /* ProjectStore.swift */; };
+		862D821FF338E252A6B5B977 /* Poppins-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0CDE5A05176C64BFFAE97835 /* Poppins-Regular.ttf */; };
+		8CCC875A14F83FDFF25A9285 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9A6FE1EE57D4D454EE23A634 /* Assets.xcassets */; };
+		8DAFF0436F56FF5890201C69 /* GroqSpeechClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFE8AAF57993D8DC153EDFC8 /* GroqSpeechClient.swift */; };
+		8F92F4E579244342383ED7EC /* SelectVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C57C7415062AD339A8E2DA42 /* SelectVideoView.swift */; };
+		90A43BC3888A8FF993870A5A /* LeagueSpartan-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4CC37AC4BE599FA23E9097CF /* LeagueSpartan-Bold.ttf */; };
+		921EE5A3D8B30A1B6BB4E686 /* Lobster-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4A1F3FC356AEE0D9D2EBC301 /* Lobster-Regular.ttf */; };
+		941F0717483F7D1775C2A501 /* BebasNeue-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = D207364E29674FEF425A81DB /* BebasNeue-Regular.ttf */; };
+		975B512E6FE2CEC839FCECB7 /* Montserrat-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 433AB1A4C5B966257876A6F8 /* Montserrat-ExtraBold.ttf */; };
+		9FA4C6079617F9FBC41A28C3 /* ProcessingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB3C7FBE2FAE3D100098111B /* ProcessingView.swift */; };
+		9FAAB366D67A10EABA76A0BA /* LeagueSpartan-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E00B3393F13F2EDC2D53DD31 /* LeagueSpartan-Regular.ttf */; };
+		ABA66E3400B91BB06D822A13 /* Shrikhand-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E38C37964FFF704A2B4D024B /* Shrikhand-Regular.ttf */; };
+		AFBB874AE251E4EC82333546 /* SecureAPIKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AA759F28053E8BDEB26594D /* SecureAPIKeyStore.swift */; };
+		B06334680C68458934786BC9 /* SourceSeparation in Frameworks */ = {isa = PBXBuildFile; productRef = AC74CD4AC93E7E0A8047390F /* SourceSeparation */; };
+		B8574CC8B6C3F653BC9E5A1A /* SpaceMono-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A30C76AB75260C6C0FC350F3 /* SpaceMono-Regular.ttf */; };
+		BBB22150FB67E4F15D20574C /* Montserrat-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F09B11E6FC94017C2F7AD376 /* Montserrat-Bold.ttf */; };
+		BD38AFD2C025B24DD277CB02 /* PetitFormalScript-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2C8E6B03283F4DA59087ABE8 /* PetitFormalScript-Regular.ttf */; };
+		C263A69607DF640E9DEFC244 /* MLXNN in Frameworks */ = {isa = PBXBuildFile; productRef = 02BD014D1358A24FF8462380 /* MLXNN */; };
+		C3706EB1B5C146C4FD797519 /* VocalIsolationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B97F3177D7253EA0DB7B83B /* VocalIsolationService.swift */; };
+		C42FA5134A00E918AEBB6F31 /* Qwen3ASR in Frameworks */ = {isa = PBXBuildFile; productRef = 9E6DF0C1D2A135131EFB3256 /* Qwen3ASR */; };
+		CBA643A7CCDDC0FE70CA7471 /* Caveat-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = E4E9FDDC49538BB91F4BEE9A /* Caveat-Regular.ttf */; };
+		CC0D5C15E5FE7FA0F9024A63 /* Allura-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 558A0123FAAF2047A2D90ED0 /* Allura-Regular.ttf */; };
+		CED6A9794834CC02C3B75619 /* ArchivoBlack-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = A31D88EFCD122F73CE0AFB98 /* ArchivoBlack-Regular.ttf */; };
+		D129D958BE81DA93CCDFAC5C /* Anton-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0125BAD8D2FD5C8EEDACE437 /* Anton-Regular.ttf */; };
+		D62B907C4155D45C089A5064 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BC39C0A409569D7857903A6 /* ContentView.swift */; };
+		E3A72AB95FDBA7F439E5DCF9 /* SpaceMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F7D599528C193490C0C39D81 /* SpaceMono-Bold.ttf */; };
+		E5944D9B78D8BA3BAE0AD588 /* Parisienne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 078B42D941B2E8E7C599237E /* Parisienne-Regular.ttf */; };
+		E6BBCF82D190998B4553D6D7 /* LineEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BCDB529DBEC6F853170DF82 /* LineEditView.swift */; };
+		E772582D9FD6B500F1C2149F /* AudioCommon in Frameworks */ = {isa = PBXBuildFile; productRef = ADB562BAB379CCE9603C668E /* AudioCommon */; };
+		E7CC75183A69D10E416F97DB /* SubByAudiocraftApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5DB468C6A126CAABA252B2 /* SubByAudiocraftApp.swift */; };
+		EA97193F25A56A462C9654DC /* AlfaSlabOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0D751ED37D5193E910C87452 /* AlfaSlabOne-Regular.ttf */; };
+		ECC4DD306A28233562265B2F /* PlayfairDisplay-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3E6BAA95CDEDB30B5941D080 /* PlayfairDisplay-Regular.ttf */; };
+		ED8C26F8758D856D396F8242 /* FontCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64E399A21BE07709C4F9AB4B /* FontCatalog.swift */; };
+		EF1C9A5AA4C41C17EBECE66D /* Lato-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = B9B388193C059D6A26CDB421 /* Lato-Bold.ttf */; };
+		FA76F9316A0D32075CCCCC54 /* PlayfairDisplay-Black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 8EF21A4372FF927E0AC21281 /* PlayfairDisplay-Black.ttf */; };
+		FDB916F07EAAF265D41ADC5D /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 691E8A1C6D1B7712A3E14C42 /* Theme.swift */; };
+		FF5C668B4BB0FAEBD1423745 /* Caveat-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7174991C3140696B21446040 /* Caveat-Bold.ttf */; };
+		FF5F927A3D7B11D29AFCB31A /* Lato-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = C792EF130CF658ABD6164F4F /* Lato-Regular.ttf */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		DB551C5C4EE51B5B8F98FB0D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 40725CB2BA92920057DBF134 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 56673D813785CDABEC53F82B;
+			remoteInfo = SubByAudiocraft;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0125BAD8D2FD5C8EEDACE437 /* Anton-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Anton-Regular.ttf"; sourceTree = "<group>"; };
+		0708CC2D5F97DE574CD05D5A /* PetitFormalScript-OFL.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "PetitFormalScript-OFL.txt"; sourceTree = "<group>"; };
+		078B42D941B2E8E7C599237E /* Parisienne-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Parisienne-Regular.ttf"; sourceTree = "<group>"; };
+		0A268C005DE7A124E872B76F /* Bangers-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Bangers-Regular.ttf"; sourceTree = "<group>"; };
+		0CDE5A05176C64BFFAE97835 /* Poppins-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Regular.ttf"; sourceTree = "<group>"; };
+		0D751ED37D5193E910C87452 /* AlfaSlabOne-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "AlfaSlabOne-Regular.ttf"; sourceTree = "<group>"; };
+		11710E54671D10C7361D53AD /* FrancoisOne-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "FrancoisOne-Regular.ttf"; sourceTree = "<group>"; };
+		19A3C7089D00F16934C15040 /* SubByAudiocraft.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = SubByAudiocraft.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		19EC64064770C3F225A7C6BE /* Courgette-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Courgette-Regular.ttf"; sourceTree = "<group>"; };
+		1E9FEC4311A1F95D6E5EC42C /* SuccessView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuccessView.swift; sourceTree = "<group>"; };
+		1FB4FEDD00D90D879281AB4A /* Sacramento-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Sacramento-Regular.ttf"; sourceTree = "<group>"; };
+		258098735A78D7A0597AC810 /* KaushanScript-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "KaushanScript-Regular.ttf"; sourceTree = "<group>"; };
+		2C8E6B03283F4DA59087ABE8 /* PetitFormalScript-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PetitFormalScript-Regular.ttf"; sourceTree = "<group>"; };
+		30D9E9886B43922CC5449D39 /* Righteous-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Righteous-Regular.ttf"; sourceTree = "<group>"; };
+		370EA6FB80B019205FEE3E71 /* BlackOpsOne-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BlackOpsOne-Regular.ttf"; sourceTree = "<group>"; };
+		3B71A3B57520EFB67FD22CF2 /* VideoProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProcessor.swift; sourceTree = "<group>"; };
+		3BCDB529DBEC6F853170DF82 /* LineEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LineEditView.swift; sourceTree = "<group>"; };
+		3E6BAA95CDEDB30B5941D080 /* PlayfairDisplay-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PlayfairDisplay-Regular.ttf"; sourceTree = "<group>"; };
+		433AB1A4C5B966257876A6F8 /* Montserrat-ExtraBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Montserrat-ExtraBold.ttf"; sourceTree = "<group>"; };
+		4A1F3FC356AEE0D9D2EBC301 /* Lobster-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lobster-Regular.ttf"; sourceTree = "<group>"; };
+		4AA759F28053E8BDEB26594D /* SecureAPIKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureAPIKeyStore.swift; sourceTree = "<group>"; };
+		4CC37AC4BE599FA23E9097CF /* LeagueSpartan-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "LeagueSpartan-Bold.ttf"; sourceTree = "<group>"; };
+		552515E989A56AA3E98BC3EA /* Montserrat-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Montserrat-Regular.ttf"; sourceTree = "<group>"; };
+		558A0123FAAF2047A2D90ED0 /* Allura-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Allura-Regular.ttf"; sourceTree = "<group>"; };
+		561F84B75E2948AFC613963A /* PlayfairDisplay-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PlayfairDisplay-Bold.ttf"; sourceTree = "<group>"; };
+		5B97F3177D7253EA0DB7B83B /* VocalIsolationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VocalIsolationService.swift; sourceTree = "<group>"; };
+		5BC39C0A409569D7857903A6 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		5DD86D7137E070DF8D55104C /* MarckScript-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "MarckScript-Regular.ttf"; sourceTree = "<group>"; };
+		5F50CD942A25E6EBCFEBD880 /* Oswald-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oswald-Bold.ttf"; sourceTree = "<group>"; };
+		60298A0087E84E281D394654 /* Pacifico-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Pacifico-Regular.ttf"; sourceTree = "<group>"; };
+		64E399A21BE07709C4F9AB4B /* FontCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FontCatalog.swift; sourceTree = "<group>"; };
+		691E8A1C6D1B7712A3E14C42 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		7174991C3140696B21446040 /* Caveat-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Caveat-Bold.ttf"; sourceTree = "<group>"; };
+		7D6F18C60707EDC464794517 /* SubByAudiocraftTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = SubByAudiocraftTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		81AEE50304E466C69765CFEF /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		8B5DB468C6A126CAABA252B2 /* SubByAudiocraftApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubByAudiocraftApp.swift; sourceTree = "<group>"; };
+		8EF21A4372FF927E0AC21281 /* PlayfairDisplay-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "PlayfairDisplay-Black.ttf"; sourceTree = "<group>"; };
+		94F074860155AC52E35838BD /* AbrilFatface-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "AbrilFatface-Regular.ttf"; sourceTree = "<group>"; };
+		9A6FE1EE57D4D454EE23A634 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		9F65FDFA45888A124A3E7248 /* Oswald-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Oswald-Regular.ttf"; sourceTree = "<group>"; };
+		A30C76AB75260C6C0FC350F3 /* SpaceMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SpaceMono-Regular.ttf"; sourceTree = "<group>"; };
+		A31D88EFCD122F73CE0AFB98 /* ArchivoBlack-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "ArchivoBlack-Regular.ttf"; sourceTree = "<group>"; };
+		AFE8AAF57993D8DC153EDFC8 /* GroqSpeechClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroqSpeechClient.swift; sourceTree = "<group>"; };
+		B3D1C3DF972E40CF547A5F6F /* ProjectStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectStore.swift; sourceTree = "<group>"; };
+		B9B388193C059D6A26CDB421 /* Lato-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lato-Bold.ttf"; sourceTree = "<group>"; };
+		BED87A240B3A8ABA8112E815 /* VideoProcessorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoProcessorTests.swift; sourceTree = "<group>"; };
+		C57C7415062AD339A8E2DA42 /* SelectVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectVideoView.swift; sourceTree = "<group>"; };
+		C792EF130CF658ABD6164F4F /* Lato-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Lato-Regular.ttf"; sourceTree = "<group>"; };
+		D207364E29674FEF425A81DB /* BebasNeue-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BebasNeue-Regular.ttf"; sourceTree = "<group>"; };
+		D4A25FB64CFB9AF0F1AB39BD /* Poppins-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Poppins-Bold.ttf"; sourceTree = "<group>"; };
+		DA3E3AB26072848F57D3FC8B /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
+		DB3C7FBE2FAE3D100098111B /* ProcessingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessingView.swift; sourceTree = "<group>"; };
+		E00B3393F13F2EDC2D53DD31 /* LeagueSpartan-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "LeagueSpartan-Regular.ttf"; sourceTree = "<group>"; };
+		E38C37964FFF704A2B4D024B /* Shrikhand-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Shrikhand-Regular.ttf"; sourceTree = "<group>"; };
+		E4E9FDDC49538BB91F4BEE9A /* Caveat-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Caveat-Regular.ttf"; sourceTree = "<group>"; };
+		EA7E7D37BF5C397545AC8337 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		F09B11E6FC94017C2F7AD376 /* Montserrat-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Montserrat-Bold.ttf"; sourceTree = "<group>"; };
+		F12F1ADCEBF523426B349851 /* EditWordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditWordsView.swift; sourceTree = "<group>"; };
+		F7D599528C193490C0C39D81 /* SpaceMono-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SpaceMono-Bold.ttf"; sourceTree = "<group>"; };
+		FA55C9A5C3C1D992CFCDCA88 /* GreatVibes-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "GreatVibes-Regular.ttf"; sourceTree = "<group>"; };
+		FBCE77E0ED4765FF82DAF2E2 /* StudioControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioControls.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5A494348211BC7408A8BCC8F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3D09E46DFD0C47C8BAE7791B /* WhisperKit in Frameworks */,
+				C42FA5134A00E918AEBB6F31 /* Qwen3ASR in Frameworks */,
+				B06334680C68458934786BC9 /* SourceSeparation in Frameworks */,
+				E772582D9FD6B500F1C2149F /* AudioCommon in Frameworks */,
+				72C3E872AEA3158844DE96D5 /* MLX in Frameworks */,
+				C263A69607DF640E9DEFC244 /* MLXNN in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5E485E1719048BD5E5F5C96A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				19A3C7089D00F16934C15040 /* SubByAudiocraft.app */,
+				7D6F18C60707EDC464794517 /* SubByAudiocraftTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		6F6AD67394BB440BEB9CC9E5 /* Fonts */ = {
+			isa = PBXGroup;
+			children = (
+				94F074860155AC52E35838BD /* AbrilFatface-Regular.ttf */,
+				0D751ED37D5193E910C87452 /* AlfaSlabOne-Regular.ttf */,
+				558A0123FAAF2047A2D90ED0 /* Allura-Regular.ttf */,
+				0125BAD8D2FD5C8EEDACE437 /* Anton-Regular.ttf */,
+				A31D88EFCD122F73CE0AFB98 /* ArchivoBlack-Regular.ttf */,
+				0A268C005DE7A124E872B76F /* Bangers-Regular.ttf */,
+				D207364E29674FEF425A81DB /* BebasNeue-Regular.ttf */,
+				370EA6FB80B019205FEE3E71 /* BlackOpsOne-Regular.ttf */,
+				7174991C3140696B21446040 /* Caveat-Bold.ttf */,
+				E4E9FDDC49538BB91F4BEE9A /* Caveat-Regular.ttf */,
+				19EC64064770C3F225A7C6BE /* Courgette-Regular.ttf */,
+				11710E54671D10C7361D53AD /* FrancoisOne-Regular.ttf */,
+				FA55C9A5C3C1D992CFCDCA88 /* GreatVibes-Regular.ttf */,
+				258098735A78D7A0597AC810 /* KaushanScript-Regular.ttf */,
+				B9B388193C059D6A26CDB421 /* Lato-Bold.ttf */,
+				C792EF130CF658ABD6164F4F /* Lato-Regular.ttf */,
+				4CC37AC4BE599FA23E9097CF /* LeagueSpartan-Bold.ttf */,
+				E00B3393F13F2EDC2D53DD31 /* LeagueSpartan-Regular.ttf */,
+				4A1F3FC356AEE0D9D2EBC301 /* Lobster-Regular.ttf */,
+				5DD86D7137E070DF8D55104C /* MarckScript-Regular.ttf */,
+				F09B11E6FC94017C2F7AD376 /* Montserrat-Bold.ttf */,
+				433AB1A4C5B966257876A6F8 /* Montserrat-ExtraBold.ttf */,
+				552515E989A56AA3E98BC3EA /* Montserrat-Regular.ttf */,
+				5F50CD942A25E6EBCFEBD880 /* Oswald-Bold.ttf */,
+				9F65FDFA45888A124A3E7248 /* Oswald-Regular.ttf */,
+				60298A0087E84E281D394654 /* Pacifico-Regular.ttf */,
+				078B42D941B2E8E7C599237E /* Parisienne-Regular.ttf */,
+				0708CC2D5F97DE574CD05D5A /* PetitFormalScript-OFL.txt */,
+				2C8E6B03283F4DA59087ABE8 /* PetitFormalScript-Regular.ttf */,
+				8EF21A4372FF927E0AC21281 /* PlayfairDisplay-Black.ttf */,
+				561F84B75E2948AFC613963A /* PlayfairDisplay-Bold.ttf */,
+				3E6BAA95CDEDB30B5941D080 /* PlayfairDisplay-Regular.ttf */,
+				D4A25FB64CFB9AF0F1AB39BD /* Poppins-Bold.ttf */,
+				0CDE5A05176C64BFFAE97835 /* Poppins-Regular.ttf */,
+				30D9E9886B43922CC5449D39 /* Righteous-Regular.ttf */,
+				1FB4FEDD00D90D879281AB4A /* Sacramento-Regular.ttf */,
+				E38C37964FFF704A2B4D024B /* Shrikhand-Regular.ttf */,
+				F7D599528C193490C0C39D81 /* SpaceMono-Bold.ttf */,
+				A30C76AB75260C6C0FC350F3 /* SpaceMono-Regular.ttf */,
+			);
+			path = Fonts;
+			sourceTree = "<group>";
+		};
+		BFBE5054769E14619B15C9CC = {
+			isa = PBXGroup;
+			children = (
+				C07A8243C43A72792FF428D7 /* SubByAudiocraft */,
+				F9EF3D30C46D7BA2FD1E3BE0 /* SubByAudiocraftTests */,
+				5E485E1719048BD5E5F5C96A /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		C07A8243C43A72792FF428D7 /* SubByAudiocraft */ = {
+			isa = PBXGroup;
+			children = (
+				9A6FE1EE57D4D454EE23A634 /* Assets.xcassets */,
+				81AEE50304E466C69765CFEF /* Components.swift */,
+				5BC39C0A409569D7857903A6 /* ContentView.swift */,
+				F12F1ADCEBF523426B349851 /* EditWordsView.swift */,
+				64E399A21BE07709C4F9AB4B /* FontCatalog.swift */,
+				AFE8AAF57993D8DC153EDFC8 /* GroqSpeechClient.swift */,
+				DA3E3AB26072848F57D3FC8B /* HistoryView.swift */,
+				EA7E7D37BF5C397545AC8337 /* Info.plist */,
+				3BCDB529DBEC6F853170DF82 /* LineEditView.swift */,
+				DB3C7FBE2FAE3D100098111B /* ProcessingView.swift */,
+				B3D1C3DF972E40CF547A5F6F /* ProjectStore.swift */,
+				4AA759F28053E8BDEB26594D /* SecureAPIKeyStore.swift */,
+				C57C7415062AD339A8E2DA42 /* SelectVideoView.swift */,
+				FBCE77E0ED4765FF82DAF2E2 /* StudioControls.swift */,
+				8B5DB468C6A126CAABA252B2 /* SubByAudiocraftApp.swift */,
+				1E9FEC4311A1F95D6E5EC42C /* SuccessView.swift */,
+				691E8A1C6D1B7712A3E14C42 /* Theme.swift */,
+				3B71A3B57520EFB67FD22CF2 /* VideoProcessor.swift */,
+				5B97F3177D7253EA0DB7B83B /* VocalIsolationService.swift */,
+				6F6AD67394BB440BEB9CC9E5 /* Fonts */,
+			);
+			path = SubByAudiocraft;
+			sourceTree = "<group>";
+		};
+		F9EF3D30C46D7BA2FD1E3BE0 /* SubByAudiocraftTests */ = {
+			isa = PBXGroup;
+			children = (
+				BED87A240B3A8ABA8112E815 /* VideoProcessorTests.swift */,
+			);
+			path = SubByAudiocraftTests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		56673D813785CDABEC53F82B /* SubByAudiocraft */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0F69E3686167115C07209CCB /* Build configuration list for PBXNativeTarget "SubByAudiocraft" */;
+			buildPhases = (
+				9BBF9C8AF0F171162ECE95D2 /* Sources */,
+				D3EACF707C1DB6636F392552 /* Resources */,
+				5A494348211BC7408A8BCC8F /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SubByAudiocraft;
+			packageProductDependencies = (
+				3D08729D95B235A5BDFF2B37 /* WhisperKit */,
+				9E6DF0C1D2A135131EFB3256 /* Qwen3ASR */,
+				AC74CD4AC93E7E0A8047390F /* SourceSeparation */,
+				ADB562BAB379CCE9603C668E /* AudioCommon */,
+				E495773F7EBD20E5B13E88DF /* MLX */,
+				02BD014D1358A24FF8462380 /* MLXNN */,
+			);
+			productName = SubByAudiocraft;
+			productReference = 19A3C7089D00F16934C15040 /* SubByAudiocraft.app */;
+			productType = "com.apple.product-type.application";
+		};
+		AF9884078757862170ABC4BB /* SubByAudiocraftTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 9C692EA9FAB13967AAA1A30B /* Build configuration list for PBXNativeTarget "SubByAudiocraftTests" */;
+			buildPhases = (
+				46F4AEE595C9D3943AB929CC /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7D82F2A4E51C76E5262798B2 /* PBXTargetDependency */,
+			);
+			name = SubByAudiocraftTests;
+			productName = SubByAudiocraftTests;
+			productReference = 7D6F18C60707EDC464794517 /* SubByAudiocraftTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		40725CB2BA92920057DBF134 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 8E12DA0F581BBF6E5EAC2A43 /* Build configuration list for PBXProject "SubByAudiocraft" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = BFBE5054769E14619B15C9CC;
+			packageReferences = (
+				BA6D70EA1340A590E9E9B1C0 /* XCRemoteSwiftPackageReference "mlx-swift" */,
+				BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */,
+				17C0C575FC1459F7363C3D49 /* XCRemoteSwiftPackageReference "WhisperKit" */,
+			);
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				56673D813785CDABEC53F82B /* SubByAudiocraft */,
+				AF9884078757862170ABC4BB /* SubByAudiocraftTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		D3EACF707C1DB6636F392552 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				06CF4585C8E95537027A16DB /* AbrilFatface-Regular.ttf in Resources */,
+				EA97193F25A56A462C9654DC /* AlfaSlabOne-Regular.ttf in Resources */,
+				CC0D5C15E5FE7FA0F9024A63 /* Allura-Regular.ttf in Resources */,
+				D129D958BE81DA93CCDFAC5C /* Anton-Regular.ttf in Resources */,
+				CED6A9794834CC02C3B75619 /* ArchivoBlack-Regular.ttf in Resources */,
+				8CCC875A14F83FDFF25A9285 /* Assets.xcassets in Resources */,
+				2EE2F7396D6AEEA577F63EE7 /* Bangers-Regular.ttf in Resources */,
+				941F0717483F7D1775C2A501 /* BebasNeue-Regular.ttf in Resources */,
+				4286977DAA049F856124B44A /* BlackOpsOne-Regular.ttf in Resources */,
+				FF5C668B4BB0FAEBD1423745 /* Caveat-Bold.ttf in Resources */,
+				CBA643A7CCDDC0FE70CA7471 /* Caveat-Regular.ttf in Resources */,
+				5FF961CB18508D61E3E7F113 /* Courgette-Regular.ttf in Resources */,
+				355F8ABA3AD4D85CB90DF91A /* FrancoisOne-Regular.ttf in Resources */,
+				57CBFDEE8D0B2AF3DCCA7B45 /* GreatVibes-Regular.ttf in Resources */,
+				77777C846EF9809A6792CA10 /* KaushanScript-Regular.ttf in Resources */,
+				EF1C9A5AA4C41C17EBECE66D /* Lato-Bold.ttf in Resources */,
+				FF5F927A3D7B11D29AFCB31A /* Lato-Regular.ttf in Resources */,
+				90A43BC3888A8FF993870A5A /* LeagueSpartan-Bold.ttf in Resources */,
+				9FAAB366D67A10EABA76A0BA /* LeagueSpartan-Regular.ttf in Resources */,
+				921EE5A3D8B30A1B6BB4E686 /* Lobster-Regular.ttf in Resources */,
+				2B581C5A3BB3750A50E0FCDA /* MarckScript-Regular.ttf in Resources */,
+				BBB22150FB67E4F15D20574C /* Montserrat-Bold.ttf in Resources */,
+				975B512E6FE2CEC839FCECB7 /* Montserrat-ExtraBold.ttf in Resources */,
+				65275CFE533D2FEAF300DFA5 /* Montserrat-Regular.ttf in Resources */,
+				418A357AC2B0D23514DAD662 /* Oswald-Bold.ttf in Resources */,
+				2A25E436CD4F7F66923BE7C2 /* Oswald-Regular.ttf in Resources */,
+				18B05D7D0C6E22C9DDC0D8D0 /* Pacifico-Regular.ttf in Resources */,
+				E5944D9B78D8BA3BAE0AD588 /* Parisienne-Regular.ttf in Resources */,
+				5B437064CCA41E3BDB2732A9 /* PetitFormalScript-OFL.txt in Resources */,
+				BD38AFD2C025B24DD277CB02 /* PetitFormalScript-Regular.ttf in Resources */,
+				FA76F9316A0D32075CCCCC54 /* PlayfairDisplay-Black.ttf in Resources */,
+				6C84883A2CC82A761EF485D8 /* PlayfairDisplay-Bold.ttf in Resources */,
+				ECC4DD306A28233562265B2F /* PlayfairDisplay-Regular.ttf in Resources */,
+				33D46E9A1396D5C891E55EC0 /* Poppins-Bold.ttf in Resources */,
+				862D821FF338E252A6B5B977 /* Poppins-Regular.ttf in Resources */,
+				533443004327A9F5F4A6E15C /* Righteous-Regular.ttf in Resources */,
+				7BB1B42048498FB6D15E231E /* Sacramento-Regular.ttf in Resources */,
+				ABA66E3400B91BB06D822A13 /* Shrikhand-Regular.ttf in Resources */,
+				E3A72AB95FDBA7F439E5DCF9 /* SpaceMono-Bold.ttf in Resources */,
+				B8574CC8B6C3F653BC9E5A1A /* SpaceMono-Regular.ttf in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		46F4AEE595C9D3943AB929CC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5ADFB279965C057BB4D0D302 /* VideoProcessorTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9BBF9C8AF0F171162ECE95D2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4D864D7A6FEF66B8046F8684 /* Components.swift in Sources */,
+				D62B907C4155D45C089A5064 /* ContentView.swift in Sources */,
+				6F61B48E8EFC16C095BA8A3B /* EditWordsView.swift in Sources */,
+				ED8C26F8758D856D396F8242 /* FontCatalog.swift in Sources */,
+				8DAFF0436F56FF5890201C69 /* GroqSpeechClient.swift in Sources */,
+				2DF83863C53F08ED7EEA10C5 /* HistoryView.swift in Sources */,
+				E6BBCF82D190998B4553D6D7 /* LineEditView.swift in Sources */,
+				9FA4C6079617F9FBC41A28C3 /* ProcessingView.swift in Sources */,
+				7C58F61034FEB40D79F34F77 /* ProjectStore.swift in Sources */,
+				AFBB874AE251E4EC82333546 /* SecureAPIKeyStore.swift in Sources */,
+				8F92F4E579244342383ED7EC /* SelectVideoView.swift in Sources */,
+				078563F7E0E903067F8259FA /* StudioControls.swift in Sources */,
+				E7CC75183A69D10E416F97DB /* SubByAudiocraftApp.swift in Sources */,
+				2B43AF25C426E1D3F4FB008C /* SuccessView.swift in Sources */,
+				FDB916F07EAAF265D41ADC5D /* Theme.swift in Sources */,
+				2756C9519E25B64C81F35550 /* VideoProcessor.swift in Sources */,
+				C3706EB1B5C146C4FD797519 /* VocalIsolationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		7D82F2A4E51C76E5262798B2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 56673D813785CDABEC53F82B /* SubByAudiocraft */;
+			targetProxy = DB551C5C4EE51B5B8F98FB0D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		32058E62A7012D9109879494 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				SDKROOT = iphoneos;
+			};
+			name = Release;
+		};
+		363188085730D3775CC72CAC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 57;
+				INFOPLIST_FILE = SubByAudiocraft/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.21.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hmyilm.SubByAudiocraft;
+			};
+			name = Debug;
+		};
+		58D5B379B6085CA4872B6766 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CURRENT_PROJECT_VERSION = 57;
+				INFOPLIST_FILE = SubByAudiocraft/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.21.5;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hmyilm.SubByAudiocraft;
+			};
+			name = Release;
+		};
+		62B658EB8FFACFD869029CEA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hmyilm.SubByAudiocraftTests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SubByAudiocraft.app/SubByAudiocraft";
+			};
+			name = Debug;
+		};
+		9FBC03398636B8E937959AF9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		DD46BD49E5C4426AC35A9AFF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hmyilm.SubByAudiocraftTests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SubByAudiocraft.app/SubByAudiocraft";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0F69E3686167115C07209CCB /* Build configuration list for PBXNativeTarget "SubByAudiocraft" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				363188085730D3775CC72CAC /* Debug */,
+				58D5B379B6085CA4872B6766 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8E12DA0F581BBF6E5EAC2A43 /* Build configuration list for PBXProject "SubByAudiocraft" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				9FBC03398636B8E937959AF9 /* Debug */,
+				32058E62A7012D9109879494 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		9C692EA9FAB13967AAA1A30B /* Build configuration list for PBXNativeTarget "SubByAudiocraftTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				62B658EB8FFACFD869029CEA /* Debug */,
+				DD46BD49E5C4426AC35A9AFF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		17C0C575FC1459F7363C3D49 /* XCRemoteSwiftPackageReference "WhisperKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/argmaxinc/WhisperKit";
+			requirement = {
+				kind = exactVersion;
+				version = 1.0.0;
+			};
+		};
+		BA6D70EA1340A590E9E9B1C0 /* XCRemoteSwiftPackageReference "mlx-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift";
+			requirement = {
+				kind = exactVersion;
+				version = 0.31.4;
+			};
+		};
+		BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/soniqo/speech-swift";
+			requirement = {
+				kind = exactVersion;
+				version = 0.0.23;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		02BD014D1358A24FF8462380 /* MLXNN */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BA6D70EA1340A590E9E9B1C0 /* XCRemoteSwiftPackageReference "mlx-swift" */;
+			productName = MLXNN;
+		};
+		3D08729D95B235A5BDFF2B37 /* WhisperKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 17C0C575FC1459F7363C3D49 /* XCRemoteSwiftPackageReference "WhisperKit" */;
+			productName = WhisperKit;
+		};
+		9E6DF0C1D2A135131EFB3256 /* Qwen3ASR */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */;
+			productName = Qwen3ASR;
+		};
+		AC74CD4AC93E7E0A8047390F /* SourceSeparation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */;
+			productName = SourceSeparation;
+		};
+		ADB562BAB379CCE9603C668E /* AudioCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */;
+			productName = AudioCommon;
+		};
+		E495773F7EBD20E5B13E88DF /* MLX */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = BA6D70EA1340A590E9E9B1C0 /* XCRemoteSwiftPackageReference "mlx-swift" */;
+			productName = MLX;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 40725CB2BA92920057DBF134 /* Project object */;
+}
