@@ -59,7 +59,7 @@
 		E3A72AB95FDBA7F439E5DCF9 /* SpaceMono-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F7D599528C193490C0C39D81 /* SpaceMono-Bold.ttf */; };
 		E5944D9B78D8BA3BAE0AD588 /* Parisienne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 078B42D941B2E8E7C599237E /* Parisienne-Regular.ttf */; };
 		E6BBCF82D190998B4553D6D7 /* LineEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BCDB529DBEC6F853170DF82 /* LineEditView.swift */; };
-		E772582D9FD6B500F1C2149F /* ffmpegkit in Frameworks */ = {isa = PBXBuildFile; productRef = D80B848106C6367A4C869B07 /* ffmpegkit */; };
+		E772582D9FD6B500F1C2149F /* FFmpeg-Kit in Frameworks */ = {isa = PBXBuildFile; productRef = 9E77963B748663F5131F7F75 /* FFmpeg-Kit */; };
 		E7CC75183A69D10E416F97DB /* SubByAudiocraftApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B5DB468C6A126CAABA252B2 /* SubByAudiocraftApp.swift */; };
 		EA97193F25A56A462C9654DC /* AlfaSlabOne-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 0D751ED37D5193E910C87452 /* AlfaSlabOne-Regular.ttf */; };
 		ECC4DD306A28233562265B2F /* PlayfairDisplay-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3E6BAA95CDEDB30B5941D080 /* PlayfairDisplay-Regular.ttf */; };
@@ -153,7 +153,7 @@
 				3D09E46DFD0C47C8BAE7791B /* WhisperKit in Frameworks */,
 				C42FA5134A00E918AEBB6F31 /* Qwen3ASR in Frameworks */,
 				B06334680C68458934786BC9 /* MLX in Frameworks */,
-				E772582D9FD6B500F1C2149F /* ffmpegkit in Frameworks */,
+				E772582D9FD6B500F1C2149F /* FFmpeg-Kit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -279,7 +279,7 @@
 				3D08729D95B235A5BDFF2B37 /* WhisperKit */,
 				9E6DF0C1D2A135131EFB3256 /* Qwen3ASR */,
 				E495773F7EBD20E5B13E88DF /* MLX */,
-				D80B848106C6367A4C869B07 /* ffmpegkit */,
+				9E77963B748663F5131F7F75 /* FFmpeg-Kit */,
 			);
 			productName = SubByAudiocraft;
 			productReference = 19A3C7089D00F16934C15040 /* SubByAudiocraft.app */;
@@ -578,10 +578,10 @@
 			package = BEFB75F84C28B814BD79140A /* XCRemoteSwiftPackageReference "speech-swift" */;
 			productName = Qwen3ASR;
 		};
-		D80B848106C6367A4C869B07 /* ffmpegkit */ = {
+		9E77963B748663F5131F7F75 /* FFmpeg-Kit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BDA38EA6F64D22B46D720012 /* XCRemoteSwiftPackageReference "ffmpeg-kit-spm" */;
-			productName = ffmpegkit;
+			productName = "FFmpeg-Kit";
 		};
 		E495773F7EBD20E5B13E88DF /* MLX */ = {
 			isa = XCSwiftPackageProductDependency;

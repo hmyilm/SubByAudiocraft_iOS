@@ -43,7 +43,7 @@ targets:
       - package: MLXSwift
         product: MLX
       - package: FFmpegKit
-        product: ffmpegkit
+        product: FFmpeg-Kit
     info:
       path: SubByAudiocraft/Info.plist
       properties:
