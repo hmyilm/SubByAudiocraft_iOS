@@ -15,8 +15,8 @@ packages:
     url: https://github.com/ml-explore/mlx-swift
     exactVersion: 0.31.4
   FFmpegKit:
-    url: https://github.com/kingslay/FFmpegKit.git
-    exactVersion: 6.0.0
+    url: https://github.com/tylerjonesio/ffmpeg-kit-spm.git
+    exactVersion: 5.1.2
 targets:
   SubByAudiocraft:
     type: application
