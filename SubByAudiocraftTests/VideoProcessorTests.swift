@@ -1505,15 +1505,15 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(dialogues.count, words.count)
         XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\an5\\pos(304,925)") })
         XCTAssertTrue(dialogues[0].hasSuffix("}Kara"))
-        XCTAssertTrue(dialogues[1].contains("Kara\\h{\\fnPoppins-Bold\\fs70\\fscx100\\fscy100\\b700\\c&H"))
+        XCTAssertTrue(dialogues[1].contains("Kara\\h{\\fnPoppins\\fs70\\fscx100\\fscy100\\b700\\c&H"))
         XCTAssertTrue(dialogues[1].hasSuffix("}Sevda"))
-        XCTAssertTrue(dialogues[2].contains("Kara\\hSevda\\h{\\fnPoppins-Bold\\fs70\\fscx100\\fscy100\\b700\\c&H"))
+        XCTAssertTrue(dialogues[2].contains("Kara\\hSevda\\h{\\fnPoppins\\fs70\\fscx100\\fscy100\\b700\\c&H"))
         XCTAssertTrue(dialogues[2].hasSuffix("}İçimde"))
         XCTAssertFalse(dialogues.contains { $0.hasSuffix("}K") || $0.hasSuffix("}Ka") })
         XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\bord0\\shad0") })
-        XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\fnPoppins-Light\\b100") })
+        XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\fnPoppins\\b100") })
         XCTAssertTrue(dialogues.allSatisfy {
-            $0.contains("\\fnPoppins-Bold\\fs70\\fscx100\\fscy100\\b700")
+            $0.contains("\\fnPoppins\\fs70\\fscx100\\fscy100\\b700")
         })
         XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\fs70\\fscx100\\fscy100") })
         XCTAssertFalse(ass.contains("\\shad1.5"))
@@ -1538,7 +1538,7 @@ final class VideoProcessorTests: XCTestCase {
 
         XCTAssertTrue(ass.contains("\\fnGeorgia\\b400"))
         XCTAssertTrue(
-            ass.contains("\\fnGeorgia-Bold\\fs72\\fscx100\\fscy100\\b700")
+            ass.contains("\\fnGeorgia\\fs72\\fscx100\\fscy100\\b700")
         )
         XCTAssertFalse(ass.contains("Times New Roman"))
         XCTAssertFalse(ass.contains("Helvetica"))
@@ -1714,8 +1714,8 @@ final class VideoProcessorTests: XCTestCase {
             accent: .violet
         )
         XCTAssertTrue(boldFaceClassic.contains("\\b700\\c&HFA8BA7&"))
-        XCTAssertTrue(boldFaceClassic.contains("\\fnMontserrat-Light\\fs70\\b100"))
-        XCTAssertTrue(boldFaceClassic.contains("\\fnMontserrat-Bold\\fs70\\b700"))
+        XCTAssertTrue(boldFaceClassic.contains("\\fnMontserrat\\fs70\\b100"))
+        XCTAssertTrue(boldFaceClassic.contains("\\fnMontserrat\\fs70\\b700"))
         XCTAssertFalse(boldFaceClassic.contains("\\bord0.8"))
 
         let kinetic = VideoProcessor.shared.makeKineticDialogues(
@@ -2257,6 +2257,11 @@ final class FontCatalogTests: XCTestCase {
         XCTAssertEqual(georgia.availableWeights, [.regular, .bold])
         XCTAssertEqual(georgia.assTag(for: .regular), "\\b400")
         XCTAssertEqual(georgia.assTag(for: .bold), "\\b700")
+        XCTAssertEqual(FontCatalog.assFamilyName(for: georgia.psName), "Georgia")
+        XCTAssertNotEqual(
+            FontCatalog.assFamilyName(for: georgia.psName),
+            georgia.boldPSName
+        )
         XCTAssertEqual(
             FontCatalog.renderPSNames(for: georgia.psName),
             ["Georgia", "Georgia-Bold"]

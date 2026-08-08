@@ -979,72 +979,10 @@ struct SubtitlePreviewPlayer: View {
                             Text(sampleText)
                                 .foregroundColor(.white)
                         } else {
-                            VStack(spacing: max(1, viewport.height / 120)) {
-                                ForEach(
-                                    Array(classicPreviewRows.enumerated()),
-                                    id: \.offset
-                                ) { row in
-                                    HStack(spacing: max(2, CGFloat(fontSize) * 0.28 * previewScale)) {
-                                        ForEach(row.element) { word in
-                                            if lyricTrackingMode == .karaoke {
-                                                ClassicCharacterTrackingWord(
-                                                    text: word.text,
-                                                    start: word.start,
-                                                    end: word.end,
-                                                    playbackTime: playbackTime
-                                                )
-                                            } else {
-                                                let isBoldActive = lyricTrackingMode == .boldWord
-                                                    && playbackTime >= word.start
-                                                    && playbackTime < word.end
-                                                if lyricTrackingMode == .boldWord {
-                                                    // Thin metnin ölçüsüne kurulan overlay, Georgia-Bold
-                                                    // daha geniş olduğunda yazıyı sıkıştırıyordu. İki yüz
-                                                    // aynı ZStack'te ölçülür; kutu büyük olan yüze göre sabit
-                                                    // kalır ve yalnız görünürlük değişir.
-                                                    ZStack {
-                                                        Text(word.text)
-                                                            .font(
-                                                                .custom(
-                                                                    thinPreviewFontName,
-                                                                    size: CGFloat(fontSize) * previewScale
-                                                                )
-                                                            )
-                                                            .fontWeight(
-                                                                hasRealThinPreviewFace ? nil : .regular
-                                                            )
-                                                            .foregroundColor(.white)
-                                                            .opacity(isBoldActive ? 0 : 1)
-
-                                                        Text(word.text)
-                                                            .font(
-                                                                .custom(
-                                                                    boldPreviewFontName,
-                                                                    size: CGFloat(fontSize) * previewScale
-                                                                )
-                                                            )
-                                                            .fontWeight(
-                                                                hasRealBoldPreviewFace ? nil : .bold
-                                                            )
-                                                            .foregroundColor(resolvedPreviewAccent)
-                                                            .opacity(isBoldActive ? 1 : 0)
-                                                    }
-                                                } else {
-                                                    Text(word.text)
-                                                        .font(
-                                                            .custom(
-                                                                fontName,
-                                                                size: CGFloat(fontSize) * previewScale
-                                                            )
-                                                        )
-                                                        .foregroundColor(.white)
-                                                }
-                                            }
-                                        }
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                                }
-                            }
+                            classicRowsPreview(
+                                previewScale: previewScale,
+                                viewportHeight: viewport.height
+                            )
                         }
                     }
                         .font(
@@ -1090,24 +1028,31 @@ struct SubtitlePreviewPlayer: View {
         )
     }
 
+    private func classicRowsPreview(
+        previewScale: CGFloat,
+        viewportHeight: CGFloat
+    ) -> some View {
+        VStack(spacing: max(1, viewportHeight / 120)) {
+            ForEach(Array(classicPreviewRows.enumerated()), id: \.offset) { row in
+                ClassicSubtitleRowPreview(
+                    words: row.element,
+                    playbackTime: playbackTime,
+                    trackingMode: lyricTrackingMode,
+                    accent: resolvedPreviewAccent,
+                    fontName: fontName,
+                    fontSize: CGFloat(fontSize) * previewScale
+                )
+                .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+    }
+
     private var regularPreviewFontName: String {
         FontCatalog.regularPSName(for: fontName)
     }
 
-    private var boldPreviewFontName: String {
-        FontCatalog.boldPSName(for: fontName) ?? regularPreviewFontName
-    }
-
     private var thinPreviewFontName: String {
         FontCatalog.faceName(for: fontName, weight: .thin)
-    }
-
-    private var hasRealBoldPreviewFace: Bool {
-        FontCatalog.boldPSName(for: fontName) != nil
-    }
-
-    private var hasRealThinPreviewFace: Bool {
-        FontCatalog.thinPSName(for: fontName) != nil
     }
 
     private var resolvedPreviewAccent: Color {
@@ -1249,6 +1194,96 @@ private struct CenteredRevealPreview: View {
             String(latest),
             text
         )
+    }
+}
+
+private struct ClassicSubtitleRowPreview: View {
+    let words: [VideoProcessor.WordTimestamp]
+    let playbackTime: Double
+    let trackingMode: LyricTrackingMode
+    let accent: Color
+    let fontName: String
+    let fontSize: CGFloat
+
+    var body: some View {
+        Group {
+            if trackingMode == .boldWord {
+                BoldWordRowPreview(
+                    words: words,
+                    playbackTime: playbackTime,
+                    accent: accent,
+                    fontName: fontName,
+                    fontSize: fontSize
+                )
+            } else {
+                HStack(spacing: max(2, fontSize * 0.28)) {
+                    ForEach(words) { word in
+                        if trackingMode == .karaoke {
+                            ClassicCharacterTrackingWord(
+                                text: word.text,
+                                start: word.start,
+                                end: word.end,
+                                playbackTime: playbackTime
+                            )
+                        } else {
+                            Text(word.text)
+                                .font(.custom(fontName, size: fontSize))
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Cümle + Kalın: bütün satır tek Text koşusu olarak dizilir. Böylece kelime
+// aralıkları sabit HStack değeri değil, seçilen fontun gerçek boşluk glifidir.
+private struct BoldWordRowPreview: View {
+    let words: [VideoProcessor.WordTimestamp]
+    let playbackTime: Double
+    let accent: Color
+    let fontName: String
+    let fontSize: CGFloat
+
+    var body: some View {
+        renderedText
+            .lineLimit(1)
+            .minimumScaleFactor(0.45)
+            .contentTransition(.interpolate)
+    }
+
+    private var renderedText: Text {
+        words.enumerated().reduce(Text("")) { result, item in
+            let word = item.element
+            let active = playbackTime >= word.start && playbackTime < word.end
+            let separator = item.offset == 0
+                ? Text("")
+                : Text("\u{00A0}")
+                    .font(.custom(inactiveFaceName, size: fontSize))
+                    .fontWeight(inactiveFallbackWeight)
+            let run = Text(word.text)
+                .font(.custom(active ? activeFaceName : inactiveFaceName, size: fontSize))
+                .fontWeight(active ? activeFallbackWeight : inactiveFallbackWeight)
+                .foregroundColor(active ? accent : .white)
+            return result + separator + run
+        }
+    }
+
+    private var inactiveFaceName: String {
+        FontCatalog.faceName(for: fontName, weight: .thin)
+    }
+
+    private var activeFaceName: String {
+        FontCatalog.faceName(for: fontName, weight: .bold)
+    }
+
+    private var inactiveFallbackWeight: Font.Weight? {
+        FontCatalog.thinPSName(for: fontName) == nil ? .regular : nil
+    }
+
+    private var activeFallbackWeight: Font.Weight? {
+        FontCatalog.boldPSName(for: fontName) == nil ? .bold : nil
     }
 }
 

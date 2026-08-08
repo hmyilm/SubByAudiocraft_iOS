@@ -224,6 +224,13 @@ enum FontCatalog {
         secenek(selection)?.assTag(for: weight) ?? weight.assTag
     }
 
+    // ASS/libass \fn etiketi PostScript yüz adı değil aile adı bekler.
+    // Örneğin iOS önizlemesi Georgia-Bold kullanırken final render
+    // \fnGeorgia\b700 kullanmalıdır; aksi halde libass sans-serif yedeğe düşer.
+    static func assFamilyName(for selection: String) -> String {
+        secenek(selection)?.assFamily ?? selection
+    }
+
     static func renderPSNames(for selection: String) -> [String] {
         guard let option = secenek(selection) else { return [selection] }
         // Seçilen yüzü (ör. ExtraBold/Black) mutlaka kopyala. Önceki sürüm yalnız

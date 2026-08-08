@@ -4599,13 +4599,12 @@ class VideoProcessor: ObservableObject {
                 let wordStartText = formatASSTime(wordStart)
                 let wordEndText = formatASSTime(wordEnd)
                 let hasActiveInterval = wordStartText != wordEndText
-                let thinFontName = FontCatalog.faceName(for: fontName, weight: .thin)
-                let boldFontName = FontCatalog.faceName(for: fontName, weight: .bold)
+                let assFamilyName = FontCatalog.assFamilyName(for: fontName)
                 let thinWeightTag = FontCatalog.assTag(for: fontName, weight: .thin)
                 let boldWeightTag = FontCatalog.assTag(for: fontName, weight: .bold)
 
                 let unactiveTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fn\(thinFontName)\\fs\(fontSize)\(thinWeightTag)\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
+                    "\\fn\(assFamilyName)\\fs\(fontSize)\(thinWeightTag)\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
 
                 if !hasActiveInterval {
                     result += "Dialogue: 1,\(segmentStartText)," +
@@ -4626,7 +4625,7 @@ class VideoProcessor: ObservableObject {
                 }
 
                 let boldTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fn\(boldFontName)\\fs\(fontSize)\(boldWeightTag)\\c&H\(resolvedAccent.assColor)&" +
+                    "\\fn\(assFamilyName)\\fs\(fontSize)\(boldWeightTag)\\c&H\(resolvedAccent.assColor)&" +
                     "\(extraTags)\\bord0\\shad0}"
                 result += "Dialogue: 2,\(wordStartText)," +
                     "\(wordEndText),Default,,0,0,0,," +
@@ -4917,8 +4916,7 @@ class VideoProcessor: ObservableObject {
         guard !events.isEmpty else { return "" }
 
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
-        let thinFontName = FontCatalog.faceName(for: fontName, weight: .thin)
-        let boldFontName = FontCatalog.faceName(for: fontName, weight: .bold)
+        let assFamilyName = FontCatalog.assFamilyName(for: fontName)
         let thinWeightTag = FontCatalog.assTag(for: fontName, weight: .thin)
         let boldWeightTag = FontCatalog.assTag(for: fontName, weight: .bold)
         let centerX = virtualWidth / 2
@@ -4939,9 +4937,9 @@ class VideoProcessor: ObservableObject {
             let durationMs = max(10, Int((eventEnd - eventStart) * 1000))
             let settleMs = min(110, durationMs)
             let baseTags = "{\\an5\\pos(\(centerX),\(centerY))" +
-                "\\fs\(fontSize)\\fscx100\\fscy100\\fn\(thinFontName)\(thinWeightTag)" +
+                "\\fs\(fontSize)\\fscx100\\fscy100\\fn\(assFamilyName)\(thinWeightTag)" +
                 "\\c&HFFFFFF&\\bord0\\shad0}"
-            let latestTags = "{\\fn\(boldFontName)\\fs\(fontSize)\\fscx100\\fscy100" +
+            let latestTags = "{\\fn\(assFamilyName)\\fs\(fontSize)\\fscx100\\fscy100" +
                 "\(boldWeightTag)\\c&H\(resolvedAccent.assColor)&\\alpha&H18&" +
                 "\\blur0.7" +
                 "\\t(0,\(settleMs),1.5,\\c&HFFFFFF&\\alpha&H00&" +
