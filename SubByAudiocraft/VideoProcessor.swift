@@ -4598,9 +4598,9 @@ class VideoProcessor: ObservableObject {
             let shadowHeight = max(20, min(virtualHeight - shadowTop - 4, rawBottom - shadowTop))
             let shadowAlpha: String
             switch intensity {
-            case .subtle: shadowAlpha = "98"
-            case .balanced: shadowAlpha = "88"
-            case .energetic: shadowAlpha = "78"
+            case .subtle: shadowAlpha = "C2"
+            case .balanced: shadowAlpha = "B8"
+            case .energetic: shadowAlpha = "AB"
             }
             result += kineticOverlayShapeDialogue(
                 layer: 0,

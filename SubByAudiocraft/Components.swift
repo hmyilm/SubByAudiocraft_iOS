@@ -1041,7 +1041,8 @@ struct SubtitlePreviewPlayer: View {
                     accent: resolvedPreviewAccent,
                     fontName: fontName,
                     fontSize: CGFloat(fontSize) * previewScale,
-                    showsUnderShadow: kineticOverlayStyle == .underShadow
+                    showsUnderShadow: kineticOverlayStyle == .underShadow,
+                    shadowIntensity: kineticIntensity
                 )
                 .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -1206,6 +1207,7 @@ private struct ClassicSubtitleRowPreview: View {
     let fontName: String
     let fontSize: CGFloat
     let showsUnderShadow: Bool
+    let shadowIntensity: KineticIntensity
 
     var body: some View {
         Group {
@@ -1216,7 +1218,8 @@ private struct ClassicSubtitleRowPreview: View {
                     accent: accent,
                     fontName: fontName,
                     fontSize: fontSize,
-                    showsUnderShadow: showsUnderShadow
+                    showsUnderShadow: showsUnderShadow,
+                    shadowIntensity: shadowIntensity
                 )
             } else {
                 HStack(spacing: max(2, fontSize * 0.28)) {
@@ -1251,6 +1254,7 @@ private struct BoldWordRowPreview: View {
     let fontName: String
     let fontSize: CGFloat
     let showsUnderShadow: Bool
+    let shadowIntensity: KineticIntensity
 
     var body: some View {
         HStack(spacing: 0) {
@@ -1278,7 +1282,7 @@ private struct BoldWordRowPreview: View {
         .background {
             if showsUnderShadow {
                 RoundedRectangle(cornerRadius: max(4, fontSize * 0.14))
-                    .fill(Color.black.opacity(0.48))
+                    .fill(Color.black.opacity(shadowOpacity))
                     .padding(.horizontal, -max(7, fontSize * 0.18))
                     .padding(.vertical, -max(3, fontSize * 0.09))
                     .offset(y: max(2, fontSize * 0.08))
@@ -1293,6 +1297,14 @@ private struct BoldWordRowPreview: View {
 
     private var activeFaceName: String {
         FontCatalog.faceName(for: fontName, weight: .bold)
+    }
+
+    private var shadowOpacity: Double {
+        switch shadowIntensity {
+        case .subtle: return 0.24
+        case .balanced: return 0.28
+        case .energetic: return 0.33
+        }
     }
 
     private var inactiveFallbackWeight: Font.Weight? {
