@@ -1505,15 +1505,43 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(dialogues.count, words.count)
         XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\an5\\pos(304,925)") })
         XCTAssertTrue(dialogues[0].hasSuffix("}Kara"))
-        XCTAssertTrue(dialogues[1].contains("Kara\\h{\\fnPoppins-Bold\\b700\\c&H"))
+        XCTAssertTrue(dialogues[1].contains("Kara\\h{\\fnPoppins-Bold\\fs70\\fscx100\\fscy100\\b700\\c&H"))
         XCTAssertTrue(dialogues[1].hasSuffix("}Sevda"))
-        XCTAssertTrue(dialogues[2].contains("Kara\\hSevda\\h{\\fnPoppins-Bold\\b700\\c&H"))
+        XCTAssertTrue(dialogues[2].contains("Kara\\hSevda\\h{\\fnPoppins-Bold\\fs70\\fscx100\\fscy100\\b700\\c&H"))
         XCTAssertTrue(dialogues[2].hasSuffix("}İçimde"))
         XCTAssertFalse(dialogues.contains { $0.hasSuffix("}K") || $0.hasSuffix("}Ka") })
         XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\bord0\\shad0") })
         XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\fnPoppins-Light\\b100") })
-        XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\fnPoppins-Bold\\b700") })
+        XCTAssertTrue(dialogues.allSatisfy {
+            $0.contains("\\fnPoppins-Bold\\fs70\\fscx100\\fscy100\\b700")
+        })
+        XCTAssertTrue(dialogues.allSatisfy { $0.contains("\\fs70\\fscx100\\fscy100") })
         XCTAssertFalse(ass.contains("\\shad1.5"))
+    }
+
+    func testCenteredWordRevealKeepsGeorgiaFamilyAndUniformActiveSize() {
+        let words = [
+            VideoProcessor.WordTimestamp(text: "Nasılsın?", start: 0.2, end: 0.8),
+            VideoProcessor.WordTimestamp(text: "İyiyim", start: 0.9, end: 1.5)
+        ]
+
+        let ass = VideoProcessor.shared.makeCenteredWordRevealDialogues(
+            group: words,
+            segStart: 0.1,
+            segEnd: 1.8,
+            fontName: "Georgia",
+            fontSize: 72,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080
+        )
+
+        XCTAssertTrue(ass.contains("\\fnGeorgia\\b400"))
+        XCTAssertTrue(
+            ass.contains("\\fnGeorgia-Bold\\fs72\\fscx100\\fscy100\\b700")
+        )
+        XCTAssertFalse(ass.contains("Times New Roman"))
+        XCTAssertFalse(ass.contains("Helvetica"))
     }
 
     func testEveryTrackingModeHasAFunctionalRenderingPath() {
@@ -1658,7 +1686,7 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(classicDialogues.count, 9)
         XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 1,") }.count, 6)
         XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 2,") }.count, 3)
-        XCTAssertTrue(classic.contains("\\fs70\\b300"))
+        XCTAssertTrue(classic.contains("\\fs70\\b400"))
         XCTAssertTrue(classic.contains("\\fs70\\b700"))
         XCTAssertTrue(classicDialogues.contains { $0.hasSuffix("}kara") })
         XCTAssertFalse(classic.contains("kara sevda içimde"))
@@ -1734,7 +1762,7 @@ final class VideoProcessorTests: XCTestCase {
             let dialogues = ass.split(separator: "\n")
 
             XCTAssertEqual(dialogues.count, 6, font.display)
-            let expectedThinTag = font.hasRealThinFace ? "\\b100" : "\\b300"
+            let expectedThinTag = font.hasRealThinFace ? "\\b100" : "\\b400"
             XCTAssertTrue(ass.contains("\(expectedThinTag)\\c&HFFFFFF&"), font.display)
             XCTAssertTrue(ass.contains("\\b700\\c&HA5E654&"), font.display)
             XCTAssertFalse(ass.contains("\\fscx104"), font.display)
@@ -2225,7 +2253,8 @@ final class FontCatalogTests: XCTestCase {
         XCTAssertEqual(georgia.faceName(for: .regular), "Georgia")
         XCTAssertEqual(georgia.faceName(for: .bold), "Georgia-Bold")
         XCTAssertTrue(georgia.hasRealFace(for: .bold))
-        XCTAssertEqual(georgia.assTag(for: .thin), "\\b300")
+        XCTAssertEqual(georgia.assTag(for: .thin), "\\b400")
+        XCTAssertEqual(georgia.availableWeights, [.regular, .bold])
         XCTAssertEqual(georgia.assTag(for: .regular), "\\b400")
         XCTAssertEqual(georgia.assTag(for: .bold), "\\b700")
         XCTAssertEqual(

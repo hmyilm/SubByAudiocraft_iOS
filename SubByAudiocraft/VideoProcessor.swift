@@ -4939,8 +4939,10 @@ class VideoProcessor: ObservableObject {
             let durationMs = max(10, Int((eventEnd - eventStart) * 1000))
             let settleMs = min(110, durationMs)
             let baseTags = "{\\an5\\pos(\(centerX),\(centerY))" +
-                "\\fs\(fontSize)\\fn\(thinFontName)\(thinWeightTag)\\c&HFFFFFF&\\bord0\\shad0}"
-            let latestTags = "{\\fn\(boldFontName)\(boldWeightTag)\\c&H\(resolvedAccent.assColor)&\\alpha&H18&" +
+                "\\fs\(fontSize)\\fscx100\\fscy100\\fn\(thinFontName)\(thinWeightTag)" +
+                "\\c&HFFFFFF&\\bord0\\shad0}"
+            let latestTags = "{\\fn\(boldFontName)\\fs\(fontSize)\\fscx100\\fscy100" +
+                "\(boldWeightTag)\\c&H\(resolvedAccent.assColor)&\\alpha&H18&" +
                 "\\blur0.7" +
                 "\\t(0,\(settleMs),1.5,\\c&HFFFFFF&\\alpha&H00&" +
                 "\\blur0.2)}"

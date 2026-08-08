@@ -79,6 +79,9 @@ struct FontOption: Identifiable, Hashable {
     var thinFaceName: String { thinPSName ?? regularFaceName }
     var hasRealBoldFace: Bool { boldPSName != nil }
     var hasRealThinFace: Bool { thinPSName != nil }
+    var availableWeights: [SubtitleFontWeight] {
+        hasRealThinFace ? SubtitleFontWeight.allCases : [.regular, .bold]
+    }
     var usesDistinctPrimaryFace: Bool {
         psName != regularFaceName && psName != boldPSName && psName != thinPSName
     }
@@ -101,13 +104,11 @@ struct FontOption: Identifiable, Hashable {
         }
     }
 
-    // Gerçek Thin/Light yüzü bulunmayan ailelerde 100 ağırlığı sentetik olarak
-    // fazla incelip Bold yüzden başka bir yazı tipiymiş gibi görünebiliyor.
-    // Aynı Regular yüz üzerinde 300 kullanmak harf yapısını korurken yeterli
-    // ağırlık farkını verir. Gerçek Light dosyası olan fontlar 100'ü korur.
+    // Gerçek Thin/Light yüzü bulunmayan ailelerde sentetik inceltme uygulanmaz.
+    // Pasif metin doğrudan Regular, aktif metin ailenin gerçek/sentetik Bold yüzüdür.
     func assTag(for weight: SubtitleFontWeight) -> String {
         if weight == .thin, !hasRealThinFace {
-            return "\\b300"
+            return SubtitleFontWeight.regular.assTag
         }
         return weight.assTag
     }

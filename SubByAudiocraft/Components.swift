@@ -1011,7 +1011,7 @@ struct SubtitlePreviewPlayer: View {
                                                                 )
                                                             )
                                                             .fontWeight(
-                                                                hasRealThinPreviewFace ? nil : .light
+                                                                hasRealThinPreviewFace ? nil : .regular
                                                             )
                                                             .foregroundColor(.white)
                                                             .opacity(isBoldActive ? 0 : 1)
@@ -1271,35 +1271,15 @@ private struct CenteredWordRevealPreview: View {
     var body: some View {
         VStack(spacing: 3) {
             ForEach(Array(revealedRows.enumerated()), id: \.offset) { row in
-                // Sabit piksel aralığı dar/geniş fontlarda yabancı görünüyordu.
-                // Her ayırıcıyı seçilen ailenin Thin yüzündeki gerçek boşluk glifi
-                // olarak çiz; böylece puntoyla birlikte doğal biçimde ölçeklenir.
-                HStack(spacing: 0) {
-                    ForEach(Array(row.element.enumerated()), id: \.element.id) { item in
-                        if item.offset > 0 {
-                            Text("\u{00A0}")
-                                .font(.custom(thinFaceName, size: fontSize))
-                                .fontWeight(fallbackWeight(isLatest: false))
-                                .accessibilityHidden(true)
-                        }
-                        let word = item.element
-                        let isLatest = word.id == revealedWords.last?.id
-                        Text(word.text)
-                            .font(.custom(isLatest ? boldFaceName : thinFaceName, size: fontSize))
-                            .fontWeight(fallbackWeight(isLatest: isLatest))
-                            .foregroundColor(isLatest ? accent : .white)
-                            .transition(
-                                .asymmetric(
-                                    insertion: .opacity,
-                                    removal: .opacity
-                                )
-                            )
-                    }
-                }
+                // Tek tek Text görünümleri dar alanda bağımsız küçülüyordu. Georgia
+                // Bold, Regular'dan geniş olduğu için yalnız okunan kelime daha küçük
+                // görünüyordu. Birleştirilmiş Text bütün satırı tek oranda ölçekler.
+                revealedRowText(row.element)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.45)
+                    .contentTransition(.interpolate)
             }
         }
-        .lineLimit(1)
-        .minimumScaleFactor(0.45)
         .frame(maxWidth: .infinity, alignment: .center)
         .animation(
             .spring(response: 0.24, dampingFraction: 0.82),
@@ -1337,11 +1317,28 @@ private struct CenteredWordRevealPreview: View {
         FontCatalog.faceName(for: fontName, weight: .bold)
     }
 
+    private func revealedRowText(_ row: [RevealedWord]) -> Text {
+        row.enumerated().reduce(Text("")) { result, item in
+            let word = item.element
+            let isLatest = word.id == revealedWords.last?.id
+            let separator = item.offset == 0
+                ? Text("")
+                : Text("\u{00A0}")
+                    .font(.custom(thinFaceName, size: fontSize))
+                    .fontWeight(fallbackWeight(isLatest: false))
+            let run = Text(word.text)
+                .font(.custom(isLatest ? boldFaceName : thinFaceName, size: fontSize))
+                .fontWeight(fallbackWeight(isLatest: isLatest))
+                .foregroundColor(isLatest ? accent : .white)
+            return result + separator + run
+        }
+    }
+
     private func fallbackWeight(isLatest: Bool) -> Font.Weight? {
         if isLatest {
             return FontCatalog.boldPSName(for: fontName) == nil ? .bold : nil
         }
-        return FontCatalog.thinPSName(for: fontName) == nil ? .light : nil
+        return FontCatalog.thinPSName(for: fontName) == nil ? .regular : nil
     }
 }
 

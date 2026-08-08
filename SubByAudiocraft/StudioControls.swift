@@ -668,7 +668,7 @@ struct CompactFontPicker: View {
                         .minimumScaleFactor(0.55)
 
                     HStack(spacing: 7) {
-                        ForEach(SubtitleFontWeight.allCases) { weight in
+                        ForEach(selectedFont.availableWeights) { weight in
                             Text(weight.title)
                                 .font(
                                     .custom(
@@ -799,7 +799,7 @@ struct CompactFontPicker: View {
     ) -> Font.Weight? {
         guard !font.hasRealFace(for: weight) else { return nil }
         switch weight {
-        case .thin: return .light
+        case .thin: return .regular
         case .regular: return .regular
         case .bold: return .bold
         }
@@ -979,7 +979,7 @@ private struct FontLibrarySheet: View {
                             .lineLimit(1)
                         Spacer(minLength: 0)
                         HStack(spacing: 4) {
-                            ForEach(SubtitleFontWeight.allCases) { weight in
+                            ForEach(font.availableWeights) { weight in
                                 Text(weight == .thin ? "T" : (weight == .regular ? "R" : "B"))
                                     .font(.custom(font.faceName(for: weight), size: 10))
                                     .fontWeight(previewWeight(for: font, weight: weight))
@@ -1097,7 +1097,7 @@ private struct FontLibrarySheet: View {
     ) -> Font.Weight? {
         guard !font.hasRealFace(for: weight) else { return nil }
         switch weight {
-        case .thin: return .light
+        case .thin: return .regular
         case .regular: return .regular
         case .bold: return .bold
         }
