@@ -233,8 +233,9 @@ enum FontCatalog {
 
     // Gerçek Bold kesit bazı ailelerde (Georgia gibi) Regular ile aynı puntoya
     // sahip olsa da belirgin biçimde daha geniştir. Cümle + Kalın modunda yalnız
-    // yatay ekseni Regular kelimenin ilerleme genişliğine sığdırırız. Dikey
-    // ölçek daima %100 kalır; böylece yazı boyu ve satır tabanı değişmez.
+    // yatay ekseni Regular kelimenin ilerleme genişliğine yaklaştırırız. Bold
+    // vurgunun okunması için Regular genişliğinin %5 fazlasına izin verilir.
+    // Dikey ölçek daima %100 kalır; yazı boyu ve satır tabanı değişmez.
     static func boldHorizontalScale(
         for text: String,
         selection: String
@@ -271,7 +272,8 @@ enum FontCatalog {
               boldWidth > regularWidth else {
             return 1
         }
-        return min(1, max(0.65, regularWidth / boldWidth))
+        let emphasisWidthBoost: CGFloat = 1.05
+        return min(1, max(0.65, (regularWidth * emphasisWidthBoost) / boldWidth))
     }
 
     static func renderPSNames(for selection: String) -> [String] {

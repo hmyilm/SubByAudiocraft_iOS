@@ -2289,7 +2289,7 @@ final class FontCatalogTests: XCTestCase {
             for: "yaşar",
             selection: georgia.psName
         )
-        XCTAssertGreaterThan(horizontalScale, 0.70)
+        XCTAssertGreaterThan(horizontalScale, 0.85)
         XCTAssertLessThan(horizontalScale, 0.95)
     }
 
