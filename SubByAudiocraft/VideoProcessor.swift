@@ -398,12 +398,22 @@ enum KineticOverlayStyle: String, CaseIterable, Identifiable, Codable {
         case .spotlight:
             return "Söylenen kelimenin arkasında ritimle değişen kontrollü bir odak plakası kullanır."
         case .underShadow:
-            return "Okunan kelimenin hemen altında hafif koyu, yumuşak bir derinlik oluşturur; renk vurgusunu boğmaz."
+            return "Moda göre altyazı bloğunun veya aktif kelimenin altında yumuşak koyu bir derinlik oluşturur; renk vurgusunu boğmaz."
         }
     }
 
     var requiresKaraokeTracking: Bool {
         self == .spotlight || self == .underShadow
+    }
+
+    func isAvailable(for trackingMode: LyricTrackingMode) -> Bool {
+        if trackingMode == .boldWord {
+            return self == .none || self == .underShadow
+        }
+        if requiresKaraokeTracking {
+            return trackingMode == .karaoke
+        }
+        return true
     }
 
     func resolved(for scene: KineticScene) -> KineticOverlayStyle {
@@ -839,7 +849,7 @@ class VideoProcessor: ObservableObject {
         trackingMode: LyricTrackingMode
     ) -> KineticOverlayStyle {
         let resolved = requested.resolved(for: plan)
-        if trackingMode != .karaoke, resolved.requiresKaraokeTracking {
+        if !resolved.isAvailable(for: trackingMode) {
             return .none
         }
         return resolved
@@ -4516,7 +4526,9 @@ class VideoProcessor: ObservableObject {
         inlineLineBreaks: Set<UUID> = [],
         extraTags: String = "",
         accent: KineticAccent = .gold,
-        customColorHex: String = KineticAccent.defaultCustomHex
+        customColorHex: String = KineticAccent.defaultCustomHex,
+        overlayStyle: KineticOverlayStyle = .none,
+        intensity: KineticIntensity = .balanced
     ) -> String {
         struct BoldWordItem {
             let word: WordTimestamp
@@ -4557,18 +4569,60 @@ class VideoProcessor: ObservableObject {
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
         var result = ""
 
-        for (rowIndex, items) in itemsByRow.enumerated() {
-            let rowText = rowTexts[rowIndex]
-            let measurement = harfSinirlariniOlc(
-                metin: rowText,
+        let rowMeasurements = rowTexts.map {
+            harfSinirlariniOlc(
+                metin: $0,
                 fontName: fontName,
                 assFontSize: fontSize
             )
+        }
+        let rowWidths = rowTexts.enumerated().map { rowIndex, rowText in
             let estimatedWidth = min(
                 maximumWidth,
                 max(24.0, Double(max(1, rowText.utf16.count)) * Double(fontSize) * 0.56)
             )
-            let lineWidth = measurement?.genislik ?? estimatedWidth
+            return rowMeasurements[rowIndex]?.genislik ?? estimatedWidth
+        }
+
+        // Cümle + Kalın modunda Alt Gölge aktif kelimeyi kovalamaz. Tüm görsel
+        // satırları tek, sabit bir blok olarak segment boyunca arkadan destekler.
+        if overlayStyle == .underShadow, let widestRow = rowWidths.max() {
+            let shadowWidth = min(
+                max(24, virtualWidth - 8),
+                max(24, Int(ceil(widestRow)) + 26)
+            )
+            let topBaseline = baselineY - ((itemsByRow.count - 1) * rowGap)
+            let rawTop = topBaseline - Int((Double(fontSize) * 0.72).rounded()) + 5
+            let rawBottom = baselineY + Int((Double(fontSize) * 0.20).rounded()) + 5
+            let shadowTop = max(4, rawTop)
+            let shadowHeight = max(20, min(virtualHeight - shadowTop - 4, rawBottom - shadowTop))
+            let shadowAlpha: String
+            switch intensity {
+            case .subtle: shadowAlpha = "98"
+            case .balanced: shadowAlpha = "88"
+            case .energetic: shadowAlpha = "78"
+            }
+            result += kineticOverlayShapeDialogue(
+                layer: 0,
+                start: segStart,
+                end: segEnd,
+                bounds: KineticOverlayBounds(
+                    left: max(4, (virtualWidth - shadowWidth) / 2),
+                    top: shadowTop,
+                    width: shadowWidth,
+                    height: shadowHeight,
+                    radius: max(7, min(18, shadowHeight / 5))
+                ),
+                color: "000000",
+                alpha: shadowAlpha,
+                extraTags: "\\blur6\\fad(55,90)"
+            )
+        }
+
+        for (rowIndex, items) in itemsByRow.enumerated() {
+            let rowText = rowTexts[rowIndex]
+            let measurement = rowMeasurements[rowIndex]
+            let lineWidth = rowWidths[rowIndex]
             let lineLeft = (Double(virtualWidth) - lineWidth) / 2
             let rowY = baselineY - ((itemsByRow.count - rowIndex - 1) * rowGap)
 
@@ -5248,7 +5302,9 @@ class VideoProcessor: ObservableObject {
                     virtualHeight: virtualHeight,
                     inlineLineBreaks: inlineLineBreaks,
                     accent: kineticAccent,
-                    customColorHex: kineticCustomColorHex
+                    customColorHex: kineticCustomColorHex,
+                    overlayStyle: kineticOverlayStyle,
+                    intensity: kineticIntensity
                 )
                 continue
             }

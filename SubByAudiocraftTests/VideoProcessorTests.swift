@@ -2012,7 +2012,9 @@ final class VideoProcessorTests: XCTestCase {
             )
             XCTAssertEqual(
                 underShadow,
-                trackingMode == .karaoke ? .underShadow : .none
+                trackingMode == .karaoke || trackingMode == .boldWord
+                    ? .underShadow
+                    : .none
             )
         }
     }
@@ -2090,6 +2092,26 @@ final class VideoProcessorTests: XCTestCase {
         )
         XCTAssertTrue(ass.contains("\\c&H000000&"))
         XCTAssertTrue(ass.contains("\\blur5.5"))
+
+        let boldWord = VideoProcessor.shared.makeBoldWordDialogues(
+            group: words,
+            segStart: 0,
+            segEnd: 1.4,
+            fontName: "Georgia",
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            inlineLineBreaks: Set([words[0].id]),
+            overlayStyle: .underShadow,
+            intensity: .balanced
+        )
+        XCTAssertEqual(
+            boldWord.components(separatedBy: "\\alpha&H88&").count - 1,
+            1
+        )
+        XCTAssertTrue(boldWord.contains("Dialogue: 0,"))
+        XCTAssertTrue(boldWord.contains("\\blur6"))
 
         let trackingOff = VideoProcessor.shared.makeKineticDialogues(
             group: words,

@@ -1040,7 +1040,8 @@ struct SubtitlePreviewPlayer: View {
                     trackingMode: lyricTrackingMode,
                     accent: resolvedPreviewAccent,
                     fontName: fontName,
-                    fontSize: CGFloat(fontSize) * previewScale
+                    fontSize: CGFloat(fontSize) * previewScale,
+                    showsUnderShadow: kineticOverlayStyle == .underShadow
                 )
                 .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -1204,6 +1205,7 @@ private struct ClassicSubtitleRowPreview: View {
     let accent: Color
     let fontName: String
     let fontSize: CGFloat
+    let showsUnderShadow: Bool
 
     var body: some View {
         Group {
@@ -1213,7 +1215,8 @@ private struct ClassicSubtitleRowPreview: View {
                     playbackTime: playbackTime,
                     accent: accent,
                     fontName: fontName,
-                    fontSize: fontSize
+                    fontSize: fontSize,
+                    showsUnderShadow: showsUnderShadow
                 )
             } else {
                 HStack(spacing: max(2, fontSize * 0.28)) {
@@ -1247,6 +1250,7 @@ private struct BoldWordRowPreview: View {
     let accent: Color
     let fontName: String
     let fontSize: CGFloat
+    let showsUnderShadow: Bool
 
     var body: some View {
         HStack(spacing: 0) {
@@ -1271,6 +1275,16 @@ private struct BoldWordRowPreview: View {
             }
         }
         .fixedSize(horizontal: true, vertical: true)
+        .background {
+            if showsUnderShadow {
+                RoundedRectangle(cornerRadius: max(4, fontSize * 0.14))
+                    .fill(Color.black.opacity(0.48))
+                    .padding(.horizontal, -max(7, fontSize * 0.18))
+                    .padding(.vertical, -max(3, fontSize * 0.09))
+                    .offset(y: max(2, fontSize * 0.08))
+                    .blur(radius: max(2, fontSize * 0.055))
+            }
+        }
     }
 
     private var inactiveFaceName: String {

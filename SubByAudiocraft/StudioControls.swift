@@ -83,12 +83,16 @@ struct StudioTypographyControls: View {
                 accentControls
             }
 
+            if lyricTrackingMode == .boldWord {
+                boldWordReadabilityControls
+            }
+
             if usesKineticDirectorControls {
                 advancedControls
             }
         }
         .onChange(of: lyricTrackingMode) {
-            if lyricTrackingMode != .karaoke, kineticOverlayStyle.requiresKaraokeTracking {
+            if !kineticOverlayStyle.isAvailable(for: lyricTrackingMode) {
                 kineticOverlayStyle = .none
             }
         }
@@ -559,7 +563,7 @@ struct StudioTypographyControls: View {
                 ? "Cümle sabit kalır; vokal ilerledikçe harfler soldan sağa takip edilir."
                 : "Kinetik kompozisyon içinde söylenen kelime zamanına göre takip edilir."
         case .boldWord:
-            return "Tam cümle sabit kalır; aktif kelime Regular kopyanın yerini alır, Bold ve %4 büyük olarak seçilen renkte görünür."
+            return "Tam cümle sabit kalır; aktif kelime aynı konumda Bold ve seçilen renkte görünür."
         case .centeredReveal:
             return "Harfler tek tek gelir; büyüyen cümle sürekli ortada kalır."
         case .centeredWordReveal:
@@ -569,7 +573,39 @@ struct StudioTypographyControls: View {
 
     private var availableOverlays: [KineticOverlayStyle] {
         KineticOverlayStyle.allCases.filter {
-            !$0.requiresKaraokeTracking || lyricTrackingMode == .karaoke
+            $0.isAvailable(for: lyricTrackingMode)
+        }
+    }
+
+    private var boldWordReadabilityControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            settingTitle("Okunabilirlik", icon: "shadow")
+
+            Toggle(
+                isOn: Binding(
+                    get: { kineticOverlayStyle == .underShadow },
+                    set: { enabled in
+                        Theme.haptic()
+                        kineticOverlayStyle = enabled ? .underShadow : .none
+                    }
+                )
+            ) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Alt Gölge")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                    Text("Tüm cümle bloğunun arkasına sabit, yumuşak koyu bir gölge ekler.")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+            }
+            .tint(Theme.yellow)
+            .frame(minHeight: 44)
+            .padding(.horizontal, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    .fill(Color.white.opacity(0.045))
+            )
         }
     }
 
