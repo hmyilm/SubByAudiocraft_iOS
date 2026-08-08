@@ -1278,7 +1278,7 @@ private struct BoldWordRowPreview: View {
         .background {
             if showsUnderShadow {
                 RoundedRectangle(cornerRadius: max(4, fontSize * 0.14))
-                    .fill(Color.black.opacity(0.15))
+                    .fill(Color.black.opacity(0.05))
                     .padding(.horizontal, -max(5, fontSize * 0.12))
                     .padding(.vertical, -max(2, fontSize * 0.06))
                     .offset(y: max(1.5, fontSize * 0.06))

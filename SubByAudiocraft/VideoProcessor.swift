@@ -4608,7 +4608,7 @@ class VideoProcessor: ObservableObject {
                     radius: max(7, min(18, shadowHeight / 5))
                 ),
                 color: "000000",
-                alpha: "D9",
+                alpha: "F2",
                 extraTags: "\\blur5\\fad(55,90)"
             )
         }

@@ -2107,7 +2107,7 @@ final class VideoProcessorTests: XCTestCase {
             intensity: .balanced
         )
         XCTAssertEqual(
-            boldWord.components(separatedBy: "\\alpha&HD9&").count - 1,
+            boldWord.components(separatedBy: "\\alpha&HF2&").count - 1,
             1
         )
         XCTAssertTrue(boldWord.contains("Dialogue: 0,"))
