@@ -1237,8 +1237,10 @@ private struct ClassicSubtitleRowPreview: View {
     }
 }
 
-// Cümle + Kalın: bütün satır tek Text koşusu olarak dizilir. Böylece kelime
-// aralıkları sabit HStack değeri değil, seçilen fontun gerçek boşluk glifidir.
+// Cümle + Kalın: satırın geometrisi her zaman pasif yüzle kurulur. Aktif Bold
+// yüz yalnızca aynı kelime hücresinin üstüne çizilir; ağırlık değişince satır
+// yeniden ölçülmez ve hiçbir kelime sağa/sola hareket etmez. NBSP ise seçilen
+// pasif yüzün gerçek boşluk glifini korur.
 private struct BoldWordRowPreview: View {
     let words: [VideoProcessor.WordTimestamp]
     let playbackTime: Double
@@ -1247,27 +1249,28 @@ private struct BoldWordRowPreview: View {
     let fontSize: CGFloat
 
     var body: some View {
-        renderedText
-            .lineLimit(1)
-            .minimumScaleFactor(0.45)
-            .contentTransition(.interpolate)
-    }
+        HStack(spacing: 0) {
+            ForEach(Array(words.enumerated()), id: \.element.id) { item in
+                if item.offset > 0 {
+                    Text("\u{00A0}")
+                        .font(.custom(inactiveFaceName, size: fontSize))
+                        .fontWeight(inactiveFallbackWeight)
+                        .foregroundColor(.white)
+                }
 
-    private var renderedText: Text {
-        words.enumerated().reduce(Text("")) { result, item in
-            let word = item.element
-            let active = playbackTime >= word.start && playbackTime < word.end
-            let separator = item.offset == 0
-                ? Text("")
-                : Text("\u{00A0}")
-                    .font(.custom(inactiveFaceName, size: fontSize))
-                    .fontWeight(inactiveFallbackWeight)
-            let run = Text(word.text)
-                .font(.custom(active ? activeFaceName : inactiveFaceName, size: fontSize))
-                .fontWeight(active ? activeFallbackWeight : inactiveFallbackWeight)
-                .foregroundColor(active ? accent : .white)
-            return result + separator + run
+                FixedBoldWordPreviewRun(
+                    word: item.element,
+                    playbackTime: playbackTime,
+                    accent: accent,
+                    inactiveFaceName: inactiveFaceName,
+                    activeFaceName: activeFaceName,
+                    inactiveFallbackWeight: inactiveFallbackWeight,
+                    activeFallbackWeight: activeFallbackWeight,
+                    fontSize: fontSize
+                )
+            }
         }
+        .fixedSize(horizontal: true, vertical: true)
     }
 
     private var inactiveFaceName: String {
@@ -1284,6 +1287,46 @@ private struct BoldWordRowPreview: View {
 
     private var activeFallbackWeight: Font.Weight? {
         FontCatalog.boldPSName(for: fontName) == nil ? .bold : nil
+    }
+}
+
+private struct FixedBoldWordPreviewRun: View {
+    let word: VideoProcessor.WordTimestamp
+    let playbackTime: Double
+    let accent: Color
+    let inactiveFaceName: String
+    let activeFaceName: String
+    let inactiveFallbackWeight: Font.Weight?
+    let activeFallbackWeight: Font.Weight?
+    let fontSize: CGFloat
+
+    private var isActive: Bool {
+        playbackTime >= word.start && playbackTime < word.end
+    }
+
+    var body: some View {
+        // Bu Text her karede aynı kaldığı için hücrenin genişliği sabittir.
+        Text(word.text)
+            .font(.custom(inactiveFaceName, size: fontSize))
+            .fontWeight(inactiveFallbackWeight)
+            .foregroundColor(isActive ? .clear : .white)
+            .overlay {
+                if isActive {
+                    Text(word.text)
+                        .font(.custom(activeFaceName, size: fontSize))
+                        .fontWeight(activeFallbackWeight)
+                        .foregroundColor(accent)
+                        .fixedSize(horizontal: true, vertical: true)
+                        .scaleEffect(
+                            x: FontCatalog.boldHorizontalScale(
+                                for: word.text,
+                                selection: inactiveFaceName
+                            ),
+                            y: 1,
+                            anchor: .center
+                        )
+                }
+            }
     }
 }
 

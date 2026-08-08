@@ -1718,6 +1718,25 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertTrue(boldFaceClassic.contains("\\fnMontserrat\\fs70\\b700"))
         XCTAssertFalse(boldFaceClassic.contains("\\bord0.8"))
 
+        let georgiaScalePercent = Int(
+            (FontCatalog.boldHorizontalScale(
+                for: "sevda",
+                selection: "Georgia"
+            ) * 100).rounded()
+        )
+        let georgia = VideoProcessor.shared.makeBoldWordDialogues(
+            group: words,
+            segStart: 0,
+            segEnd: 2,
+            fontName: "Georgia",
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 608,
+            virtualHeight: 1080
+        )
+        XCTAssertTrue(georgia.contains("\\fscx\(georgiaScalePercent)\\fscy100"))
+        XCTAssertFalse(georgia.contains("\\fscy99"))
+
         let kinetic = VideoProcessor.shared.makeKineticDialogues(
             group: words,
             lineIndex: 0,
@@ -2266,6 +2285,12 @@ final class FontCatalogTests: XCTestCase {
             FontCatalog.renderPSNames(for: georgia.psName),
             ["Georgia", "Georgia-Bold"]
         )
+        let horizontalScale = FontCatalog.boldHorizontalScale(
+            for: "yaşar",
+            selection: georgia.psName
+        )
+        XCTAssertGreaterThan(horizontalScale, 0.70)
+        XCTAssertLessThan(horizontalScale, 0.95)
     }
 
     func testCatalogUsesUniquePostScriptNamesAndExcludesUnsafeLegacyFonts() {

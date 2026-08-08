@@ -231,6 +231,49 @@ enum FontCatalog {
         secenek(selection)?.assFamily ?? selection
     }
 
+    // Gerçek Bold kesit bazı ailelerde (Georgia gibi) Regular ile aynı puntoya
+    // sahip olsa da belirgin biçimde daha geniştir. Cümle + Kalın modunda yalnız
+    // yatay ekseni Regular kelimenin ilerleme genişliğine sığdırırız. Dikey
+    // ölçek daima %100 kalır; böylece yazı boyu ve satır tabanı değişmez.
+    static func boldHorizontalScale(
+        for text: String,
+        selection: String
+    ) -> CGFloat {
+        guard !text.isEmpty,
+              let option = secenek(selection),
+              let boldName = option.boldPSName else {
+            return 1
+        }
+
+        func measuredWidth(_ postScriptName: String) -> CGFloat? {
+            let font = CTFontCreateWithName(postScriptName as CFString, 1_000, nil)
+            let resolvedName = CTFontCopyPostScriptName(font) as String
+            guard resolvedName.caseInsensitiveCompare(postScriptName) == .orderedSame else {
+                return nil
+            }
+            let attributed = NSAttributedString(
+                string: text,
+                attributes: [NSAttributedString.Key(kCTFontAttributeName as String): font]
+            )
+            let width = CGFloat(
+                CTLineGetTypographicBounds(
+                    CTLineCreateWithAttributedString(attributed),
+                    nil,
+                    nil,
+                    nil
+                )
+            )
+            return width.isFinite && width > 0 ? width : nil
+        }
+
+        guard let regularWidth = measuredWidth(option.regularFaceName),
+              let boldWidth = measuredWidth(boldName),
+              boldWidth > regularWidth else {
+            return 1
+        }
+        return min(1, max(0.65, regularWidth / boldWidth))
+    }
+
     static func renderPSNames(for selection: String) -> [String] {
         guard let option = secenek(selection) else { return [selection] }
         // Seçilen yüzü (ör. ExtraBold/Black) mutlaka kopyala. Önceki sürüm yalnız

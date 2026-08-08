@@ -4602,6 +4602,12 @@ class VideoProcessor: ObservableObject {
                 let assFamilyName = FontCatalog.assFamilyName(for: fontName)
                 let thinWeightTag = FontCatalog.assTag(for: fontName, weight: .thin)
                 let boldWeightTag = FontCatalog.assTag(for: fontName, weight: .bold)
+                let boldHorizontalPercent = Int(
+                    (FontCatalog.boldHorizontalScale(
+                        for: item.text,
+                        selection: fontName
+                    ) * 100).rounded()
+                )
 
                 let unactiveTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
                     "\\fn\(assFamilyName)\\fs\(fontSize)\(thinWeightTag)\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
@@ -4626,7 +4632,7 @@ class VideoProcessor: ObservableObject {
 
                 let boldTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
                     "\\fn\(assFamilyName)\\fs\(fontSize)\(boldWeightTag)\\c&H\(resolvedAccent.assColor)&" +
-                    "\(extraTags)\\bord0\\shad0}"
+                    "\(extraTags)\\fscx\(boldHorizontalPercent)\\fscy100\\bord0\\shad0}"
                 result += "Dialogue: 2,\(wordStartText)," +
                     "\(wordEndText),Default,,0,0,0,," +
                     "\(boldTags)\(item.text)\n"
