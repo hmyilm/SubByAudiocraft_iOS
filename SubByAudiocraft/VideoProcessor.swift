@@ -4898,7 +4898,10 @@ class VideoProcessor: ObservableObject {
             let clean = cleanASSWord(word.text)
             guard !clean.isEmpty else { continue }
             if !completedText.isEmpty {
-                completedText += previousWordEndedVisualRow ? "\\N" : " "
+                // ASS'in satır içindeki normal boşluğu font geçişinin yanında
+                // daraltmasını/yutmasını önle. \h, aktif Thin yüzün gerçek boşluk
+                // glif genişliğini korur ve SwiftUI önizlemedeki NBSP ile eşleşir.
+                completedText += previousWordEndedVisualRow ? "\\N" : "\\h"
             }
             events.append(
                 RevealEvent(

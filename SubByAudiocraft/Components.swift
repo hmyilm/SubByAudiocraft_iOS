@@ -1271,8 +1271,18 @@ private struct CenteredWordRevealPreview: View {
     var body: some View {
         VStack(spacing: 3) {
             ForEach(Array(revealedRows.enumerated()), id: \.offset) { row in
-                HStack(spacing: 5) {
-                    ForEach(row.element) { word in
+                // Sabit piksel aralığı dar/geniş fontlarda yabancı görünüyordu.
+                // Her ayırıcıyı seçilen ailenin Thin yüzündeki gerçek boşluk glifi
+                // olarak çiz; böylece puntoyla birlikte doğal biçimde ölçeklenir.
+                HStack(spacing: 0) {
+                    ForEach(Array(row.element.enumerated()), id: \.element.id) { item in
+                        if item.offset > 0 {
+                            Text("\u{00A0}")
+                                .font(.custom(thinFaceName, size: fontSize))
+                                .fontWeight(fallbackWeight(isLatest: false))
+                                .accessibilityHidden(true)
+                        }
+                        let word = item.element
                         let isLatest = word.id == revealedWords.last?.id
                         Text(word.text)
                             .font(.custom(isLatest ? boldFaceName : thinFaceName, size: fontSize))
