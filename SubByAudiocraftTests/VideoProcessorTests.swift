@@ -2107,11 +2107,11 @@ final class VideoProcessorTests: XCTestCase {
             intensity: .balanced
         )
         XCTAssertEqual(
-            boldWord.components(separatedBy: "\\alpha&HB8&").count - 1,
+            boldWord.components(separatedBy: "\\alpha&HD9&").count - 1,
             1
         )
         XCTAssertTrue(boldWord.contains("Dialogue: 0,"))
-        XCTAssertTrue(boldWord.contains("\\blur6"))
+        XCTAssertTrue(boldWord.contains("\\blur5"))
 
         let trackingOff = VideoProcessor.shared.makeKineticDialogues(
             group: words,

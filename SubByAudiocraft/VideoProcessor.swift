@@ -4589,19 +4589,13 @@ class VideoProcessor: ObservableObject {
         if overlayStyle == .underShadow, let widestRow = rowWidths.max() {
             let shadowWidth = min(
                 max(24, virtualWidth - 8),
-                max(24, Int(ceil(widestRow)) + 26)
+                max(24, Int(ceil(widestRow)) + 18)
             )
             let topBaseline = baselineY - ((itemsByRow.count - 1) * rowGap)
-            let rawTop = topBaseline - Int((Double(fontSize) * 0.72).rounded()) + 5
-            let rawBottom = baselineY + Int((Double(fontSize) * 0.20).rounded()) + 5
+            let rawTop = topBaseline - Int((Double(fontSize) * 0.66).rounded()) + 4
+            let rawBottom = baselineY + Int((Double(fontSize) * 0.14).rounded()) + 4
             let shadowTop = max(4, rawTop)
             let shadowHeight = max(20, min(virtualHeight - shadowTop - 4, rawBottom - shadowTop))
-            let shadowAlpha: String
-            switch intensity {
-            case .subtle: shadowAlpha = "C2"
-            case .balanced: shadowAlpha = "B8"
-            case .energetic: shadowAlpha = "AB"
-            }
             result += kineticOverlayShapeDialogue(
                 layer: 0,
                 start: segStart,
@@ -4614,8 +4608,8 @@ class VideoProcessor: ObservableObject {
                     radius: max(7, min(18, shadowHeight / 5))
                 ),
                 color: "000000",
-                alpha: shadowAlpha,
-                extraTags: "\\blur6\\fad(55,90)"
+                alpha: "D9",
+                extraTags: "\\blur5\\fad(55,90)"
             )
         }
 

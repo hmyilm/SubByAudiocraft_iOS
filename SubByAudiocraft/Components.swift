@@ -1041,8 +1041,7 @@ struct SubtitlePreviewPlayer: View {
                     accent: resolvedPreviewAccent,
                     fontName: fontName,
                     fontSize: CGFloat(fontSize) * previewScale,
-                    showsUnderShadow: kineticOverlayStyle == .underShadow,
-                    shadowIntensity: kineticIntensity
+                    showsUnderShadow: kineticOverlayStyle == .underShadow
                 )
                 .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -1207,7 +1206,6 @@ private struct ClassicSubtitleRowPreview: View {
     let fontName: String
     let fontSize: CGFloat
     let showsUnderShadow: Bool
-    let shadowIntensity: KineticIntensity
 
     var body: some View {
         Group {
@@ -1218,8 +1216,7 @@ private struct ClassicSubtitleRowPreview: View {
                     accent: accent,
                     fontName: fontName,
                     fontSize: fontSize,
-                    showsUnderShadow: showsUnderShadow,
-                    shadowIntensity: shadowIntensity
+                    showsUnderShadow: showsUnderShadow
                 )
             } else {
                 HStack(spacing: max(2, fontSize * 0.28)) {
@@ -1254,7 +1251,6 @@ private struct BoldWordRowPreview: View {
     let fontName: String
     let fontSize: CGFloat
     let showsUnderShadow: Bool
-    let shadowIntensity: KineticIntensity
 
     var body: some View {
         HStack(spacing: 0) {
@@ -1282,11 +1278,11 @@ private struct BoldWordRowPreview: View {
         .background {
             if showsUnderShadow {
                 RoundedRectangle(cornerRadius: max(4, fontSize * 0.14))
-                    .fill(Color.black.opacity(shadowOpacity))
-                    .padding(.horizontal, -max(7, fontSize * 0.18))
-                    .padding(.vertical, -max(3, fontSize * 0.09))
-                    .offset(y: max(2, fontSize * 0.08))
-                    .blur(radius: max(2, fontSize * 0.055))
+                    .fill(Color.black.opacity(0.15))
+                    .padding(.horizontal, -max(5, fontSize * 0.12))
+                    .padding(.vertical, -max(2, fontSize * 0.06))
+                    .offset(y: max(1.5, fontSize * 0.06))
+                    .blur(radius: max(1.5, fontSize * 0.04))
             }
         }
     }
@@ -1297,14 +1293,6 @@ private struct BoldWordRowPreview: View {
 
     private var activeFaceName: String {
         FontCatalog.faceName(for: fontName, weight: .bold)
-    }
-
-    private var shadowOpacity: Double {
-        switch shadowIntensity {
-        case .subtle: return 0.24
-        case .balanced: return 0.28
-        case .energetic: return 0.33
-        }
     }
 
     private var inactiveFallbackWeight: Font.Weight? {
