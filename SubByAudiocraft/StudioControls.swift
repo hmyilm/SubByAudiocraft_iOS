@@ -57,6 +57,7 @@ struct StudioTypographyControls: View {
     @Binding var fontName: String
     @Binding var fontSize: Double
     @Binding var marginV: Double
+    @Binding var subtitleTextColorHex: String
     @Binding var karaokeMode: KaraokeMode
     @Binding var lyricTrackingMode: LyricTrackingMode
     @Binding var kineticStyle: KineticStyle
@@ -74,6 +75,7 @@ struct StudioTypographyControls: View {
             Divider().overlay(Theme.cardStroke)
             movementModeControls
             trackingControls
+            textColorControls
 
             if usesKineticDirectorControls {
                 kineticStyleControls
@@ -300,6 +302,52 @@ struct StudioTypographyControls: View {
                     .frame(width: 44, height: 44)
                     .accessibilityLabel("Özel vurgu rengi")
             }
+        }
+    }
+
+    private var textColorControls: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                settingTitle("Yazı Rengi", icon: "paintbrush.pointed")
+                Spacer()
+                Text(resolvedTextColor.hex)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(resolvedTextColorColor)
+            }
+
+            HStack(spacing: 10) {
+                ForEach(["#FFFFFF", "#111111", "#FEF3C7", "#FFE45C", "#A7F3D0"], id: \.self) { hex in
+                    let selected = resolvedTextColor.hex == hex
+                    Button {
+                        Theme.haptic()
+                        subtitleTextColorHex = hex
+                    } label: {
+                        Circle()
+                            .fill(previewColor(for: hex))
+                            .frame(width: 28, height: 28)
+                            .overlay(
+                                Circle().stroke(
+                                    selected ? Theme.yellow : Color.white.opacity(0.25),
+                                    lineWidth: selected ? 3 : 1
+                                )
+                            )
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Yazı rengi \(hex)")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                }
+
+                ColorPicker("Özel yazı rengi", selection: textColorBinding, supportsOpacity: false)
+                    .labelsHidden()
+                    .frame(width: 44, height: 44)
+                    .accessibilityLabel("Özel yazı rengi")
+            }
+
+            Text("Ana yazı rengini değiştirir. Okunan kelimenin vurgu rengi ayrı ayarlanır.")
+                .font(.caption2)
+                .foregroundColor(.gray)
         }
     }
 
@@ -627,6 +675,23 @@ struct StudioTypographyControls: View {
         return lyricTrackingMode == .karaoke || kineticOverlayStyle != .none
     }
 
+    private var resolvedTextColor: KineticResolvedColor {
+        KineticResolvedColor(hex: subtitleTextColorHex)
+    }
+
+    private var resolvedTextColorColor: Color {
+        Color(
+            red: resolvedTextColor.red,
+            green: resolvedTextColor.green,
+            blue: resolvedTextColor.blue
+        )
+    }
+
+    private func previewColor(for hex: String) -> Color {
+        let color = KineticResolvedColor(hex: hex)
+        return Color(red: color.red, green: color.green, blue: color.blue)
+    }
+
     private var resolvedAccent: KineticResolvedColor {
         kineticAccent.resolvedColor(customHex: kineticCustomColorHex)
     }
@@ -664,6 +729,33 @@ struct StudioTypographyControls: View {
                     Int((blue * 255).rounded())
                 )
                 kineticAccent = .custom
+            }
+        )
+    }
+
+    private var textColorBinding: Binding<Color> {
+        Binding(
+            get: { resolvedTextColorColor },
+            set: { color in
+                let components = UIColor(color).cgColor.components ?? [1, 1, 1, 1]
+                let red: CGFloat
+                let green: CGFloat
+                let blue: CGFloat
+                if components.count >= 3 {
+                    red = components[0]
+                    green = components[1]
+                    blue = components[2]
+                } else {
+                    red = components[0]
+                    green = components[0]
+                    blue = components[0]
+                }
+                subtitleTextColorHex = String(
+                    format: "#%02X%02X%02X",
+                    Int((red * 255).rounded()),
+                    Int((green * 255).rounded()),
+                    Int((blue * 255).rounded())
+                )
             }
         )
     }

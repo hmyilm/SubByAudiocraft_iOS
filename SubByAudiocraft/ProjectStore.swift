@@ -19,6 +19,8 @@ struct SavedProject: Identifiable, Codable {
     var fontAdi: String
     var fontBoyu: Double
     var dikeyKonum: Double
+    // Optional tutulur: eski projeler beyaz ana yazı rengiyle açılır.
+    var yaziRengi: String?
     // Optional tutulur: 1.6.0 öncesi proje.json dosyalarında bu alan yoktur.
     // Eksik değer her zaman Klasik olarak çözülerek eski projelerin görünümü korunur.
     var karaokeModu: String?
@@ -62,6 +64,10 @@ struct SavedProject: Identifiable, Codable {
     var kineticCustomColorHex: String {
         KineticResolvedColor.normalizedHex(kinetikOzelRenk)
             ?? KineticAccent.defaultCustomHex
+    }
+
+    var subtitleTextColorHex: String {
+        KineticResolvedColor.normalizedHex(yaziRengi) ?? "#FFFFFF"
     }
 
     var kineticIntensity: KineticIntensity {
@@ -169,6 +175,7 @@ final class ProjectStore: ObservableObject {
                  fontAdi: String,
                  fontBoyu: Double,
                  dikeyKonum: Double,
+                 yaziRengi: String,
                  karaokeModu: KaraokeMode,
                  sozTakibi: LyricTrackingMode,
                  kinetikStil: KineticStyle,
@@ -216,6 +223,7 @@ final class ProjectStore: ObservableObject {
             fontAdi: fontAdi,
             fontBoyu: fontBoyu,
             dikeyKonum: dikeyKonum,
+            yaziRengi: KineticResolvedColor.normalizedHex(yaziRengi) ?? "#FFFFFF",
             karaokeModu: karaokeModu.rawValue,
             sozTakibi: sozTakibi.rawValue,
             kinetikStil: kinetikStil.rawValue,
@@ -260,6 +268,7 @@ final class ProjectStore: ObservableObject {
                   fontAdi: String,
                   fontBoyu: Double,
                   dikeyKonum: Double,
+                  yaziRengi: String,
                   karaokeModu: KaraokeMode,
                   sozTakibi: LyricTrackingMode,
                   kinetikStil: KineticStyle,
@@ -280,6 +289,7 @@ final class ProjectStore: ObservableObject {
         proje.fontAdi = fontAdi
         proje.fontBoyu = fontBoyu
         proje.dikeyKonum = dikeyKonum
+        proje.yaziRengi = KineticResolvedColor.normalizedHex(yaziRengi) ?? "#FFFFFF"
         proje.karaokeModu = karaokeModu.rawValue
         proje.sozTakibi = sozTakibi.rawValue
         proje.kinetikStil = kinetikStil.rawValue

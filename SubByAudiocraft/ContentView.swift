@@ -25,6 +25,7 @@ private struct StyleAutosaveToken: Equatable {
     let fontName: String
     let fontSize: Double
     let marginV: Double
+    let subtitleTextColorHex: String
     let karaokeMode: String
     let lyricTrackingMode: String
     let kineticStyle: String
@@ -85,6 +86,7 @@ struct ContentView: View {
     @AppStorage("subtitle.fontName") private var fontName: String = "Anton-Regular"
     @AppStorage("subtitle.fontSize") private var fontSize: Double = 70.0
     @AppStorage("subtitle.marginV") private var marginV: Double = 120.0
+    @AppStorage("subtitle.textColorHex") private var subtitleTextColorHex: String = "#FFFFFF"
     @AppStorage("subtitle.karaokeMode") private var karaokeModeRaw: String = KaraokeMode.classic.rawValue
     @AppStorage("subtitle.lyricTrackingMode") private var lyricTrackingModeRaw: String = LyricTrackingMode.karaoke.rawValue
     @AppStorage("subtitle.kineticStyle") private var kineticStyleRaw: String = KineticStyle.automatic.rawValue
@@ -227,6 +229,7 @@ struct ContentView: View {
             fontName: $fontName,
             fontSize: $fontSize,
             marginV: $marginV,
+            subtitleTextColorHex: $subtitleTextColorHex,
             karaokeMode: karaokeModeBinding,
             lyricTrackingMode: lyricTrackingModeBinding,
             kineticStyle: kineticStyleBinding,
@@ -253,6 +256,7 @@ struct ContentView: View {
             fontName: fontName,
             fontSize: fontSize,
             marginV: marginV,
+            subtitleTextColorHex: subtitleTextColorHex,
             karaokeMode: karaokeModeRaw,
             lyricTrackingMode: lyricTrackingModeRaw,
             kineticStyle: kineticStyleRaw,
@@ -283,6 +287,8 @@ struct ContentView: View {
         kineticAccentRaw = KineticAccent.resolved(kineticAccentRaw).rawValue
         kineticCustomColorHex = KineticResolvedColor.normalizedHex(kineticCustomColorHex)
             ?? KineticAccent.defaultCustomHex
+        subtitleTextColorHex = KineticResolvedColor.normalizedHex(subtitleTextColorHex)
+            ?? "#FFFFFF"
         kineticIntensityRaw = KineticIntensity.resolved(kineticIntensityRaw).rawValue
         kineticLetterStyleRaw = KineticLetterStyle(rawValue: kineticLetterStyleRaw)?.rawValue
             ?? KineticLetterStyle.automatic.rawValue
@@ -728,6 +734,7 @@ struct ContentView: View {
                         fontAdi: self.fontName,
                         fontBoyu: self.fontSize,
                         dikeyKonum: self.marginV,
+                        yaziRengi: self.subtitleTextColorHex,
                         karaokeModu: KaraokeMode.resolved(self.karaokeModeRaw),
                         sozTakibi: LyricTrackingMode.resolved(self.lyricTrackingModeRaw),
                         kinetikStil: KineticStyle.resolved(self.kineticStyleRaw),
@@ -806,6 +813,7 @@ struct ContentView: View {
         let renderFontName = fontName
         let renderFontSize = Int(fontSize)
         let renderMarginV = Int(marginV)
+        let renderTextColorHex = subtitleTextColorHex
         let renderKaraokeMode = KaraokeMode.resolved(karaokeModeRaw)
         let renderTrackingMode = LyricTrackingMode.resolved(lyricTrackingModeRaw)
         let renderKineticStyle = KineticStyle.resolved(kineticStyleRaw)
@@ -829,6 +837,7 @@ struct ContentView: View {
                 fontName: renderFontName,
                 fontSize: renderFontSize,
                 marginV: renderMarginV,
+                subtitleTextColorHex: renderTextColorHex,
                 karaokeMode: renderKaraokeMode,
                 lyricTrackingMode: renderTrackingMode,
                 kineticStyle: renderKineticStyle,
@@ -991,6 +1000,7 @@ struct ContentView: View {
             fontAdi: fontName,
             fontBoyu: fontSize,
             dikeyKonum: marginV,
+            yaziRengi: subtitleTextColorHex,
             karaokeModu: KaraokeMode.resolved(karaokeModeRaw),
             sozTakibi: LyricTrackingMode.resolved(lyricTrackingModeRaw),
             kinetikStil: KineticStyle.resolved(kineticStyleRaw),
@@ -1037,6 +1047,7 @@ struct ContentView: View {
         if FontCatalog.secenek(proje.fontAdi) != nil { fontName = proje.fontAdi }
         fontSize = proje.fontBoyu
         marginV = proje.dikeyKonum
+        subtitleTextColorHex = proje.subtitleTextColorHex
         karaokeModeRaw = proje.karaokeMode.rawValue
         lyricTrackingModeRaw = proje.lyricTrackingMode.rawValue
         kineticStyleRaw = proje.kineticStyle.rawValue

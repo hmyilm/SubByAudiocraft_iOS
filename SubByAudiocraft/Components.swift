@@ -828,6 +828,7 @@ struct SubtitlePreviewPlayer: View {
     let fontName: String
     let fontSize: Double
     let marginV: Double
+    let subtitleTextColorHex: String
     let sampleText: String
     let height: CGFloat
     let karaokeWords: [VideoProcessor.WordTimestamp]
@@ -851,6 +852,7 @@ struct SubtitlePreviewPlayer: View {
         fontName: String,
         fontSize: Double,
         marginV: Double,
+        subtitleTextColorHex: String = "#FFFFFF",
         sampleText: String,
         height: CGFloat,
         karaokeWords: [VideoProcessor.WordTimestamp] = [],
@@ -873,6 +875,8 @@ struct SubtitlePreviewPlayer: View {
         self.fontName = fontName
         self.fontSize = fontSize
         self.marginV = marginV
+        self.subtitleTextColorHex = KineticResolvedColor.normalizedHex(subtitleTextColorHex)
+            ?? "#FFFFFF"
         self.sampleText = sampleText
         self.height = height
         self.karaokeWords = karaokeWords
@@ -935,9 +939,10 @@ struct SubtitlePreviewPlayer: View {
                                 CenteredWordRevealPreview(
                                     words: previewWords,
                                     inlineLineBreaks: inlineLineBreaks,
-                                    playbackTime: revealPlaybackTime,
-                                    accent: revealAccent,
-                                    fontName: fontName,
+                                playbackTime: revealPlaybackTime,
+                                accent: revealAccent,
+                                baseColor: resolvedPreviewTextColor,
+                                fontName: fontName,
                                     fontSize: CGFloat(fontSize) * previewScale
                                 )
                             } else {
@@ -945,7 +950,8 @@ struct SubtitlePreviewPlayer: View {
                                     words: previewWords,
                                     inlineLineBreaks: inlineLineBreaks,
                                     playbackTime: revealPlaybackTime,
-                                    accent: revealAccent
+                                    accent: revealAccent,
+                                    baseColor: resolvedPreviewTextColor
                                 )
                             }
                         } else if karaokeMode == .kinetic
@@ -969,6 +975,7 @@ struct SubtitlePreviewPlayer: View {
                                 previewHeight: viewport.height,
                                 accent: kineticAccent,
                                 customColorHex: kineticCustomColorHex,
+                                baseColor: resolvedPreviewTextColor,
                                 intensity: kineticIntensity,
                                 letterStyle: kineticLetterStyle,
                                 overlayStyle: kineticOverlayStyle,
@@ -977,7 +984,7 @@ struct SubtitlePreviewPlayer: View {
                             )
                         } else if karaokeWords.isEmpty {
                             Text(sampleText)
-                                .foregroundColor(.white)
+                                .foregroundColor(resolvedPreviewTextColor)
                         } else {
                             classicRowsPreview(
                                 previewScale: previewScale,
@@ -1039,6 +1046,7 @@ struct SubtitlePreviewPlayer: View {
                     playbackTime: playbackTime,
                     trackingMode: lyricTrackingMode,
                     accent: resolvedPreviewAccent,
+                    baseColor: resolvedPreviewTextColor,
                     fontName: fontName,
                     fontSize: CGFloat(fontSize) * previewScale,
                     showsUnderShadow: kineticOverlayStyle == .underShadow
@@ -1060,6 +1068,10 @@ struct SubtitlePreviewPlayer: View {
         kineticAccent.resolvedColor(
             customHex: kineticCustomColorHex
         ).previewColor
+    }
+
+    private var resolvedPreviewTextColor: Color {
+        KineticResolvedColor(hex: subtitleTextColorHex).previewColor
     }
 
     private func manualKineticRows(
@@ -1108,6 +1120,7 @@ private struct ClassicCharacterTrackingWord: View {
     let start: Double
     let end: Double
     let playbackTime: Double
+    let baseColor: Color
 
     private var progress: CGFloat {
         guard end > start else { return playbackTime >= end ? 1 : 0 }
@@ -1116,10 +1129,10 @@ private struct ClassicCharacterTrackingWord: View {
 
     var body: some View {
         Text(text)
-            .foregroundColor(.white.opacity(0.35))
+            .foregroundColor(baseColor.opacity(0.35))
             .overlay(alignment: .trailing) {
                 Text(text)
-                    .foregroundColor(.white)
+                    .foregroundColor(baseColor)
                     .mask(alignment: .trailing) {
                         GeometryReader { geometry in
                             Rectangle()
@@ -1139,11 +1152,12 @@ private struct CenteredRevealPreview: View {
     let inlineLineBreaks: Set<UUID>
     let playbackTime: Double
     let accent: Color
+    let baseColor: Color
 
     var body: some View {
         (
             Text(reveal.leading)
-                .foregroundColor(.white)
+                .foregroundColor(baseColor)
             +
             Text(reveal.latest)
                 .foregroundColor(accent)
@@ -1203,6 +1217,7 @@ private struct ClassicSubtitleRowPreview: View {
     let playbackTime: Double
     let trackingMode: LyricTrackingMode
     let accent: Color
+    let baseColor: Color
     let fontName: String
     let fontSize: CGFloat
     let showsUnderShadow: Bool
@@ -1214,6 +1229,7 @@ private struct ClassicSubtitleRowPreview: View {
                     words: words,
                     playbackTime: playbackTime,
                     accent: accent,
+                    baseColor: baseColor,
                     fontName: fontName,
                     fontSize: fontSize,
                     showsUnderShadow: showsUnderShadow
@@ -1226,12 +1242,13 @@ private struct ClassicSubtitleRowPreview: View {
                                 text: word.text,
                                 start: word.start,
                                 end: word.end,
-                                playbackTime: playbackTime
+                                playbackTime: playbackTime,
+                                baseColor: baseColor
                             )
                         } else {
                             Text(word.text)
                                 .font(.custom(fontName, size: fontSize))
-                                .foregroundColor(.white)
+                                .foregroundColor(baseColor)
                         }
                     }
                 }
@@ -1248,6 +1265,7 @@ private struct BoldWordRowPreview: View {
     let words: [VideoProcessor.WordTimestamp]
     let playbackTime: Double
     let accent: Color
+    let baseColor: Color
     let fontName: String
     let fontSize: CGFloat
     let showsUnderShadow: Bool
@@ -1259,13 +1277,14 @@ private struct BoldWordRowPreview: View {
                     Text("\u{00A0}")
                         .font(.custom(inactiveFaceName, size: fontSize))
                         .fontWeight(inactiveFallbackWeight)
-                        .foregroundColor(.white)
+                        .foregroundColor(baseColor)
                 }
 
                 FixedBoldWordPreviewRun(
                     word: item.element,
                     playbackTime: playbackTime,
                     accent: accent,
+                    baseColor: baseColor,
                     inactiveFaceName: inactiveFaceName,
                     activeFaceName: activeFaceName,
                     inactiveFallbackWeight: inactiveFallbackWeight,
@@ -1308,6 +1327,7 @@ private struct FixedBoldWordPreviewRun: View {
     let word: VideoProcessor.WordTimestamp
     let playbackTime: Double
     let accent: Color
+    let baseColor: Color
     let inactiveFaceName: String
     let activeFaceName: String
     let inactiveFallbackWeight: Font.Weight?
@@ -1323,7 +1343,7 @@ private struct FixedBoldWordPreviewRun: View {
         Text(word.text)
             .font(.custom(inactiveFaceName, size: fontSize))
             .fontWeight(inactiveFallbackWeight)
-            .foregroundColor(isActive ? .clear : .white)
+            .foregroundColor(isActive ? .clear : baseColor)
             .overlay {
                 if isActive {
                     Text(word.text)
@@ -1357,6 +1377,7 @@ private struct CenteredWordRevealPreview: View {
     let inlineLineBreaks: Set<UUID>
     let playbackTime: Double
     let accent: Color
+    let baseColor: Color
     let fontName: String
     let fontSize: CGFloat
 
@@ -1421,7 +1442,7 @@ private struct CenteredWordRevealPreview: View {
             let run = Text(word.text)
                 .font(.custom(isLatest ? boldFaceName : thinFaceName, size: fontSize))
                 .fontWeight(fallbackWeight(isLatest: isLatest))
-                .foregroundColor(isLatest ? accent : .white)
+                .foregroundColor(isLatest ? accent : baseColor)
             return result + separator + run
         }
     }
@@ -1443,6 +1464,7 @@ private struct KineticPreviewLockup: View {
     let previewHeight: CGFloat
     let accent: KineticAccent
     let customColorHex: String
+    let baseColor: Color
     let intensity: KineticIntensity
     let letterStyle: KineticLetterStyle
     let overlayStyle: KineticOverlayStyle
@@ -1519,7 +1541,7 @@ private struct KineticPreviewLockup: View {
                                                         ? resolvedAccent.foregroundPreviewColor
                                                         : resolvedAccent.previewColor
                                                 )
-                                                : (isPast ? .white.opacity(0.35) : .white)
+                                                : (isPast ? baseColor.opacity(0.35) : baseColor)
                                         )
                                 )
                                 .overlay {

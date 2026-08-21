@@ -2215,11 +2215,12 @@ class VideoProcessor: ObservableObject {
         familyName: String,
         fontSize: Int,
         isBold: Bool,
-        marginV: Int
+        marginV: Int,
+        primaryColor: String = "FFFFFF"
     ) -> String {
         let boldFlag = isBold ? -1 : 0
         return "Style: Default,\(familyName),\(fontSize)," +
-            "&H00FFFFFF,&H000000FF,&H00000000,&H00000000," +
+            "&H00\(primaryColor),&H000000FF,&H00000000,&H00000000," +
             "\(boldFlag),0,0,0,100,100,0,0,1,0,0,2,10,10,\(marginV),1"
     }
     
@@ -4148,6 +4149,7 @@ class VideoProcessor: ObservableObject {
         style: KineticStyle = .automatic,
         accent: KineticAccent = .gold,
         customColorHex: String = KineticAccent.defaultCustomHex,
+        baseTextColorHex: String = "#FFFFFF",
         intensity: KineticIntensity = .balanced,
         letterStyle: KineticLetterStyle = .clean,
         overlayStyle: KineticOverlayStyle = .none,
@@ -4223,6 +4225,7 @@ class VideoProcessor: ObservableObject {
             )
         }
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
+        let resolvedTextColor = KineticResolvedColor(hex: baseTextColorHex)
         let karaokeTrackingEnabled = lyricTrackingMode == .karaoke
         let boldWordTrackingEnabled = lyricTrackingMode == .boldWord
         let effectiveOverlayStyle = resolvedKineticOverlayStyle(
@@ -4408,7 +4411,7 @@ class VideoProcessor: ObservableObject {
             }
             let fadeIn = isolatedWord ? 70 : (pagedWords ? 75 : 110)
             let fadeOut = isolatedWord ? 100 : (pagedWords ? 95 : 140)
-            tags += "\\fs\(placement.fontSize)\\c&HFFFFFF&\\fad(\(fadeIn),\(fadeOut))"
+            tags += "\\fs\(placement.fontSize)\\c&H\(resolvedTextColor.assColor)&\\fad(\(fadeIn),\(fadeOut))"
             if karaokeTrackingEnabled && preserveConnectedGlyphs {
                 tags += "\\alpha&H00&"
             }
@@ -4464,12 +4467,12 @@ class VideoProcessor: ObservableObject {
                 if plan.highlight == .pill {
                     tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&" +
                         "\\3a&HFF&\\4a&HFF&\(activeScaleTags)\(activeAlphaTags))"
-                    tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&" +
+                    tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&H\(resolvedTextColor.assColor)&" +
                         "\\3a&H00&\\4a&H00&\(restingScaleTags)\(pastAlphaTags))"
                 } else {
                     tags += "\\t(\(wordStartMs),\(colorInEnd),\\c&H\(activeColor)&" +
                         "\(activeScaleTags)\(activeAlphaTags))"
-                    tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&HFFFFFF&" +
+                    tags += "\\t(\(wordEndMs),\(colorOutEnd),\\c&H\(resolvedTextColor.assColor)&" +
                         "\(restingScaleTags)\(pastAlphaTags))"
                 }
             }
@@ -4527,6 +4530,7 @@ class VideoProcessor: ObservableObject {
         extraTags: String = "",
         accent: KineticAccent = .gold,
         customColorHex: String = KineticAccent.defaultCustomHex,
+        baseTextColorHex: String = "#FFFFFF",
         overlayStyle: KineticOverlayStyle = .none,
         intensity: KineticIntensity = .balanced
     ) -> String {
@@ -4567,6 +4571,7 @@ class VideoProcessor: ObservableObject {
         let baselineY = max(0, virtualHeight - marginV)
         let rowGap = max(1, fontSize)
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
+        let resolvedTextColor = KineticResolvedColor(hex: baseTextColorHex)
         var result = ""
 
         let rowMeasurements = rowTexts.map {
@@ -4658,7 +4663,7 @@ class VideoProcessor: ObservableObject {
                 )
 
                 let unactiveTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
-                    "\\fn\(assFamilyName)\\fs\(fontSize)\(thinWeightTag)\\c&HFFFFFF&\(extraTags)\\bord0\\shad0}"
+                    "\\fn\(assFamilyName)\\fs\(fontSize)\(thinWeightTag)\\c&H\(resolvedTextColor.assColor)&\(extraTags)\\bord0\\shad0}"
 
                 if !hasActiveInterval {
                     result += "Dialogue: 1,\(segmentStartText)," +
@@ -4835,6 +4840,7 @@ class VideoProcessor: ObservableObject {
         virtualHeight: Int,
         accent: KineticAccent = .gold,
         customColorHex: String = KineticAccent.defaultCustomHex,
+        baseTextColorHex: String = "#FFFFFF",
         inlineLineBreaks: Set<UUID> = []
     ) -> String {
         struct RevealEvent {
@@ -4888,6 +4894,7 @@ class VideoProcessor: ObservableObject {
         guard !events.isEmpty else { return "" }
 
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
+        let resolvedTextColor = KineticResolvedColor(hex: baseTextColorHex)
         let centerX = virtualWidth / 2
         let halfHeight = max(12, fontSize / 2)
         let centerY = min(
@@ -4906,10 +4913,10 @@ class VideoProcessor: ObservableObject {
             let durationMs = max(10, Int((eventEnd - eventStart) * 1000))
             let settleMs = min(90, durationMs)
             let baseTags = "{\\an5\\pos(\(centerX),\(centerY))" +
-                "\\fs\(fontSize)\\c&HFFFFFF&\\bord0\\shad0}"
+                "\\fs\(fontSize)\\c&H\(resolvedTextColor.assColor)&\\bord0\\shad0}"
             let latestTags = "{\\c&H\(resolvedAccent.assColor)&\\alpha&H38&" +
                 "\\fscx108\\fscy108\\blur0.8" +
-                "\\t(0,\(settleMs),1.6,\\c&HFFFFFF&\\alpha&H00&" +
+                "\\t(0,\(settleMs),1.6,\\c&H\(resolvedTextColor.assColor)&\\alpha&H00&" +
                 "\\fscx100\\fscy100\\blur0.2)}"
             let text = event.leading + latestTags + String(event.latest)
             result += "Dialogue: 2,\(formatASSTime(eventStart))," +
@@ -4934,6 +4941,7 @@ class VideoProcessor: ObservableObject {
         virtualHeight: Int,
         accent: KineticAccent = .gold,
         customColorHex: String = KineticAccent.defaultCustomHex,
+        baseTextColorHex: String = "#FFFFFF",
         inlineLineBreaks: Set<UUID> = []
     ) -> String {
         struct RevealEvent {
@@ -4970,6 +4978,7 @@ class VideoProcessor: ObservableObject {
         guard !events.isEmpty else { return "" }
 
         let resolvedAccent = accent.resolvedColor(customHex: customColorHex)
+        let resolvedTextColor = KineticResolvedColor(hex: baseTextColorHex)
         let assFamilyName = FontCatalog.assFamilyName(for: fontName)
         let thinWeightTag = FontCatalog.assTag(for: fontName, weight: .thin)
         let boldWeightTag = FontCatalog.assTag(for: fontName, weight: .bold)
@@ -4992,11 +5001,11 @@ class VideoProcessor: ObservableObject {
             let settleMs = min(110, durationMs)
             let baseTags = "{\\an5\\pos(\(centerX),\(centerY))" +
                 "\\fs\(fontSize)\\fscx100\\fscy100\\fn\(assFamilyName)\(thinWeightTag)" +
-                "\\c&HFFFFFF&\\bord0\\shad0}"
+                "\\c&H\(resolvedTextColor.assColor)&\\bord0\\shad0}"
             let latestTags = "{\\fn\(assFamilyName)\\fs\(fontSize)\\fscx100\\fscy100" +
                 "\(boldWeightTag)\\c&H\(resolvedAccent.assColor)&\\alpha&H18&" +
                 "\\blur0.7" +
-                "\\t(0,\(settleMs),1.5,\\c&HFFFFFF&\\alpha&H00&" +
+                "\\t(0,\(settleMs),1.5,\\c&H\(resolvedTextColor.assColor)&\\alpha&H00&" +
                 "\\blur0.2)}"
             result += "Dialogue: 2,\(formatASSTime(eventStart))," +
                 "\(formatASSTime(eventEnd)),Default,,0,0,0,," +
@@ -5016,6 +5025,7 @@ class VideoProcessor: ObservableObject {
         fontName: String,
         fontSize: Int,
         marginV: Int,
+        subtitleTextColorHex: String = "#FFFFFF",
         karaokeMode: KaraokeMode = .classic,
         lyricTrackingMode: LyricTrackingMode = .karaoke,
         kineticStyle: KineticStyle = .automatic,
@@ -5087,7 +5097,8 @@ class VideoProcessor: ObservableObject {
             familyName: familyName,
             fontSize: fontSize,
             isBold: boldFlag == -1,
-            marginV: marginV
+            marginV: marginV,
+            primaryColor: KineticResolvedColor(hex: subtitleTextColorHex).assColor
         ))
 
         [Events]
@@ -5195,6 +5206,7 @@ class VideoProcessor: ObservableObject {
                     virtualHeight: virtualHeight,
                     accent: kineticAccent,
                     customColorHex: kineticCustomColorHex,
+                    baseTextColorHex: subtitleTextColorHex,
                     inlineLineBreaks: inlineLineBreaks
                 )
                 continue
@@ -5211,6 +5223,7 @@ class VideoProcessor: ObservableObject {
                     virtualHeight: virtualHeight,
                     accent: kineticAccent,
                     customColorHex: kineticCustomColorHex,
+                    baseTextColorHex: subtitleTextColorHex,
                     inlineLineBreaks: inlineLineBreaks
                 )
                 continue
@@ -5233,6 +5246,7 @@ class VideoProcessor: ObservableObject {
                     style: kineticStyle,
                     accent: kineticAccent,
                     customColorHex: kineticCustomColorHex,
+                    baseTextColorHex: subtitleTextColorHex,
                     intensity: kineticIntensity,
                     letterStyle: kineticLetterStyle,
                     overlayStyle: kineticOverlayStyle,
@@ -5297,6 +5311,7 @@ class VideoProcessor: ObservableObject {
                     inlineLineBreaks: inlineLineBreaks,
                     accent: kineticAccent,
                     customColorHex: kineticCustomColorHex,
+                    baseTextColorHex: subtitleTextColorHex,
                     overlayStyle: kineticOverlayStyle,
                     intensity: kineticIntensity
                 )

@@ -24,6 +24,7 @@ struct EditWordsView: View {
     @Binding var fontName: String
     @Binding var fontSize: Double
     @Binding var marginV: Double
+    @Binding var subtitleTextColorHex: String
     @Binding var karaokeMode: KaraokeMode
     @Binding var lyricTrackingMode: LyricTrackingMode
     @Binding var kineticStyle: KineticStyle
@@ -71,6 +72,7 @@ struct EditWordsView: View {
                         fontName: fontName,
                         fontSize: fontSize,
                         marginV: marginV,
+                        subtitleTextColorHex: subtitleTextColorHex,
                         sampleText: previewLine,
                         height: 200,
                         karaokeWords: previewWords,
@@ -134,6 +136,7 @@ struct EditWordsView: View {
                             fontName: $fontName,
                             fontSize: $fontSize,
                             marginV: $marginV,
+                            subtitleTextColorHex: $subtitleTextColorHex,
                             karaokeMode: $karaokeMode,
                             lyricTrackingMode: $lyricTrackingMode,
                             kineticStyle: $kineticStyle,

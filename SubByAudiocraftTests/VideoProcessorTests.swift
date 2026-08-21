@@ -141,6 +141,49 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(fields[3], "&H00FFFFFF")
     }
 
+    func testCustomSubtitleTextColorIsPreservedAcrossExportPaths() {
+        let textColor = "#2F80ED"
+        let assColor = KineticResolvedColor(hex: textColor).assColor
+        XCTAssertEqual(assColor, "ED802F")
+
+        let style = VideoProcessor.shared.makeDefaultASSStyleLine(
+            familyName: "Montserrat",
+            fontSize: 70,
+            isBold: false,
+            marginV: 120,
+            primaryColor: assColor
+        )
+        XCTAssertTrue(style.contains("&H00ED802F"))
+
+        let words = makeWords(["renk", "korunur"])
+        let boldWord = VideoProcessor.shared.makeBoldWordDialogues(
+            group: words,
+            segStart: 0,
+            segEnd: 1.2,
+            fontName: "Georgia",
+            fontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            baseTextColorHex: textColor
+        )
+        XCTAssertTrue(boldWord.contains("\\c&HED802F&"))
+
+        let kinetic = VideoProcessor.shared.makeKineticDialogues(
+            group: words,
+            lineIndex: 0,
+            segStart: 0,
+            segEnd: 1.2,
+            fontName: "Anton-Regular",
+            requestedFontSize: 70,
+            marginV: 120,
+            virtualWidth: 607,
+            virtualHeight: 1080,
+            baseTextColorHex: textColor
+        )
+        XCTAssertTrue(kinetic.contains("\\c&HED802F&"))
+    }
+
     func testChronologicalWordSortPlacesNewWordAtItsTimestamp() {
         var words = makeWords(["bir", "iki", "üç"])
         let inserted = VideoProcessor.WordTimestamp(
