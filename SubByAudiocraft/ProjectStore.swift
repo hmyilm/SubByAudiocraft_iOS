@@ -104,10 +104,10 @@ final class ProjectStore: ObservableObject {
 
     private let kokKlasor: URL
 
-    init() {
+    init(rootDirectory: URL? = nil) {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
-        kokKlasor = docs.appendingPathComponent("Projeler", isDirectory: true)
+        kokKlasor = rootDirectory ?? docs.appendingPathComponent("Projeler", isDirectory: true)
         try? FileManager.default.createDirectory(at: kokKlasor, withIntermediateDirectories: true)
         yukle()
     }
@@ -137,11 +137,16 @@ final class ProjectStore: ObservableObject {
         let klasorler = (try? fm.contentsOfDirectory(at: kokKlasor, includingPropertiesForKeys: nil)) ?? []
         var liste: [SavedProject] = []
         for dir in klasorler {
-            let json = dir.appendingPathComponent("proje.json")
-            if let data = try? Data(contentsOf: json),
-               let proje = try? JSONDecoder().decode(SavedProject.self, from: data),
-               fm.fileExists(atPath: videoURL(proje).path) {
-                liste.append(proje)
+            // Ana metadata okunamazsa son sağlam kayıt kullanılır. Kaynak video
+            // ve bozuk dosya silinmez; güncelleme geçmişi sessizce temizlemez.
+            for filename in ["proje.json", "proje.yedek.json"] {
+                let json = dir.appendingPathComponent(filename)
+                if let data = try? Data(contentsOf: json),
+                   let proje = try? JSONDecoder().decode(SavedProject.self, from: data),
+                   fm.fileExists(atPath: videoURL(proje).path) {
+                    liste.append(proje)
+                    break
+                }
             }
         }
         projeler = liste.sorted { $0.guncelleme > $1.guncelleme }
@@ -153,7 +158,16 @@ final class ProjectStore: ObservableObject {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
             let data = try encoder.encode(proje)
-            try data.write(to: klasor(proje.id).appendingPathComponent("proje.json"), options: .atomic)
+            let directory = klasor(proje.id)
+            let destination = directory.appendingPathComponent("proje.json")
+            if let previous = try? Data(contentsOf: destination),
+               (try? JSONDecoder().decode(SavedProject.self, from: previous)) != nil {
+                // Önce önceki ayarları güvenle yedekle; video kopyalanmaz.
+                try previous.write(
+                    to: directory.appendingPathComponent("proje.yedek.json"), options: .atomic
+                )
+            }
+            try data.write(to: destination, options: .atomic)
             return true
         } catch {
             print("Proje kaydedilemedi: \(error.localizedDescription)")

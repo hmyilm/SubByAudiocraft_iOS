@@ -748,6 +748,43 @@ class VideoProcessor: ObservableObject {
         var text: String
         var start: Double
         var end: Double
+        // Grubun tüm kelimelerine yazılır: bölme/silme sonrası konum korunur.
+        // Eksik alan eski projelerde genel konumu kullanır.
+        var subtitleMarginV: Double? = nil
+    }
+
+    func subtitleGroups(for words: [WordTimestamp], lineBreaks: Set<UUID>) -> [[WordTimestamp]] {
+        var groups: [[WordTimestamp]] = []
+        var current: [WordTimestamp] = []
+        for word in words {
+            current.append(word)
+            if lineBreaks.contains(word.id) {
+                groups.append(current)
+                current = []
+            }
+        }
+        if !current.isEmpty { groups.append(current) }
+        return groups
+    }
+
+    func subtitleMarginV(for group: [WordTimestamp], defaultMarginV: Double) -> Double {
+        // Birleşen gruplarda ilk kelimenin konumu esas alınır.
+        SubtitlePosition.clamped(group.first?.subtitleMarginV ?? defaultMarginV)
+    }
+
+    func applyingSubtitleMarginV(
+        _ value: Double?,
+        to group: [WordTimestamp],
+        in words: [WordTimestamp]
+    ) -> [WordTimestamp] {
+        let ids = Set(group.map(\.id))
+        return words.map { original in
+            var word = original
+            if ids.contains(word.id) {
+                word.subtitleMarginV = value.map(SubtitlePosition.clamped)
+            }
+            return word
+        }
     }
 
     // Düzenleyicide zaman değiştirilen veya sonradan eklenen kelimeleri kronolojik
@@ -2032,7 +2069,8 @@ class VideoProcessor: ObservableObject {
                 id: word.id,
                 text: text,
                 start: start,
-                end: max(start + 0.05, word.end)
+                end: max(start + 0.05, word.end),
+                subtitleMarginV: word.subtitleMarginV
             )
         }.sorted {
             if $0.start == $1.start { return $0.end < $1.end }
@@ -4577,7 +4615,7 @@ class VideoProcessor: ObservableObject {
         let rowMeasurements = rowTexts.map {
             harfSinirlariniOlc(
                 metin: $0,
-                fontName: fontName,
+                fontName: FontCatalog.faceName(for: fontName, weight: .thin),
                 assFontSize: fontSize
             )
         }
@@ -4654,7 +4692,15 @@ class VideoProcessor: ObservableObject {
                 let hasActiveInterval = wordStartText != wordEndText
                 let assFamilyName = FontCatalog.assFamilyName(for: fontName)
                 let thinWeightTag = FontCatalog.assTag(for: fontName, weight: .thin)
-                let boldWeightTag = FontCatalog.assTag(for: fontName, weight: .bold)
+                let syntheticStroke = FontCatalog.syntheticBoldStrokeWidth(
+                    for: fontName, fontSize: CGFloat(fontSize)
+                )
+                let boldWeightTag = FontCatalog.assTag(
+                    for: fontName, weight: syntheticStroke > 0 ? .regular : .bold
+                )
+                let boldStrokeTags = syntheticStroke > 0
+                    ? "\\bord\(String(format: "%.3f", locale: Locale(identifier: "en_US_POSIX"), Double(syntheticStroke)))\\3c&H\(resolvedAccent.assColor)&\\3a&H00&"
+                    : "\\bord0"
                 let boldHorizontalPercent = Int(
                     (FontCatalog.boldHorizontalScale(
                         for: item.text,
@@ -4685,7 +4731,7 @@ class VideoProcessor: ObservableObject {
 
                 let boldTags = "{\\q2\\an2\\pos(\(wordCenterX),\(rowY))" +
                     "\\fn\(assFamilyName)\\fs\(fontSize)\(boldWeightTag)\\c&H\(resolvedAccent.assColor)&" +
-                    "\(extraTags)\\fscx\(boldHorizontalPercent)\\fscy100\\bord0\\shad0}"
+                    "\(extraTags)\\fscx\(boldHorizontalPercent)\\fscy100\(boldStrokeTags)\\shad0}"
                 result += "Dialogue: 2,\(wordStartText)," +
                     "\(wordEndText),Default,,0,0,0,," +
                     "\(boldTags)\(item.text)\n"
@@ -5064,6 +5110,59 @@ class VideoProcessor: ObservableObject {
         let virtualHeight = 1080
         let virtualWidth = Int(1080.0 * aspectRatio)
         
+        let assContent = makeASSContent(
+            words: renderWords,
+            lineBreaks: lineBreaks,
+            inlineLineBreaks: inlineLineBreaks,
+            fontName: fontName,
+            fontSize: fontSize,
+            marginV: marginV,
+            subtitleTextColorHex: subtitleTextColorHex,
+            karaokeMode: karaokeMode,
+            lyricTrackingMode: lyricTrackingMode,
+            kineticStyle: kineticStyle,
+            kineticAccent: kineticAccent,
+            kineticCustomColorHex: kineticCustomColorHex,
+            kineticIntensity: kineticIntensity,
+            kineticLetterStyle: kineticLetterStyle,
+            kineticOverlayStyle: kineticOverlayStyle,
+            kineticEmphasisWordIDs: kineticEmphasisWordIDs,
+            virtualWidth: virtualWidth,
+            virtualHeight: virtualHeight
+        )
+
+        let assURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".ass")
+        do {
+            try assContent.write(to: assURL, atomically: true, encoding: .utf8)
+            return assURL
+        } catch {
+            print("Failed to write ASS file: \(error)")
+            return nil
+        }
+    }
+
+    // Video okumasından ayrılan saf ASS üretimi, tüm modlarda sahne konumunu
+    // ve geçmişten gelen ayarları kodlama yapmadan doğrulamayı sağlar.
+    func makeASSContent(
+        words: [WordTimestamp],
+        lineBreaks: Set<UUID>,
+        inlineLineBreaks: Set<UUID> = [],
+        fontName: String,
+        fontSize: Int,
+        marginV: Int,
+        subtitleTextColorHex: String = "#FFFFFF",
+        karaokeMode: KaraokeMode = .classic,
+        lyricTrackingMode: LyricTrackingMode = .karaoke,
+        kineticStyle: KineticStyle = .automatic,
+        kineticAccent: KineticAccent = .gold,
+        kineticCustomColorHex: String = KineticAccent.defaultCustomHex,
+        kineticIntensity: KineticIntensity = .balanced,
+        kineticLetterStyle: KineticLetterStyle = .clean,
+        kineticOverlayStyle: KineticOverlayStyle = .none,
+        kineticEmphasisWordIDs: Set<UUID> = [],
+        virtualWidth: Int,
+        virtualHeight: Int = 1080
+    ) -> String {
         let familyName = getFontFamilyName(for: fontName)
 
         // Bold bayrağı yalnız gerçekten kalın kesimi olan fontlarda açılır. Eskiden her font
@@ -5106,22 +5205,9 @@ class VideoProcessor: ObservableObject {
 
         """
         
-        // Satır grupları: kullanıcının satır düzenleyicide onayladığı düzen esas alınır;
-        // satır sonu bilgisi yoksa otomatik öneri kullanılır.
-        var groups: [[WordTimestamp]] = []
-        if lineBreaks.isEmpty {
-            groups = autoLineGroups(for: renderWords)
-        } else {
-            var currentGroup: [WordTimestamp] = []
-            for word in renderWords {
-                currentGroup.append(word)
-                if lineBreaks.contains(word.id) {
-                    groups.append(currentGroup)
-                    currentGroup = []
-                }
-            }
-            if !currentGroup.isEmpty { groups.append(currentGroup) }
-        }
+        // Boş break kümesi de geçerli bir kullanıcı düzenidir: tek grup.
+        // Otomatik gruplama analizde yapılır; dışa aktarım düzeni değiştirmez.
+        let groups = subtitleGroups(for: words, lineBreaks: lineBreaks)
 
         // Efekt (kullanıcının Python sistemiyle birebir aynı):
         // Satırın tamamı TAM GÖRÜNÜR (&H00&) gelir; her harf, söylendiği anda
@@ -5194,6 +5280,12 @@ class VideoProcessor: ObservableObject {
                 maximumWidth: maximumLineWidth
             )
 
+            let sceneMarginV = Int(SubtitlePosition.visibleMargin(
+                subtitleMarginV(for: seg.group, defaultMarginV: Double(marginV)),
+                fontSize: Double(fontSize),
+                rowCount: visualRows.count
+            ).rounded())
+
             if renderPath == .centeredWordReveal {
                 assContent += makeCenteredWordRevealDialogues(
                     group: seg.group,
@@ -5201,7 +5293,7 @@ class VideoProcessor: ObservableObject {
                     segEnd: segEnd,
                     fontName: fontName,
                     fontSize: lineFontSize,
-                    marginV: marginV,
+                    marginV: sceneMarginV,
                     virtualWidth: virtualWidth,
                     virtualHeight: virtualHeight,
                     accent: kineticAccent,
@@ -5218,7 +5310,7 @@ class VideoProcessor: ObservableObject {
                     segStart: segStart,
                     segEnd: segEnd,
                     fontSize: lineFontSize,
-                    marginV: marginV,
+                    marginV: sceneMarginV,
                     virtualWidth: virtualWidth,
                     virtualHeight: virtualHeight,
                     accent: kineticAccent,
@@ -5240,7 +5332,7 @@ class VideoProcessor: ObservableObject {
                     segEnd: segEnd,
                     fontName: fontName,
                     requestedFontSize: fontSize,
-                    marginV: marginV,
+                    marginV: sceneMarginV,
                     virtualWidth: virtualWidth,
                     virtualHeight: virtualHeight,
                     style: kineticStyle,
@@ -5272,7 +5364,7 @@ class VideoProcessor: ObservableObject {
                     text: lineText,
                     measuredWidth: fittedLineWidth,
                     fontSize: lineFontSize,
-                    marginV: marginV,
+                    marginV: sceneMarginV,
                     virtualWidth: virtualWidth,
                     virtualHeight: virtualHeight,
                     plan: kineticPlans[index],
@@ -5305,7 +5397,7 @@ class VideoProcessor: ObservableObject {
                     segEnd: segEnd,
                     fontName: fontName,
                     fontSize: lineFontSize,
-                    marginV: marginV,
+                    marginV: sceneMarginV,
                     virtualWidth: virtualWidth,
                     virtualHeight: virtualHeight,
                     inlineLineBreaks: inlineLineBreaks,
@@ -5321,7 +5413,7 @@ class VideoProcessor: ObservableObject {
             if renderPath == .staticLine {
                 let t0 = formatASSTime(segStart)
                 let t1 = formatASSTime(segEnd)
-                assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,," +
+                assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,\(sceneMarginV),," +
                     "{\\fs\(lineFontSize)\(lineMotionTags)}\(lineText)\n"
                 continue
             }
@@ -5337,7 +5429,7 @@ class VideoProcessor: ObservableObject {
                     segEnd: segEnd,
                     fontName: fontName,
                     fontSize: lineFontSize,
-                    marginV: marginV,
+                    marginV: sceneMarginV,
                     virtualWidth: virtualWidth,
                     virtualHeight: virtualHeight,
                     extraTags: lineMotionTags
@@ -5413,27 +5505,20 @@ class VideoProcessor: ObservableObject {
                     tags += "\\t(\(s),\(e),\\clip(\(x),0,\(virtualWidth),\(virtualHeight)))"
                 }
                 tags += "}"
-                assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)\\alpha&HA0&}\(metin)\n"
-                assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)}\(tags)\(metin)\n"
+                assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,\(sceneMarginV),,{\\fs\(lineFontSize)\(lineMotionTags)\\alpha&HA0&}\(metin)\n"
+                assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,\(sceneMarginV),,{\\fs\(lineFontSize)\(lineMotionTags)}\(tags)\(metin)\n"
             } else {
                 // Ölçüm yapılamadı veya satır sığmayıp sarılacak: harf harf eriyen kopya
                 if bitisikFont {
-                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,0,,{\\fs\(lineFontSize)\(lineMotionTags)\\alpha&HA0&}\(metin)\n"
+                    assContent += "Dialogue: 0,\(t0),\(t1),Default,,0,0,\(sceneMarginV),,{\\fs\(lineFontSize)\(lineMotionTags)\\alpha&HA0&}\(metin)\n"
                 }
-                assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,0,,\(effectText)\n"
+                assContent += "Dialogue: 1,\(t0),\(t1),Default,,0,0,\(sceneMarginV),,\(effectText)\n"
             }
         }
         
-        let assURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".ass")
-        do {
-            try assContent.write(to: assURL, atomically: true, encoding: .utf8)
-            return assURL
-        } catch {
-            print("Failed to write ASS file: \(error)")
-            return nil
-        }
+        return assContent
     }
-    
+
     // Filtre argümanlarında geçebilecek özel karakterleri FFmpeg için escape eder
     private func escapeForFilter(_ path: String) -> String {
         path.replacingOccurrences(of: "\\", with: "\\\\")

@@ -276,6 +276,14 @@ enum FontCatalog {
         return min(1, max(0.65, (regularWidth * emphasisWidthBoost) / boldWidth))
     }
 
+    // Tek ağırlıklı fontlarda SwiftUI/libass'ın fonta bağlı sentetik Bold
+    // davranışına güvenme. Aynı renkli ince kalem darbesi, glifleri parçalamadan
+    // aktif kelimeyi kalınlaştırır; gerçek Bold yüzler bu yedeği kullanmaz.
+    static func syntheticBoldStrokeWidth(for selection: String, fontSize: CGFloat) -> CGFloat {
+        guard !hasRealFace(for: selection, weight: .bold), fontSize.isFinite else { return 0 }
+        return max(0, fontSize) * 0.022
+    }
+
     static func renderPSNames(for selection: String) -> [String] {
         guard let option = secenek(selection) else { return [selection] }
         // Seçilen yüzü (ör. ExtraBold/Black) mutlaka kopyala. Önceki sürüm yalnız

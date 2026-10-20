@@ -40,6 +40,7 @@ struct EditWordsView: View {
     @State private var previewWords: [VideoProcessor.WordTimestamp] = []
     @State private var previewLineIndex: Int = 0
     @State private var playbackTime: Double = 0
+    @State private var selectedPositionWordID: UUID?
     @State private var selectedPanel: EditorPanel = .design
     @State private var showsAddWordAlert = false
     @State private var newWordText = ""
@@ -47,17 +48,7 @@ struct EditWordsView: View {
     @State private var wordSortWorkItem: DispatchWorkItem?
 
     private var lines: [[VideoProcessor.WordTimestamp]] {
-        var groups: [[VideoProcessor.WordTimestamp]] = []
-        var current: [VideoProcessor.WordTimestamp] = []
-        for word in words {
-            current.append(word)
-            if breaks.contains(word.id) {
-                groups.append(current)
-                current = []
-            }
-        }
-        if !current.isEmpty { groups.append(current) }
-        return groups
+        VideoProcessor.shared.subtitleGroups(for: words, lineBreaks: breaks)
     }
 
     var body: some View {
@@ -71,7 +62,9 @@ struct EditWordsView: View {
                         player: player,
                         fontName: fontName,
                         fontSize: fontSize,
-                        marginV: marginV,
+                        marginV: VideoProcessor.shared.subtitleMarginV(
+                            for: previewWords, defaultMarginV: marginV
+                        ),
                         subtitleTextColorHex: subtitleTextColorHex,
                         sampleText: previewLine,
                         height: 200,
@@ -117,6 +110,18 @@ struct EditWordsView: View {
                     Label(previewTrackingHint, systemImage: lyricTrackingMode.icon)
                     .font(.caption2)
                     .foregroundColor(.gray)
+
+                    Divider()
+                    SubtitleScenePositionControls(
+                        words: $words,
+                        lineBreaks: breaks,
+                        inlineLineBreaks: inlineBreaks,
+                        fontSize: fontSize,
+                        defaultMarginV: $marginV,
+                        selectedWordID: $selectedPositionWordID,
+                        currentWordID: previewWords.first?.id,
+                        onSelect: selectPositionGroup
+                    )
                 }
                 .card()
 
@@ -156,30 +161,10 @@ struct EditWordsView: View {
                             sampleText: previewLine
                         )
 
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: 12) {
-                                LabeledSlider(icon: "textformat.size", title: "Yazı Boyutu", value: $fontSize, range: 30...150, step: 1)
-                                LabeledSlider(
-                                    icon: "arrow.up.and.down",
-                                    title: "Dikey Konum",
-                                    value: $marginV,
-                                    range: 30...950,
-                                    step: 5,
-                                    valueText: positionTitle
-                                )
-                            }
-                            VStack(spacing: 12) {
-                                LabeledSlider(icon: "textformat.size", title: "Yazı Boyutu", value: $fontSize, range: 30...150, step: 1)
-                                LabeledSlider(
-                                    icon: "arrow.up.and.down",
-                                    title: "Dikey Konum",
-                                    value: $marginV,
-                                    range: 30...950,
-                                    step: 5,
-                                    valueText: positionTitle
-                                )
-                            }
-                        }
+                        LabeledSlider(
+                            icon: "textformat.size", title: "Yazı Boyutu",
+                            value: $fontSize, range: 30...150, step: 1
+                        )
                     }
                     .card()
                 }
@@ -305,6 +290,9 @@ struct EditWordsView: View {
         .onChange(of: breaks) {
             normalizeEmphasisSelection()
         }
+        .onChange(of: words) {
+            updatePreviewLine()
+        }
         .onChange(of: inlineBreaks) {
             updatePreviewLine()
         }
@@ -355,10 +343,19 @@ struct EditWordsView: View {
         }
     }
 
-    private func positionTitle(_ value: Double) -> String {
-        if value < 260 { return "Alt" }
-        if value < 650 { return "Orta" }
-        return "Üst"
+    private func selectPositionGroup(_ group: [VideoProcessor.WordTimestamp]) {
+        guard let first = group.first else { return }
+        player?.pause()
+        let target = max(0, first.start)
+        // Seek tamamlanana kadar da seçili grubun ön izlemesini göster.
+        playbackTime = target
+        previewWords = group
+        previewLine = group.map(\.text).joined(separator: " ")
+        previewLineIndex = lines.firstIndex { $0.first?.id == first.id } ?? 0
+        player?.seek(
+            to: CMTime(seconds: target, preferredTimescale: 600),
+            toleranceBefore: .zero, toleranceAfter: .zero
+        )
     }
 
     private func updatePreviewLine() {
@@ -376,6 +373,7 @@ struct EditWordsView: View {
             return
         }
         playbackTime = t
+        if player.rate != 0 { selectedPositionWordID = nil }
         if let match = lines.enumerated().first(where: { item in
             let group = item.element
             guard let first = group.first, let last = group.last else { return false }
@@ -446,7 +444,14 @@ struct EditWordsView: View {
         }
         end = max(start + 0.1, end)
 
-        let newWord = VideoProcessor.WordTimestamp(text: text, start: start, end: end)
+        let containingGroup = lines.first { group in
+            guard let first = group.first, let last = group.last else { return false }
+            return start >= first.start && start <= last.end
+        }
+        let newWord = VideoProcessor.WordTimestamp(
+            text: text, start: start, end: end,
+            subtitleMarginV: containingGroup?.first?.subtitleMarginV
+        )
         if let previousLast = sortedBefore.last,
            start >= previousLast.start,
            breaks.remove(previousLast.id) != nil {

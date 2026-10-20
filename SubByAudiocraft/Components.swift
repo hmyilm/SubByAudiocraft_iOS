@@ -1011,12 +1011,17 @@ struct SubtitlePreviewPlayer: View {
                                 : Color.clear
                         )
                         .cornerRadius(max(1, 6 * previewScale))
-                        .padding(.bottom, CGFloat(marginV) * previewScale)
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(
                             width: viewport.width,
                             height: viewport.height,
                             alignment: .bottom
                         )
+                        // Konum ölçüme katılmaz: yukarı taşırken yazı küçülmez.
+                        .offset(y: -CGFloat(SubtitlePosition.visibleMargin(
+                            marginV, fontSize: fontSize,
+                            rowCount: max(1, classicPreviewRows.count)
+                        )) * previewScale)
                         .clipped()
                         .position(x: viewport.midX, y: viewport.midY)
                 }
@@ -1289,6 +1294,9 @@ private struct BoldWordRowPreview: View {
                     activeFaceName: activeFaceName,
                     inactiveFallbackWeight: inactiveFallbackWeight,
                     activeFallbackWeight: activeFallbackWeight,
+                    syntheticStrokeWidth: FontCatalog.syntheticBoldStrokeWidth(
+                        for: fontName, fontSize: fontSize
+                    ),
                     fontSize: fontSize
                 )
             }
@@ -1319,7 +1327,7 @@ private struct BoldWordRowPreview: View {
     }
 
     private var activeFallbackWeight: Font.Weight? {
-        FontCatalog.boldPSName(for: fontName) == nil ? .bold : nil
+        FontCatalog.boldPSName(for: fontName) == nil ? .regular : nil
     }
 }
 
@@ -1332,10 +1340,18 @@ private struct FixedBoldWordPreviewRun: View {
     let activeFaceName: String
     let inactiveFallbackWeight: Font.Weight?
     let activeFallbackWeight: Font.Weight?
+    let syntheticStrokeWidth: CGFloat
     let fontSize: CGFloat
 
     private var isActive: Bool {
         playbackTime >= word.start && playbackTime < word.end
+    }
+
+    private var activeText: some View {
+        Text(word.text)
+            .font(.custom(activeFaceName, size: fontSize))
+            .fontWeight(activeFallbackWeight)
+            .foregroundColor(accent)
     }
 
     var body: some View {
@@ -1346,10 +1362,20 @@ private struct FixedBoldWordPreviewRun: View {
             .foregroundColor(isActive ? .clear : baseColor)
             .overlay {
                 if isActive {
-                    Text(word.text)
-                        .font(.custom(activeFaceName, size: fontSize))
-                        .fontWeight(activeFallbackWeight)
-                        .foregroundColor(accent)
+                    activeText
+                        .background {
+                            if syntheticStrokeWidth > 0 {
+                                // Aynı glif koşusunu sekiz yönde çok az genişlet;
+                                // kelime hücresi ve el yazısının bağları sabit kalır.
+                                ForEach(0..<8, id: \.self) { index in
+                                    let angle = Double(index) * .pi / 4
+                                    activeText.offset(
+                                        x: syntheticStrokeWidth * CGFloat(cos(angle)),
+                                        y: syntheticStrokeWidth * CGFloat(sin(angle))
+                                    )
+                                }
+                            }
+                        }
                         .fixedSize(horizontal: true, vertical: true)
                         .scaleEffect(
                             x: FontCatalog.boldHorizontalScale(

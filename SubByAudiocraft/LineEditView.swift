@@ -16,17 +16,7 @@ struct LineEditView: View {
     @State private var previousInlineBreaks: Set<UUID>? = nil
 
     private var lines: [[VideoProcessor.WordTimestamp]] {
-        var groups: [[VideoProcessor.WordTimestamp]] = []
-        var current: [VideoProcessor.WordTimestamp] = []
-        for word in words {
-            current.append(word)
-            if breaks.contains(word.id) {
-                groups.append(current)
-                current = []
-            }
-        }
-        if !current.isEmpty { groups.append(current) }
-        return groups
+        VideoProcessor.shared.subtitleGroups(for: words, lineBreaks: breaks)
     }
 
     var body: some View {

@@ -1730,7 +1730,8 @@ final class VideoProcessorTests: XCTestCase {
         XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 1,") }.count, 6)
         XCTAssertEqual(classicDialogues.filter { $0.hasPrefix("Dialogue: 2,") }.count, 3)
         XCTAssertTrue(classic.contains("\\fs70\\b400"))
-        XCTAssertTrue(classic.contains("\\fs70\\b700"))
+        XCTAssertFalse(classic.contains("\\fs70\\b700"))
+        XCTAssertTrue(classic.contains("\\bord1.540\\3c&H7A5CFF&"))
         XCTAssertTrue(classicDialogues.contains { $0.hasSuffix("}kara") })
         XCTAssertFalse(classic.contains("kara sevda içimde"))
         XCTAssertTrue(
@@ -1826,7 +1827,11 @@ final class VideoProcessorTests: XCTestCase {
             XCTAssertEqual(dialogues.count, 6, font.display)
             let expectedThinTag = font.hasRealThinFace ? "\\b100" : "\\b400"
             XCTAssertTrue(ass.contains("\(expectedThinTag)\\c&HFFFFFF&"), font.display)
-            XCTAssertTrue(ass.contains("\\b700\\c&HA5E654&"), font.display)
+            let expectedActiveWeight = font.hasRealBoldFace ? "\\b700" : "\\b400"
+            XCTAssertTrue(ass.contains("\(expectedActiveWeight)\\c&HA5E654&"), font.display)
+            if !font.hasRealBoldFace {
+                XCTAssertTrue(ass.contains("\\bord1.540\\3c&HA5E654&"), font.display)
+            }
             XCTAssertFalse(ass.contains("\\fscx104"), font.display)
             XCTAssertFalse(ass.contains("\\bord0.8"), font.display)
             XCTAssertFalse(ass.contains("kara sevda"), font.display)
