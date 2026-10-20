@@ -374,7 +374,13 @@ struct EditWordsView: View {
         }
         playbackTime = t
         if player.rate != 0 { selectedPositionWordID = nil }
-        if let match = lines.enumerated().first(where: { item in
+        // Komşu grupların 0.2 sn ön/arka gösterim aralığı çakışabilir.
+        // Duraklatılmış konum düzenlemesinde seçilen grup önceliklidir.
+        let selectedMatch = lines.enumerated().first { item in
+            guard let selectedPositionWordID, player.rate == 0 else { return false }
+            return item.element.contains { $0.id == selectedPositionWordID }
+        }
+        if let match = selectedMatch ?? lines.enumerated().first(where: { item in
             let group = item.element
             guard let first = group.first, let last = group.last else { return false }
             return t >= first.start - 0.2 && t <= last.end + 0.2
